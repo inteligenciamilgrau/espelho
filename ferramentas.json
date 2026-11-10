@@ -1,0 +1,27 @@
+{
+  "respostaComecar": "jogo começou",
+  "respostaComando": "recebido",
+  "respostaVitoria": "Parabéns! Você conseguiu!",
+  "ferramentas": [
+    {
+      "name": "comecar",
+      "description": "Começa.",
+      "inputSchema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "apertar_botao",
+      "description": "Aperta um botão.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "botao": {
+            "type": "string",
+            "enum": ["W", "A", "S", "D", "ESPACO", "L", "T", "F"]
+          },
+          "texto": { "type": "string", "maxLength": 10 }
+        },
+        "required": ["botao"]
+      }
+    }
+  ]
+}

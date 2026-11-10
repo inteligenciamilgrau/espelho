@@ -1,0 +1,16 @@
+# Sistema operacional
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editores
+.vscode/
+.idea/
+*.swp
+
+# Configuração local do Claude Code (permissões e caminhos desta máquina)
+.claude/settings.local.json
+
+# Registros e temporários
+*.log
+*.tmp

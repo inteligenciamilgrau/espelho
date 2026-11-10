@@ -1,0 +1,5 @@
+# Biblioteca de terceiros: guardar byte a byte, sem converter fim de linha
+vendor/** -text
+
+# Arquivos de lote do Windows precisam de fim de linha CRLF
+*.bat text eol=crlf

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jogo</title>
+<!-- ícone da aba: o rosto do robô, desenhado em SVG aqui mesmo (funciona sem servidor) -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cline x1='42' y1='17' x2='42' y2='7' stroke='%232c333b' stroke-width='3'/%3E%3Ccircle cx='42' cy='7' r='5' fill='%23ff8a3d'/%3E%3Crect x='7' y='17' width='50' height='40' rx='10' fill='%23e6eaee' stroke='%232c333b' stroke-width='3'/%3E%3Crect x='14' y='27' width='36' height='18' rx='6' fill='%232c333b'/%3E%3Ccircle cx='24' cy='36' r='5' fill='%234fe3ff'/%3E%3Ccircle cx='40' cy='36' r='5' fill='%234fe3ff'/%3E%3C/svg%3E">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  [hidden] { display: none !important; }
+  .painel {
+    position: fixed; padding: 10px 12px; border-radius: 8px;
+    background: rgba(10, 14, 18, .62); color: #e8eef2;
+    font: 13px/1.5 Consolas, "Cascadia Mono", monospace; white-space: pre;
+    pointer-events: none; user-select: none;
+  }
+  #ajuda  { top: 12px; left: 12px; }
+  #status { top: 12px; right: 12px; text-align: right; }
+  #log    { bottom: 12px; left: 12px; min-width: 260px; }
+  #log .ultima { color: #7dffb0; }
+  #modo   { bottom: 52px; right: 12px; background: rgba(150, 60, 0, .8); font-weight: bold; }
+  #ponte  { bottom: 12px; right: 12px; font-size: 12px; color: #9fb0ba; text-align: right; }
+  #ponte.alerta { background: rgba(150, 30, 20, .9); color: #fff; font-size: 14px; font-weight: bold; }
+  #mensagem { bottom: 12px; left: 12px; }
+  #caixa {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    padding: 18px 20px; border-radius: 10px; background: rgba(10, 14, 18, .92);
+    color: #e8eef2; font: 14px/1.6 Consolas, "Cascadia Mono", monospace; text-align: center;
+  }
+  #caixa input {
+    display: block; margin: 8px auto; width: 11ch; padding: 6px 10px;
+    font: bold 22px Consolas, "Cascadia Mono", monospace; letter-spacing: 2px; text-align: center;
+    color: #5dffa0; background: #06120c; border: 2px solid #2a6b48; border-radius: 6px; outline: none;
+  }
+  #caixa small { color: #9fb0ba; }
+</style>
+</head>
+<body>
+<canvas id="tela"></canvas>
+
+<!-- Só quais botões existem: o jogo não diz o objetivo nem o que cada botão faz.
+     (M, R e H são da página, não do jogo: modo iA, recomeçar e esta lista.) -->
+<div id="ajuda" class="painel">  W
+A S D
+Espaço
+L T F
+
+M R H</div>
+
+<div id="mensagem" class="painel">jogo começou</div>
+
+<!-- Painel de depuração: mostra o que cada comando fez. Sem tecla; só aparece com ?depurar no endereço. -->
+<div id="status" class="painel" hidden></div>
+<div id="log" class="painel" hidden></div>
+<div id="modo" class="painel" hidden>M</div>
+
+<!-- Estado da ligação com o servidor MCP (ver ponte.js). Não aparece quando a página é aberta direto do arquivo. -->
+<div id="ponte" class="painel" hidden></div>
+
+<div id="caixa" hidden>
+  <input id="entrada" maxlength="10" autocomplete="off" spellcheck="false">
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="jogo.js"></script>
+<script src="ponte.js"></script>
+</body>
+</html>
