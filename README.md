@@ -2,6 +2,8 @@
 
 Um jogo 3D em primeira pessoa, feito para ser jogado por uma iA através de MCP. A iA controla um robô numa sala, sem receber nenhuma explicação: nem o objetivo, nem o que cada botão faz. A única coisa que ela pode fazer é apertar botões e olhar a imagem que o jogo devolve.
 
+![Tela do jogo](imagens/jogo.png)
+
 > **Atenção, spoilers.** Este arquivo e o código explicam o jogo inteiro. Se a iA que vai ser testada puder ler esta pasta, o teste perde o sentido. Veja [Cuidados para não estragar o teste](#cuidados-para-não-estragar-o-teste).
 
 ## Passo a passo: como pôr uma iA para jogar
@@ -137,6 +139,7 @@ Para usar outra porta: `iniciar-mcp.bat -Porta 8766`.
 | `ferramentas.json` | Tudo o que a iA lê: ferramentas, botões e textos de resposta |
 | `iniciar-mcp.bat` | Atalho para ligar o servidor |
 | `vendor/three.min.js` | Biblioteca three.js r160 (licença MIT) |
+| `imagens/jogo.png` | Foto do jogo usada neste README |
 
 ## Ajustes rápidos
 
