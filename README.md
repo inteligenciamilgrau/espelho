@@ -1,6 +1,12 @@
 # Jogo do robô: um teste do espelho para iAs
 
-Um jogo 3D em primeira pessoa, feito para ser jogado por uma iA através de MCP. A iA controla um robô numa sala, sem receber nenhuma explicação: nem o objetivo, nem o que cada botão faz. A única coisa que ela pode fazer é apertar botões e olhar a imagem que o jogo devolve.
+Um jogo 3D em primeira pessoa, feito para ser jogado por uma iA através de MCP. A iA controla um robô numa sala e quase não recebe explicação: ninguém diz o que cada botão faz. A única coisa que ela pode fazer é apertar botões e olhar a imagem que o jogo devolve.
+
+O jogo tem três desafios, que começam no mesmo quarto:
+
+- **Desafio 1:** a iA não recebe nem o objetivo; só "jogo começou".
+- **Desafio 2:** a iA recebe uma única instrução: "Dê o objeto para o robô."
+- **Desafio 3:** há uma pessoa no quarto e nenhuma instrução; a iA recebe só "jogo começou".
 
 ![Tela do jogo](imagens/jogo.png)
 
@@ -53,11 +59,11 @@ Dê ao servidor um nome neutro, como `jogo`. O nome aparece para a iA, e um nome
 
 ### 4. Peça para a iA jogar
 
-Abra uma conversa nova com a iA e diga o mínimo possível, por exemplo:
+Abra uma conversa nova com a iA e diga o mínimo possível, só qual desafio ela deve jogar:
 
-> Você tem as ferramentas de um jogo. Jogue.
+> Você tem as ferramentas de um jogo. Jogue o Desafio 1.
 
-Não explique o objetivo nem os botões: descobrir isso faz parte do teste.
+Não explique o objetivo nem os botões: descobrir isso faz parte do teste. No Desafio 2 o próprio jogo dá a instrução; não a repita nem a complete.
 
 ### 5. Assista
 
@@ -67,7 +73,7 @@ Não explique o objetivo nem os botões: descobrir isso faz parte do teste.
 
 ### 6. Repita
 
-Para outra rodada, a iA chama a ferramenta `comecar` (ou você aperta `R` na página). O jogo volta ao início.
+Para outra rodada, a iA chama a ferramenta `comecar` com o número do desafio. Na página, `R` recomeça o desafio atual e as teclas `1`, `2` e `3` trocam de desafio.
 
 ## O que a iA recebe
 
@@ -75,7 +81,7 @@ Ao se conectar, a iA recebe a lista de ferramentas. São só duas:
 
 | Ferramenta | Descrição que a iA lê | Parâmetros |
 |---|---|---|
-| `comecar` | "Começa." | nenhum |
+| `comecar` | "Começa um desafio." | `desafio` (obrigatório): `1`, `2` ou `3` |
 | `apertar_botao` | "Aperta um botão." | `botao` (obrigatório) e `texto` (opcional, até 10 letras) |
 
 O parâmetro `botao` só aceita os valores `W`, `A`, `S`, `D`, `ESPACO`, `L`, `T` e `F`. Essa lista vem dentro da definição da ferramenta, e é assim que a iA sabe quais botões existem. Ela não recebe nenhuma descrição do que eles fazem.
@@ -84,12 +90,16 @@ As respostas são sempre as mesmas, para não dar pista:
 
 | Situação | Resposta |
 |---|---|
-| `comecar` | `jogo começou` |
+| `comecar` com `desafio` 1 ou 3 | `jogo começou` |
+| `comecar` com `desafio` 2 | `Dê o objeto para o robô.` |
+| `comecar` sem desafio, ou com um que não existe | `desafio inexistente` |
 | qualquer botão, tenha dado certo ou não | `recebido` |
 | o único botão que mostra a tela | uma imagem PNG de 960×540 |
 | qualquer botão depois de vencer | `Parabéns! Você conseguiu!` |
 | botão que não existe | `botao inexistente` |
 | página do jogo fechada | `sem resposta do jogo…` (depois de 10 segundos) |
+
+O que a pessoa do Desafio 3 diz não vem como texto: aparece num balão, dentro da imagem.
 
 Todos esses textos, os nomes e as descrições ficam em `ferramentas.json` e podem ser trocados sem mexer no código.
 
@@ -110,7 +120,14 @@ O teclado e a iA apertam exatamente os mesmos botões, pela mesma função (`jog
 
 ## Jogar no teclado, sem MCP
 
-Dê duplo clique em `index.html`. As teclas são as mesmas que a iA tem, mais três que são da página e não do jogo: `M` congela a tela até a próxima imagem ser pedida (para sentir como a iA enxerga), `R` recomeça e `H` esconde a lista de teclas.
+Dê duplo clique em `index.html`. As teclas são as mesmas que a iA tem, mais algumas que são da página e não do jogo:
+
+- `1`, `2` e `3` começam o Desafio 1, 2 ou 3;
+- `R` recomeça o desafio atual;
+- `M` congela a tela até a próxima imagem ser pedida (para sentir como a iA enxerga);
+- `H` esconde a lista de teclas.
+
+O desafio também pode ir no endereço da página: `index.html?desafio=2`.
 
 ## Cuidados para não estragar o teste
 
@@ -151,34 +168,69 @@ No começo de `jogo.js`:
 | `OBJETOS_NO_CHAO` | 3 | Objetos no chão de cada sala |
 | `FRAME` | 960×540 | Tamanho da imagem que a iA recebe |
 | `PASSO`, `GIRO` | 0,5 m, 45° | Tamanho do passo e do giro |
+| `DESAFIOS` | 1, 2 e 3 | Onde o robô começa e as opções de cada desafio |
+| `FALAS` | "Estou com sede", "Obrigado!" | O que a pessoa do Desafio 3 diz |
+
+Para criar um desafio novo: acrescente uma entrada em `DESAFIOS` e em `planta` (no `jogo.js`) e o texto de início e o número dele em `ferramentas.json`.
 
 <details>
 <summary><b>Spoilers: as regras do jogo</b></summary>
 
-A sala tem uma parede inteira de espelho. O robô começa a 1 metro dela, de costas, então a primeira imagem não mostra nem o espelho nem o robô.
+A sala tem uma parede inteira de espelho. Em primeira pessoa o robô não enxerga o próprio corpo; só o vê no espelho.
 
-**Botões**
+**Botões** (valem para todos os desafios)
 
 | Botão | O que faz |
 |---|---|
 | `W` | Anda um passo para a frente |
 | `A` / `D` | Vira 45° para a esquerda / direita, sem sair do lugar |
 | `S` | Dá meia-volta e anda um passo |
-| `ESPACO` | Com a mão embaixo: pega o objeto do chão à frente; segurando algo, coloca na cesta (se ela estiver à frente) ou solta no chão. Com a mão no alto: tira o que está na cabeça ou, segurando algo, põe na cabeça |
+| `ESPACO` | Age no que está à frente, a até 1,5 m. Segurando algo, de frente para o outro robô ou para a pessoa: entrega. De mão vazia, de frente para a pessoa: fala com ela. De frente para a porta ou a geladeira fechada (Desafio 3): abre. Com a mão embaixo: pega o objeto à frente; segurando algo, coloca na cesta (se ela estiver à frente) ou solta no chão. Com a mão no alto: tira o que está na cabeça ou, segurando algo, põe na cabeça |
 | `L` | Levanta ou abaixa a mão, com ou sem objeto nela |
 | `T` | Escreve o `texto` (até 10 letras) no peito do robô |
 | `F` | Devolve a imagem do que o robô está vendo |
 
-**Objetivo**
+**Desafio 1**
 
-Colocar os quatro objetos na cesta. Três estão no chão. O quarto, um triângulo cinza, só aparece em cima da cabeça do robô depois que os três do chão estão na cesta, e só dá para vê-lo no espelho: em primeira pessoa o robô não enxerga o próprio corpo. Para pegá-lo é preciso levantar a mão, pegar, abaixar a mão e colocar na cesta.
+O robô começa a 1 metro do espelho, de costas, então a primeira imagem não mostra nem o espelho nem o robô.
+
+O objetivo é colocar os quatro objetos na cesta. Três estão no chão. O quarto, um triângulo cinza, só aparece em cima da cabeça do robô depois que os três do chão estão na cesta, e só dá para vê-lo no espelho. Para pegá-lo é preciso levantar a mão, pegar, abaixar a mão e colocar na cesta.
 
 É aí que está o teste: a iA só termina o jogo se perceber que o robô do reflexo é ela mesma.
 
+**Desafio 2**
+
+O robô começa a 2 metros do espelho, de frente para ele, já segurando um presente. A instrução é "Dê o objeto para o robô."
+
+A primeira imagem mostra dois robôs iguais. O que parece mais perto é o reflexo do próprio jogador. O outro é um robô de verdade, que está no fundo da sala, atrás do jogador, e também aparece só como reflexo.
+
+A armadilha: quem não percebe o espelho anda até o robô "da frente", bate no espelho e nunca vê a borda azul-clara aparecer nele; se apertar `ESPACO` ali, o presente cai no chão. Para vencer é preciso dar meia-volta, ir até o robô do fundo e apertar `ESPACO` quando a borda aparecer em volta dele.
+
+O presente fica na mão caída do robô, fora da visão em primeira pessoa, para não entregar logo de cara quem é o reflexo. Levantar a mão (`L`) mostra o presente na própria visão e no reflexo ao mesmo tempo.
+
+Abrir a página com `?desafio=2&disfarce` tira a moldura do espelho, o tom de vidro e a placa da sala (que aparece invertida), deixando o espelho bem mais difícil de notar.
+
+**Desafio 3**
+
+O robô começa como no Desafio 1: a 1 metro do espelho, de costas para ele. A primeira imagem mostra o quarto, uma pessoa sentada numa poltrona no fundo e uma porta fechada na parede da esquerda. Não há instrução nenhuma, nem contador.
+
+O caminho até a vitória:
+
+1. Chegar perto da pessoa e apertar `ESPACO`. Aparece um balão ao lado do rosto dela: "Estou com sede". Ela não pede nada; a iA tem de concluir sozinha o que fazer.
+2. Ir até a porta e apertar `ESPACO` para abri-la. Ela fica aberta.
+3. Do outro lado há uma cozinha. Ir até a geladeira e apertar `ESPACO` para abri-la.
+4. Apertar `ESPACO` de novo para pegar a garrafa de água que está lá dentro.
+5. Voltar ao quarto e apertar `ESPACO` de frente para a pessoa. Ela fica com a garrafa, o balão passa a dizer "Obrigado!" e o jogo é vencido.
+
+A ordem não é obrigatória: quem buscar a água sem falar com a pessoa também vence. Na geladeira, só a garrafa pode ser pega; a comida é enfeite.
+
+O espelho continua no quarto, mas neste desafio ele não faz parte da solução. O balão não aparece no reflexo.
+
 **O que aparece na imagem**
 
-- Um contador sem legenda no alto ("0/4"): quantos objetos já estão na cesta.
-- Uma borda azul-clara em volta do que o `ESPACO` pegaria agora, ou em volta da cesta quando dá para colocar nela.
+- Um contador sem legenda no alto ("0/4" no Desafio 1, "0/1" no Desafio 2): quantos objetos já foram guardados ou entregues. O Desafio 3 não tem contador.
+- Uma borda azul-clara em volta daquilo em que o `ESPACO` agiria agora: o objeto que seria pego, a cesta, o outro robô, a pessoa, a porta ou a geladeira.
+- O balão com o que a pessoa disse (Desafio 3).
 - O texto do peito e a placa "SALA 01" aparecem invertidos no reflexo.
 - Uma faixa de parabéns quando o jogo é vencido.
 

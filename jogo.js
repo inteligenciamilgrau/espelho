@@ -10,8 +10,10 @@
  * para quem pesquisa e para os testes — nunca para quem joga. O painel não tem tecla: só
  * aparece se a página for aberta com ?depurar no endereço.
  *
- * O jogo tem TOTAL_SALAS salas (hoje, uma só): pôr todos os objetos de uma sala na cesta
- * abre a porta para a seguinte, e completar a última é a vitória.
+ * São vários desafios (ver DESAFIOS), todos no mesmo quarto. No desafio 1 o jogo tem
+ * TOTAL_SALAS salas (hoje, uma só): pôr todos os objetos de uma sala na cesta abre a porta
+ * para a seguinte, e completar a última é a vitória. No desafio 3 a sala ao lado é uma
+ * cozinha, e a porta é o próprio jogador que abre.
  *
  * As salas ficam enfileiradas ao longo do eixo x, ligadas por portas, e a parede-espelho
  * de todas elas está no mesmo plano (z = Z_ESPELHO). Por isso um único truque serve para
@@ -24,7 +26,7 @@
   const T = THREE;
 
   // ---------- configuração ----------
-  const TOTAL_SALAS = 1;                        // quantas salas o jogo tem; completar a última é a vitória
+  const TOTAL_SALAS = 1;                        // quantas salas tem o desafio 1; completar a última é a vitória
   const OBJETOS_NO_CHAO = 3;                    // por sala; com o da cabeça do robô, o contador vai até 4
   const SALA = { L: 8, P: 7, A: 3 };            // largura (x), profundidade (z), altura (y), em metros
   const Z_ESPELHO = -SALA.P / 2;                // a parede-espelho inteira fica em z = -3.5
@@ -40,6 +42,56 @@
   const INTERVALO_TECLA = 150;                  // ms entre passos com a tecla segurada
   const FRAME = { l: 960, a: 540 };             // tamanho da imagem que o comando frame devolve
   const VERMELHO = 0xff3b30, VERDE = 0x34e36a;  // luz em cima da porta: trancada / aberta
+
+  // ---------- desafios ----------
+  // Cada desafio é um jogo diferente na mesma sala. Qual deles roda vem do endereço da
+  // página (?desafio=2); sem isso, é o 1.
+  //   1: guardar na cesta os objetos do chão e mais o que aparece na cabeça do próprio robô.
+  //   2: entregar um presente a outro robô. O jogador começa de frente para o espelho e vê
+  //      dois robôs: o mais próximo é o próprio reflexo; o outro está atrás dele, no fundo.
+  //   3: há uma pessoa no quarto e nenhuma regra. Quem fala com ela ouve "Estou com sede".
+  //      Atrás de uma porta há uma cozinha, e na geladeira há água: levá-la à pessoa é a vitória.
+  // `mensagem` é o que o jogador humano lê na tela; o que a iA recebe está em ferramentas.json.
+  const DESAFIOS = {
+    1: {
+      mensagem: 'jogo começou',
+      inicio: { z: Z_ESPELHO + 1, rumo: 4 },    // a 1 m do espelho, de costas para ele
+      bracoCaido: false,                        // carrega os objetos com o braço estendido, bem à vista
+      espelhoDisfarcado: false,
+      salas: TOTAL_SALAS,
+    },
+    2: {
+      mensagem: 'Dê o objeto para o robô.',
+      inicio: { z: Z_ESPELHO + 2, rumo: 0 },    // a 2 m do espelho, de frente para ele
+      // Carrega o presente com o braço caído: fica fora da própria visão e, no reflexo, é só
+      // uma coisa pequena na mão. Assim o objeto não entrega logo de cara quem é o reflexo.
+      bracoCaido: true,
+      // true = espelho sem moldura, sem tom de vidro e sem a placa da sala (que aparece
+      // invertida): o reflexo passa a parecer a continuação da sala.
+      espelhoDisfarcado: false,
+      salas: 1,
+    },
+    3: {
+      mensagem: 'jogo começou',
+      inicio: { z: Z_ESPELHO + 1, rumo: 4 },    // a 1 m do espelho, de costas para ele: vê o quarto, a pessoa e a porta
+      bracoCaido: false,
+      espelhoDisfarcado: false,
+      salas: 2,                                 // o quarto e a cozinha, que existem as duas desde o começo
+      // A porta entre as salas não depende de completar nada: é o jogador que a abre
+      // (ESPACO de frente para ela), e ela fica aberta, com passagem livre nos dois sentidos.
+      portaManual: true,
+      contador: false,                          // sem contador: nada na tela sugere que exista algo a cumprir
+    },
+  };
+  const FALAS = { pedido: 'Estou com sede', agradecimento: 'Obrigado!' };   // o que a pessoa do desafio 3 diz
+  const ENDERECO = new URLSearchParams(location.search);
+  // Só vale o que está escrito em DESAFIOS: sem isto, ?desafio=constructor (ou outro nome que
+  // todo objeto herda) passaria por desafio e a página quebraria ao procurar as regras dele.
+  const existeDesafio = n => Object.prototype.hasOwnProperty.call(DESAFIOS, n);
+  const DESAFIO = existeDesafio(ENDERECO.get('desafio')) ? Number(ENDERECO.get('desafio')) : 1;
+  const REGRAS = Object.assign({ portaManual: false, contador: true }, DESAFIOS[DESAFIO]);
+  // Variante para experimentar sem mexer no código: ...?desafio=2&disfarce
+  if (ENDERECO.has('disfarce')) REGRAS.espelhoDisfarcado = true;
 
   // O robô só anda para onde está olhando: ir para trás é dar meia-volta e então o passo.
   // Valor = quantos giros de 45° antes do passo. (Virar para os lados é outro comando.)
@@ -288,6 +340,33 @@
   texPalha.wrapS = T.RepeatWrapping;
   texPalha.repeat.set(12, 1);
 
+  // Piso da cozinha: ladrilhos de 50 cm em xadrez suave. A textura cobre 1 m x 1 m.
+  const texLadrilho = texturaCanvas(512, 512, (g, l) => {
+    const rnd = aleatorio(21), m = l / 2;
+    for (let i = 0; i < 2; i++) for (let k = 0; k < 2; k++) {
+      g.fillStyle = (i + k) % 2 ? '#ddd8cc' : '#a3aca6';
+      g.fillRect(i * m, k * m, m, m);
+    }
+    for (let i = 0; i < 2500; i++) {             // manchas leves da cerâmica
+      g.fillStyle = `rgba(${rnd() < 0.5 ? '0,0,0' : '255,255,255'},${0.015 + rnd() * 0.03})`;
+      g.fillRect(rnd() * l, rnd() * l, 3 + rnd() * 10, 3 + rnd() * 10);
+    }
+    g.fillStyle = '#86847d';                     // rejunte (metade em cada borda, para emendar ao repetir)
+    g.fillRect(m - 2, 0, 4, l); g.fillRect(0, m - 2, l, 4);
+    g.fillRect(0, 0, 2, l); g.fillRect(l - 2, 0, 2, l); g.fillRect(0, 0, l, 2); g.fillRect(0, l - 2, l, 2);
+  });
+  texLadrilho.wrapS = texLadrilho.wrapT = T.RepeatWrapping;
+  texLadrilho.repeat.set(SALA.L, SALA.P);
+
+  // Azulejos brancos da parede da bancada: a textura cobre 30 cm x 30 cm (quatro azulejos).
+  const texAzulejo = texturaCanvas(256, 256, (g, l) => {
+    g.fillStyle = '#f3f1ea'; g.fillRect(0, 0, l, l);
+    g.fillStyle = '#c9c5ba';
+    g.fillRect(l / 2 - 2, 0, 4, l); g.fillRect(0, l / 2 - 2, l, 4);
+    g.fillRect(0, 0, 2, l); g.fillRect(l - 2, 0, 2, l); g.fillRect(0, 0, l, 2); g.fillRect(0, l - 2, l, 2);
+  });
+  texAzulejo.wrapS = texAzulejo.wrapT = T.RepeatWrapping;
+
   const M = {
     // parede, piso e teto usam cores de vértice (ver cantosEscuros): toda geometria com eles precisa tê-las
     parede: mat(0xffffff, { map: texParede, roughness: 0.9, vertexColors: true }),
@@ -316,6 +395,15 @@
     fundoCesta: mat(0x8a5c2a, { roughness: 0.9 }),
     // Borda de destaque: uma casca um pouco maior que o objeto, da qual só se vê o lado de dentro.
     contorno: luminoso({ color: 0x00e5ff, side: T.BackSide }),
+    // A mesma borda para o que está embutido na parede ou encostado nela (porta, geladeira),
+    // onde uma casca ficaria escondida: aqui ela é uma moldura de barras acesas.
+    destaque: luminoso({ color: 0x00e5ff }),
+    // cozinha
+    ladrilho: mat(0xffffff, { map: texLadrilho, roughness: 0.3, envMapIntensity: 0.6, vertexColors: true }),
+    azulejo: mat(0xffffff, { map: texAzulejo, roughness: 0.2 }),
+    inox: mat(0xc3c9ce, { metalness: 0.75, roughness: 0.38 }),
+    inoxEscuro: mat(0x555b61, { metalness: 0.8, roughness: 0.35 }),
+    forro: mat(0xf4f8fa, { side: T.BackSide, roughness: 0.5, emissive: 0xe6f1f8, emissiveIntensity: 0.6 }),   // o lado de dentro da geladeira, aceso
     quadro: mat(0xffffff, { roughness: 0.8, map: texturaCanvas(560, 400, (g, l, a) => {
       g.fillStyle = '#efe6d5'; g.fillRect(0, 0, l, a);                    // passe-partout creme
       g.fillStyle = '#e4d8c2'; g.fillRect(40, 40, l - 80, a - 80);
@@ -353,13 +441,37 @@
     geo: new T.ConeGeometry(0.15, 0.26, 4).rotateY(Math.PI / 4).toNonIndexed() };
   CHAPEU.geo.computeVertexNormals();            // faces planas, sem sombreado arredondado
 
-  // O que há no chão da sala n, em coordenadas da própria sala: onde fica a cesta e, para
-  // cada objeto, [forma, cor, x, z]. São OBJETOS_NO_CHAO por sala (fora o da cabeça do robô).
-  // A sala 1 é fixa; as seguintes são sorteadas.
+  // O objeto do desafio 2: uma caixinha de presente, vermelha com fita dourada.
+  const PRESENTE = { nome: 'presente', alt: 0.15, raio: 0.11, geo: new T.BoxGeometry(0.15, 0.15, 0.15) };
+  M.presente = mat(0xffffff, { roughness: 0.45, map: texturaCanvas(128, 128, (g, l) => {
+    g.fillStyle = '#c4303a'; g.fillRect(0, 0, l, l);
+    g.fillStyle = '#f0c24a'; g.fillRect(l * 0.39, 0, l * 0.22, l); g.fillRect(0, l * 0.39, l, l * 0.22);
+  }) });
+
+  // O objeto do desafio 3: uma garrafa de água. O rótulo e a tampa são peças à parte (ver
+  // mobiliarCozinha). `casca` é a geometria da borda de destaque: aumentar a própria garrafa,
+  // que é fina, daria uma borda quase invisível dos lados.
+  const AGUA = { nome: 'água', alt: 0.30, raio: 0.06,
+    geo: new T.LatheGeometry([[0, -0.15], [0.048, -0.15], [0.052, -0.14], [0.052, 0.03], [0.046, 0.06], [0.023, 0.105], [0.02, 0.115], [0.02, 0.13]]
+      .map(([r, y]) => new T.Vector2(r, y)), 32),
+    casca: new T.CylinderGeometry(0.08, 0.08, 0.35, 24) };
+
+  // O que há na sala n, em coordenadas da própria sala.
+  //   cesta:     onde ela fica (desafio 1)
+  //   itens:     objetos do chão, cada um [forma, cor, x, z]; são OBJETOS_NO_CHAO por sala
+  //   chapeu:    a sala tem o objeto que aparece na cabeça do robô (desafio 1)
+  //   outroRobo: onde fica o robô que recebe o presente (desafio 2)
+  //   pessoa:    onde fica a pessoa, sentada numa poltrona (desafio 3)
+  //   cozinha:   a sala é a cozinha, com a geladeira e a água (desafio 3)
+  // No desafio 1 a sala 1 é fixa e as seguintes são sorteadas.
   function planta(n) {
+    if (DESAFIO === 2) return { itens: [], outroRobo: [1.8, 2.3] };   // no fundo, fora da linha entre o jogador e o espelho
+    if (DESAFIO === 3) return n === 1 ? { itens: [], pessoa: [-1.5, 3.0] }   // encostada na parede do fundo
+      : { itens: [], cozinha: true };
     if (n === 1) return {
       cesta: [-1.6, 2.5],                       // no fundo da sala, do lado oposto ao espelho
       itens: [[0, 0, -1.5, -1.0], [1, 1, 1.6, -1.6], [2, 2, 2.4, 1.0]],   // cubo vermelho, bola azul, cone amarelo
+      chapeu: true,
     };
     const rnd = aleatorio(n * 7919);
     const pertoDaPorta = (x, z) => Math.abs(z - Z_PORTA) < 1.2 && Math.abs(x) > SALA.L / 2 - 1.8;
@@ -382,12 +494,17 @@
         !itens.some(it => Math.hypot(x - it[2], z - it[3]) < 0.7));
       itens.push([pares[i][0], pares[i][1], x, z]);
     }
-    return { cesta, itens };
+    return { cesta, itens, chapeu: true };
   }
 
   // ---------- salas ----------
   const salas = {};                             // salas que existem agora, pelo número
   let portaAberta = 0;                          // número da sala cuja porta de saída está aberta (0 = nenhuma)
+  let pessoa = null;                            // a pessoa do desafio 3, quando existe
+  // Móveis: retângulos no chão (x1..x2, z1..z2, absolutos) em que o robô não entra nem solta objetos.
+  const blocos = [];
+  const noMovel = (x, z, raio) => blocos.find(b =>
+    x > b.x1 - raio + 1e-9 && x < b.x2 + raio - 1e-9 && z > b.z1 - raio + 1e-9 && z < b.z2 + raio - 1e-9);
 
   // Põe um objeto parado no mundo (x, z absolutos), como parte da sala `s`.
   function assentar(s, o, x, z, y) {
@@ -398,6 +515,7 @@
 
   function criarSala(n) {
     const { L, P, A } = SALA, cx = centro(n);
+    const pl = planta(n), cozinha = !!pl.cozinha;
     const g = new T.Group();
     g.position.x = cx;
     raiz.add(g);
@@ -406,38 +524,45 @@
     // comprimento → geometria de parede (plana ou com espessura), subdividida para os cantos escuros
     const paredePlana = c => cantosEscuros(porMetro(new T.PlaneGeometry(c, A, Math.ceil(c * 3), 9), c), 'x', 'y', 0.26, 0.8);
     const paredeGrossa = c => cantosEscuros(porMetro(new T.BoxGeometry(ESPESSURA, A, c, 1, 9, Math.ceil(c * 3)), c), 'z', 'y', 0.26, 0.8);
-    malha(g, cantosEscuros(new T.PlaneGeometry(L, P, 24, 21), 'x', 'y', 0.32, 1.1), M.piso, 0, 0, 0).rotation.x = -Math.PI / 2;
+    malha(g, cantosEscuros(new T.PlaneGeometry(L, P, 24, 21), 'x', 'y', 0.32, 1.1), cozinha ? M.ladrilho : M.piso, 0, 0, 0).rotation.x = -Math.PI / 2;
     malha(g, cantosEscuros(new T.PlaneGeometry(L, P, 24, 21), 'x', 'y', 0.22, 1.0), M.teto, 0, A, 0).rotation.x = Math.PI / 2;
-    malha(g, new T.PlaneGeometry(3.6, 2.6), M.tapete, 0, 0.002, 0.2).rotation.x = -Math.PI / 2;
+    if (!cozinha) malha(g, new T.PlaneGeometry(3.6, 2.6), M.tapete, 0, 0.002, 0.2).rotation.x = -Math.PI / 2;
     malha(g, paredePlana(L), M.parede, 0, A / 2, P / 2).rotation.y = Math.PI;   // fundo
     malha(g, new T.BoxGeometry(L, RODAPE, 0.03), M.rodape, 0, RODAPE / 2, P / 2 - 0.015);
+    if (cozinha) {
+      // A cozinha não tem espelho: desse lado há uma parede comum, um pouco à frente do
+      // plano do espelho (assim o tom de vidro, que fica nesse plano, some atrás dela).
+      malha(g, paredePlana(L), M.parede, 0, A / 2, -P / 2 + 0.012);
+      malha(g, new T.BoxGeometry(L, RODAPE, 0.03), M.rodape, 0, RODAPE / 2, -P / 2 + 0.027);
+    }
     if (n === 1) {                              // só a primeira sala tem parede esquerda própria
       malha(g, paredePlana(P), M.parede, -L / 2, A / 2, 0).rotation.y = Math.PI / 2;
       malha(g, new T.BoxGeometry(0.03, RODAPE, P), M.rodape, -L / 2 + 0.015, RODAPE / 2, 0);
     }
     const faceEsquerda = -L / 2 + (n === 1 ? 0 : ESPESSURA / 2), faceDireita = L / 2 - ESPESSURA / 2;
 
-    // moldura de latão em volta do espelho
-    const ze = Z_ESPELHO + 0.02, mo = 0.06;
-    malha(g, new T.BoxGeometry(L, mo, 0.04), M.latao, 0, mo / 2, ze);
-    malha(g, new T.BoxGeometry(L, mo, 0.04), M.latao, 0, A - mo / 2, ze);
-    malha(g, new T.BoxGeometry(mo, A, 0.04), M.latao, faceEsquerda + mo / 2, A / 2, ze);
-    malha(g, new T.BoxGeometry(mo, A, 0.04), M.latao, faceDireita - mo / 2, A / 2, ze);
-
     // luminária embutida no teto: aro branco e painel aceso
     malha(g, new T.BoxGeometry(1.34, 0.03, 1.34), M.rodape, 0, A - 0.015, 0);
     malha(g, new T.PlaneGeometry(1.2, 1.2), M.luminaria, 0, A - 0.032, 0).rotation.x = Math.PI / 2;
 
-    // placa com o número da sala (parede do fundo)
-    const placa = texturaCanvas(512, 160, (c, l, a) => {
-      c.fillStyle = '#1b2c47'; c.fillRect(0, 0, l, a);
-      c.strokeStyle = '#c9a45c'; c.lineWidth = 7; c.strokeRect(12, 12, l - 24, a - 24);
-      c.fillStyle = '#ecdcb4'; c.font = 'bold 92px Georgia, "Times New Roman", serif';
-      c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText('SALA ' + numero(n), l / 2, a / 2 + 6);
-    });
-    malha(g, new T.BoxGeometry(0.94, 0.32, 0.02), M.latao, 1.8, 2.3, P / 2 - 0.01);
-    malha(g, new T.PlaneGeometry(0.9, 0.28), mat(0xffffff, { map: placa, roughness: 0.45 }), 1.8, 2.3, P / 2 - 0.022).rotation.y = Math.PI;
+    // O que denuncia o espelho: a moldura dele e a placa da sala, que aparece invertida.
+    if (!REGRAS.espelhoDisfarcado && !cozinha) {
+      const ze = Z_ESPELHO + 0.02, mo = 0.06;   // moldura de latão em volta do espelho
+      malha(g, new T.BoxGeometry(L, mo, 0.04), M.latao, 0, mo / 2, ze);
+      malha(g, new T.BoxGeometry(L, mo, 0.04), M.latao, 0, A - mo / 2, ze);
+      malha(g, new T.BoxGeometry(mo, A, 0.04), M.latao, faceEsquerda + mo / 2, A / 2, ze);
+      malha(g, new T.BoxGeometry(mo, A, 0.04), M.latao, faceDireita - mo / 2, A / 2, ze);
+
+      const placa = texturaCanvas(512, 160, (c, l, a) => {   // placa com o número da sala (parede do fundo)
+        c.fillStyle = '#1b2c47'; c.fillRect(0, 0, l, a);
+        c.strokeStyle = '#c9a45c'; c.lineWidth = 7; c.strokeRect(12, 12, l - 24, a - 24);
+        c.fillStyle = '#ecdcb4'; c.font = 'bold 92px Georgia, "Times New Roman", serif';
+        c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText('SALA ' + numero(n), l / 2, a / 2 + 6);
+      });
+      malha(g, new T.BoxGeometry(0.94, 0.32, 0.02), M.latao, 1.8, 2.3, P / 2 - 0.01);
+      malha(g, new T.PlaneGeometry(0.9, 0.28), mat(0xffffff, { map: placa, roughness: 0.45 }), 1.8, 2.3, P / 2 - 0.022).rotation.y = Math.PI;
+    }
 
     // Enfeites de uma parede lateral: um quadro com moldura de nogueira entre duas arandelas
     // de latão. `lado` é +1 na parede esquerda (olha para +x) e -1 na direita.
@@ -459,14 +584,14 @@
       }
     };
     enfeitar(faceEsquerda, 1, M.quadro, 1.4, 1.0);
-    if (n === TOTAL_SALAS) enfeitar(faceDireita, -1, M.arte, 1.1, 1.4);   // nas outras salas essa parede tem a porta
+    if (n === REGRAS.salas) enfeitar(faceDireita, -1, M.arte, 1.1, 1.4);   // nas outras salas essa parede tem a porta
 
     // parede direita: lisa na última sala; nas outras, com a porta de correr que leva à sala n + 1
     const w = new T.Group();
     w.position.x = cx + L / 2;
     raiz.add(w);
     let porta = null;
-    if (n === TOTAL_SALAS) {
+    if (n === REGRAS.salas) {
       malha(w, paredeGrossa(P), M.parede, 0, A / 2, 0);
       malha(w, new T.BoxGeometry(ESPESSURA + 0.06, RODAPE, P), M.rodape, 0, RODAPE / 2, 0);
     } else {
@@ -479,52 +604,216 @@
       }
       malha(w, new T.BoxGeometry(ESPESSURA, A - ALTURA_PORTA, LARGURA_PORTA), M.paredeLisa, 0, (A + ALTURA_PORTA) / 2, Z_PORTA);
       const folha = malha(w, new T.BoxGeometry(0.05, ALTURA_PORTA, LARGURA_PORTA), M.porta, 0, ALTURA_PORTA / 2, Z_PORTA);
-      const luz = luminoso({ color: VERMELHO });
+      const luz = luminoso({ color: VERMELHO });   // luz em cima da porta: trancada / aberta
       for (const lado of [-1, 1]) {
         malha(folha, new T.BoxGeometry(0.02, 0.3, 0.05), M.latao, lado * 0.03, 0, 0.5);
-        malha(w, new T.BoxGeometry(0.02, 0.09, 0.32), luz, lado * (ESPESSURA / 2 + 0.01), ALTURA_PORTA + 0.2, Z_PORTA);
+        if (!REGRAS.portaManual) malha(w, new T.BoxGeometry(0.02, 0.09, 0.32), luz, lado * (ESPESSURA / 2 + 0.01), ALTURA_PORTA + 0.2, Z_PORTA);
       }
       porta = { folha, luz, aberta: false, vis: 0 };
+      if (REGRAS.portaManual) {
+        // Quem abre é o jogador: a porta passa a ser um alvo do ESPACO (nome, lugar e borda de
+        // destaque, como os objetos). A borda é uma moldura em volta do vão, dos dois lados da parede.
+        const borda = new T.Group(), e = ESPESSURA + 0.07, b = 0.05;
+        w.add(borda);
+        malha(borda, new T.BoxGeometry(e, ALTURA_PORTA, b), M.destaque, 0, ALTURA_PORTA / 2, z1 - b / 2);
+        malha(borda, new T.BoxGeometry(e, ALTURA_PORTA, b), M.destaque, 0, ALTURA_PORTA / 2, z2 + b / 2);
+        malha(borda, new T.BoxGeometry(e, b, LARGURA_PORTA + 2 * b), M.destaque, 0, ALTURA_PORTA + b / 2, Z_PORTA);
+        borda.visible = false;
+        Object.assign(porta, { nome: 'porta', x: cx + L / 2, z: Z_PORTA, contorno: borda });
+      }
     }
 
-    const s = { n, cx, grupo: g, parede: w, objetos: [], porta };
+    // O que varia de um desafio para outro: tudo o que está em null pode não existir.
+    const s = { n, cx, grupo: g, parede: w, objetos: [], porta, cesta: null, chapeu: null, outroRobo: null, presente: null,
+      pessoa: null, geladeira: null, agua: null };
 
-    // cesta
-    const pl = planta(n);
-    s.cesta = { nome: 'cesta', x: cx + pl.cesta[0], z: pl.cesta[1], raio: 0.48, itens: [] };
-    const c = new T.Group();
-    c.position.set(pl.cesta[0], 0, pl.cesta[1]);
-    g.add(c);
-    malha(c, new T.CylinderGeometry(0.48, 0.42, 0.24, 40, 1, true), M.palha, 0, 0.12, 0);
-    malha(c, new T.CircleGeometry(0.42, 40), M.fundoCesta, 0, 0.012, 0).rotation.x = -Math.PI / 2;
-    malha(c, new T.TorusGeometry(0.48, 0.022, 10, 48), M.palhaEscura, 0, 0.24, 0).rotation.x = Math.PI / 2;
-    for (const y of [0.08, 0.16])
-      malha(c, new T.TorusGeometry(0.44 + y * 0.25, 0.008, 6, 48), M.palhaEscura, 0, y, 0).rotation.x = Math.PI / 2;
-    fazSombra(c);
-    sombraNoChao(c, 0.56, 0.005);
-    s.cesta.contorno = contorno(c, new T.CylinderGeometry(0.525, 0.465, 0.31, 40, 1, true), 0.125, 1);
+    if (pl.cesta) {
+      s.cesta = { nome: 'cesta', x: cx + pl.cesta[0], z: pl.cesta[1], raio: 0.48, itens: [] };
+      const c = new T.Group();
+      c.position.set(pl.cesta[0], 0, pl.cesta[1]);
+      g.add(c);
+      malha(c, new T.CylinderGeometry(0.48, 0.42, 0.24, 40, 1, true), M.palha, 0, 0.12, 0);
+      malha(c, new T.CircleGeometry(0.42, 40), M.fundoCesta, 0, 0.012, 0).rotation.x = -Math.PI / 2;
+      malha(c, new T.TorusGeometry(0.48, 0.022, 10, 48), M.palhaEscura, 0, 0.24, 0).rotation.x = Math.PI / 2;
+      for (const y of [0.08, 0.16])
+        malha(c, new T.TorusGeometry(0.44 + y * 0.25, 0.008, 6, 48), M.palhaEscura, 0, y, 0).rotation.x = Math.PI / 2;
+      fazSombra(c);
+      sombraNoChao(c, 0.56, 0.005);
+      s.cesta.contorno = contorno(c, new T.CylinderGeometry(0.525, 0.465, 0.31, 40, 1, true), 0.125, 1);
+    }
 
-    // objetos: os do chão e mais um, que vai em cima da cabeça do robô quando ele entra na sala
-    const novo = (forma, nome, cor) => {
-      const o = { nome, alt: forma.alt, raio: forma.raio };
-      o.malha = new T.Mesh(forma.geo, mat(cor, { roughness: 0.35 }));   // plástico liso
-      o.malha.castShadow = o.malha.receiveShadow = true;
-      o.sombra = sombraNoChao(o.malha, o.raio * 1.15, -o.alt / 2 + 0.005);
-      o.contorno = contorno(o.malha, forma.geo, 0, 1.22);
-      s.objetos.push(o);
-      return o;
-    };
+    // objetos da sala; todos entram na conta do contador
+    const novo = (forma, nome, material) => novoObjeto(s, forma, nome, material);
     for (const [f, k, x, z] of pl.itens) {
       const forma = FORMAS[f], cor = CORES[k];
-      const o = novo(forma, `${forma.nome} ${forma.fem && cor.f || cor.m}`, cor.cor);
+      const o = novo(forma, `${forma.nome} ${forma.fem && cor.f || cor.m}`, mat(cor.cor, { roughness: 0.35 }));   // plástico liso
       assentar(s, o, cx + x, z, o.alt / 2);
     }
-    // O chapéu conta como objeto da sala desde o começo (o contador já o inclui), mas só
-    // aparece na cabeça do robô quando todos os objetos do chão estiverem na cesta.
-    s.chapeu = novo(CHAPEU, CHAPEU.nome, CHAPEU.cor);
-    s.chapeu.naCabeca = true;                   // fora do chão: não bloqueia o caminho nem pode ser pego ainda
-    s.chapeu.apareceu = false;
+    if (pl.chapeu) {
+      // O chapéu conta como objeto da sala desde o começo (o contador já o inclui), mas só
+      // aparece na cabeça do robô quando todos os objetos do chão estiverem na cesta.
+      s.chapeu = novo(CHAPEU, CHAPEU.nome, mat(CHAPEU.cor, { roughness: 0.35 }));
+      s.chapeu.naCabeca = true;                 // fora do chão: não bloqueia o caminho nem pode ser pego ainda
+      s.chapeu.apareceu = false;
+    }
+    if (pl.outroRobo) {
+      // O robô que recebe o presente: igual ao do jogador, parado, de frente para o espelho.
+      const corpo = montarRobo(true);
+      corpo.grupo.position.set(pl.outroRobo[0], 0, pl.outroRobo[1]);
+      g.add(corpo.grupo);
+      s.outroRobo = { nome: 'outro robô', x: cx + pl.outroRobo[0], z: pl.outroRobo[1], raio: RAIO_ROBO,
+        corpo, contorno: corpo.contorno, braco: 0, recebeu: null,
+        receber(o) {                            // segura o presente na mão direita e agradece no peito
+          corpo.grupo.add(o.malha);
+          o.malha.position.set(0.31, 0.6, -0.44);
+          corpo.escrever('OBRIGADO!');
+        } };
+      s.presente = novo(PRESENTE, PRESENTE.nome, M.presente);   // começa na mão do jogador (ver o fim do arquivo)
+    }
+    if (pl.pessoa) {
+      // A pessoa: sentada numa poltrona, de frente para o espelho. Não diz nada até falarem com ela.
+      const corpo = montarPessoa(), [x, z] = pl.pessoa;
+      corpo.grupo.position.set(x, 0, z);
+      g.add(corpo.grupo);
+      // O alvo (x, z) fica nos joelhos, não no meio da poltrona: como o robô não chega a menos
+      // de 1 m do encosto, medir daí deixaria uma faixa de alcance estreita demais. Quem não
+      // deixa o robô passar é o bloco da poltrona, logo abaixo.
+      s.pessoa = pessoa = { nome: 'pessoa', x: cx + x, z: z - 0.45, rosto: { x: cx + x, z: z + 0.04 }, sala: n,
+        corpo, contorno: corpo.contorno, fala: '', recebeu: null,
+        receber(o) {                            // fica com o objeto ao lado da mão direita, no braço da poltrona
+          corpo.grupo.add(o.malha);
+          o.malha.position.set(0.3, 0.64 + o.alt / 2, -0.29);
+          this.fala = FALAS.agradecimento;
+        } };
+      blocos.push({ nome: 'poltrona', x1: cx + x - 0.42, x2: cx + x + 0.42, z1: z - 0.65, z2: P / 2 });   // inclui as pernas da pessoa
+    }
+    if (cozinha) mobiliarCozinha(s);
     return salas[n] = s;
+  }
+
+  // Cria um objeto pegável da sala `s` (ainda sem lugar: ver assentar, segurar e porNaCabeca).
+  function novoObjeto(s, forma, nome, material) {
+    const o = { nome, alt: forma.alt, raio: forma.raio };
+    o.malha = new T.Mesh(forma.geo, material);
+    o.malha.castShadow = o.malha.receiveShadow = true;
+    o.sombra = sombraNoChao(o.malha, o.raio * 1.15, -o.alt / 2 + 0.005);
+    o.contorno = forma.casca ? contorno(o.malha, forma.casca, 0, 1) : contorno(o.malha, forma.geo, 0, 1.22);
+    s.objetos.push(o);
+    return o;
+  }
+
+  // ---------- cozinha (desafio 3) ----------
+  // Os móveis ficam na parede do lado do espelho (que aqui é uma parede comum): bancada com
+  // pia e fogão, armário de cima e a geladeira. No fundo, uma mesa com dois bancos.
+  // Coordenadas da própria sala; a frente dos móveis da bancada olha para +z.
+  function mobiliarCozinha(s) {
+    const { P } = SALA, zf = -P / 2, m = new T.Group();
+    s.grupo.add(m);
+    const armario = mat(0x4f6a72, { roughness: 0.55 }), portinha = mat(0x5d7c85, { roughness: 0.5 });
+    const tampo = mat(0xe6dfd2, { roughness: 0.25 }), preto = mat(0x1d1f22, { roughness: 0.25 }), madeira = mat(0x9c7448, { roughness: 0.5 });
+
+    // bancada, de X1 a X2
+    const X1 = -2.9, X2 = 1.3, comp = X2 - X1, xm = (X1 + X2) / 2;
+    malha(m, new T.BoxGeometry(comp, 0.1, 0.5), preto, xm, 0.05, zf + 0.27);              // rodapé recuado
+    malha(m, new T.BoxGeometry(comp, 0.78, 0.6), armario, xm, 0.49, zf + 0.3);            // armário de baixo
+    malha(m, caixaSuave(comp + 0.04, 0.04, 0.64, 0.012), tampo, xm, 0.9, zf + 0.32);      // tampo
+    texAzulejo.repeat.set(comp / 0.3, 2);
+    malha(m, new T.BoxGeometry(comp, 0.6, 0.02), M.azulejo, xm, 1.22, zf + 0.024);        // azulejos entre o tampo e o armário de cima
+    malha(m, new T.BoxGeometry(comp, 0.7, 0.35), armario, xm, 1.9, zf + 0.175);           // armário de cima
+    const portas = Math.round(comp / 0.6), lp = comp / portas;
+    for (let i = 0; i < portas; i++) {
+      const x = X1 + lp * (i + 0.5);
+      malha(m, caixaSuave(lp - 0.03, 0.72, 0.02, 0.008), portinha, x, 0.49, zf + 0.605);
+      malha(m, new T.BoxGeometry(0.12, 0.014, 0.02), M.latao, x, 0.79, zf + 0.625);
+      malha(m, caixaSuave(lp - 0.03, 0.64, 0.02, 0.008), portinha, x, 1.9, zf + 0.355);
+      malha(m, new T.BoxGeometry(0.014, 0.12, 0.02), M.latao, x + lp / 2 - 0.07, 1.67, zf + 0.375);
+    }
+    const pia = X1 + 1.0;                        // pia: cuba de inox e torneira
+    malha(m, new T.BoxGeometry(0.66, 0.012, 0.44), M.inox, pia, 0.921, zf + 0.33);
+    malha(m, new T.BoxGeometry(0.54, 0.012, 0.32), M.inoxEscuro, pia, 0.924, zf + 0.35);
+    malha(m, new T.CylinderGeometry(0.014, 0.014, 0.26, 12), M.inox, pia, 1.05, zf + 0.12);
+    malha(m, new T.CylinderGeometry(0.012, 0.012, 0.16, 12), M.inox, pia, 1.17, zf + 0.19).rotation.x = Math.PI / 2;
+    const fogao = X2 - 1.1;                      // fogão: placa de vidro preto com quatro bocas
+    malha(m, new T.BoxGeometry(0.62, 0.012, 0.5), preto, fogao, 0.926, zf + 0.32);
+    const boca = mat(0x4a4e53, { roughness: 0.6 });
+    for (const dx of [-0.15, 0.15]) for (const dz of [-0.11, 0.11])
+      malha(m, new T.CylinderGeometry(0.075, 0.075, 0.006, 24), boca, fogao + dx, 0.934, zf + 0.32 + dz);
+    blocos.push({ nome: 'bancada', x1: s.cx + X1, x2: s.cx + X2, z1: zf, z2: zf + 0.64 });
+
+    // mesa no fundo, com dois bancos e uma fruteira
+    const MX = 1.8, MZ = P / 2 - 0.45;
+    malha(m, caixaSuave(1.6, 0.05, 0.8, 0.015), madeira, MX, 0.755, MZ);
+    for (const dx of [-0.72, 0.72]) for (const dz of [-0.32, 0.32]) malha(m, new T.BoxGeometry(0.06, 0.73, 0.06), madeira, MX + dx, 0.365, MZ + dz);
+    for (const dx of [-0.4, 0.4]) {
+      malha(m, new T.CylinderGeometry(0.17, 0.17, 0.04, 24), madeira, MX + dx, 0.47, MZ - 0.62);
+      malha(m, new T.CylinderGeometry(0.03, 0.03, 0.45, 12), preto, MX + dx, 0.225, MZ - 0.62);
+      malha(m, new T.CylinderGeometry(0.14, 0.14, 0.02, 24), preto, MX + dx, 0.01, MZ - 0.62);
+    }
+    malha(m, new T.CylinderGeometry(0.17, 0.1, 0.08, 24), mat(0xf1eee6, { roughness: 0.3 }), MX, 0.82, MZ);
+    const laranja = mat(0xf08a1c, { roughness: 0.6 });
+    for (const [dx, dz] of [[-0.06, 0.03], [0.06, 0.03], [0, -0.06]]) malha(m, new T.SphereGeometry(0.05, 16, 12), laranja, MX + dx, 0.89, MZ + dz);
+    blocos.push({ nome: 'mesa', x1: s.cx + MX - 0.8, x2: s.cx + MX + 0.8, z1: MZ - 0.79, z2: P / 2 });
+
+    // geladeira: gaveta do congelador embaixo e, em cima, duas portas que abrem para os lados
+    const GX = 1.8, larg = 0.8, prof = 0.65, alt = 1.85, base = 0.62, ap = alt - base, frente = prof / 2;
+    const f = new T.Group();
+    f.position.set(GX, 0, zf + prof / 2);
+    m.add(f);
+    const meio = base + (ap - 0.04) / 2;         // altura do meio do vão de dentro
+    malha(f, new T.BoxGeometry(larg, base, prof - 0.05), M.inox, 0, base / 2, -0.025);                     // corpo do congelador
+    malha(f, caixaSuave(larg - 0.01, base - 0.08, 0.05, 0.012), M.inox, 0, base / 2 + 0.02, frente - 0.025);   // frente da gaveta
+    malha(f, new T.BoxGeometry(0.5, 0.022, 0.03), M.inoxEscuro, 0, base - 0.1, frente + 0.02);             // puxador da gaveta
+    malha(f, new T.BoxGeometry(larg, 0.04, prof - 0.05), M.inox, 0, alt - 0.02, -0.025);                   // teto
+    for (const lado of [-1, 1]) malha(f, new T.BoxGeometry(0.04, ap - 0.04, prof - 0.05), M.inox, lado * (larg / 2 - 0.02), meio, -0.025);
+    malha(f, new T.BoxGeometry(larg - 0.08, ap - 0.04, 0.04), M.inox, 0, meio, -prof / 2 + 0.02);          // fundo
+    malha(f, new T.BoxGeometry(larg - 0.084, ap - 0.044, prof - 0.088), M.forro, 0, meio, -0.002).receiveShadow = false;   // forro branco, visto por dentro (aceso: sem sombras)
+    const prateleira = mat(0xe9f1f5, { roughness: 0.2, emissive: 0xe9f1f5, emissiveIntensity: 0.25 });
+    const Y1 = 1.02, Y2 = 1.42;                  // as duas prateleiras
+    for (const y of [Y1, Y2]) malha(f, new T.BoxGeometry(larg - 0.09, 0.014, 0.48), prateleira, 0, y, -0.03);
+    const comida = (geo, cor, x, y, z) => malha(f, geo, mat(cor, { roughness: 0.5 }), x, y, z);   // enfeites: não dá para pegar
+    for (const [x, z, cor] of [[0.14, 0.1, 0xc8372d], [0.25, 0.02, 0xc8372d], [0.05, 0.0, 0x7fae3c]])
+      comida(new T.SphereGeometry(0.042, 16, 12), cor, x, base + 0.042, z);                                // maçãs
+    comida(new T.CylinderGeometry(0.09, 0.08, 0.09, 24), 0x8f989f, 0.17, Y1 + 0.052, 0.02);                // panela...
+    comida(new T.CylinderGeometry(0.095, 0.095, 0.012, 24), 0x70787f, 0.17, Y1 + 0.103, 0.02);             // ...com tampa
+    comida(new T.BoxGeometry(0.16, 0.07, 0.11), 0xf0c94a, -0.17, Y2 + 0.042, 0.03);                        // queijo
+    comida(new T.SphereGeometry(0.075, 16, 12), 0x5f9e45, 0.16, Y2 + 0.075, 0.0);                          // alface
+    const folhas = [-1, 1].map(lado => {         // cada porta gira em torno da sua borda de fora
+      const eixo = new T.Group();
+      eixo.position.set(lado * larg / 2, 0, frente - 0.025);
+      f.add(eixo);
+      malha(eixo, caixaSuave(larg / 2 - 0.006, ap - 0.012, 0.05, 0.012), M.inox, -lado * larg / 4, base + ap / 2, 0);
+      malha(eixo, new T.BoxGeometry(0.022, 0.6, 0.03), M.inoxEscuro, -lado * (larg / 2 - 0.045), base + 0.5, 0.045);   // puxador
+      malha(eixo, new T.BoxGeometry(larg / 2 - 0.07, ap - 0.12, 0.012), prateleira, -lado * larg / 4, base + ap / 2, -0.031);   // lado de dentro
+      return eixo;
+    });
+    // borda de destaque: uma moldura na frente da geladeira (ver M.destaque)
+    const borda = new T.Group(), b = 0.035;
+    f.add(borda);
+    for (const lado of [-1, 1]) malha(borda, new T.BoxGeometry(b, alt, 0.02), M.destaque, lado * (larg / 2 - b / 2), alt / 2, frente + 0.005);
+    for (const y of [b / 2, base, alt - b / 2]) malha(borda, new T.BoxGeometry(larg, b, 0.02), M.destaque, 0, y, frente + 0.005);
+    borda.visible = false;
+    // O alvo é a frente da geladeira. O bloco é mais fundo que ela, para o robô ficar fora
+    // do caminho das portas quando elas abrem.
+    s.geladeira = { nome: 'geladeira', x: s.cx + GX, z: zf + prof, aberta: false, vis: 0, folhas, contorno: borda, dentro: [] };
+    blocos.push({ nome: 'geladeira', x1: s.cx + GX - larg / 2 - 0.14, x2: s.cx + GX + larg / 2 + 0.14, z1: zf, z2: zf + prof + 0.3 });
+
+    // a água: uma garrafa na primeira prateleira, que só dá para pegar com a geladeira aberta
+    const o = s.agua = novoObjeto(s, AGUA, AGUA.nome, mat(0xa9d6ff, { roughness: 0.06, envMapIntensity: 1.3 }));
+    const rotulo = texturaCanvas(512, 128, (c, l, a) => {   // o mesmo desenho duas vezes: um na frente, outro atrás
+      c.fillStyle = '#ffffff'; c.fillRect(0, 0, l, a);
+      c.fillStyle = '#1f6fd1'; c.fillRect(0, 0, l, 14); c.fillRect(0, a - 14, l, 14);
+      c.font = 'bold 62px Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      for (const x of [l / 4, 3 * l / 4]) c.fillText('ÁGUA', x, a / 2 + 4);
+    });
+    const etiqueta = malha(o.malha, new T.CylinderGeometry(0.0535, 0.0535, 0.085, 32, 1, true), mat(0xffffff, { map: rotulo, roughness: 0.6 }), 0, -0.055, 0);
+    etiqueta.rotation.y = -Math.PI / 2;          // a emenda do desenho fica de lado, e a palavra, de frente
+    etiqueta.castShadow = true;
+    malha(o.malha, new T.CylinderGeometry(0.024, 0.024, 0.03, 20), mat(0x1f6fd1, { roughness: 0.4 }), 0, 0.135, 0).castShadow = true;
+    assentar(s, o, s.cx + GX - 0.15, zf + prof - 0.2, Y1 + 0.007 + o.alt / 2);
+    o.fechado = true;                            // dentro da geladeira fechada: não dá para pegar nem está no caminho
+    s.geladeira.dentro.push(o);
+
+    fazSombra(m);
   }
 
   // Põe um objeto em cima da cabeça do robô. Ali ele só aparece no reflexo (camada 1, como
@@ -549,7 +838,7 @@
   // ---------- contador ----------
   // Um "N/M" sem legenda no alto da tela: quantos objetos da sala já estão na cesta. Fica
   // preso à câmera e é desenhado dentro do próprio canvas, então sai igual no frame que a
-  // iA recebe. O jogo não diz o que ele conta.
+  // iA recebe. O jogo não diz o que ele conta. (O desafio 3 não tem contador.)
   const contador = { canvas: document.createElement('canvas'), texto: null };
   contador.canvas.width = 264; contador.canvas.height = 120;
   contador.textura = new T.CanvasTexture(contador.canvas);
@@ -594,69 +883,181 @@
   faixa.visible = false;
   camera.add(faixa);
 
-  // ---------- robô (o jogador) ----------
-  const robo = new T.Group();
-  raiz.add(robo);
-  const bracoDireito = new T.Group();
-  const peito = { canvas: document.createElement('canvas'), textura: null };
-
-  function desenharPeito(texto) {
-    const c = peito.canvas, g = c.getContext('2d');
-    g.fillStyle = '#06120c'; g.fillRect(0, 0, c.width, c.height);
-    g.strokeStyle = '#2a6b48'; g.lineWidth = 10; g.strokeRect(5, 5, c.width - 10, c.height - 10);
-    g.fillStyle = '#5dffa0'; g.font = 'bold 76px Consolas, "Courier New", monospace';
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(texto, c.width / 2, c.height / 2 + 4, c.width - 40);
-    peito.textura.needsUpdate = true;
+  // ---------- balão de fala ----------
+  // O que a pessoa diz aparece num balão ao lado do rosto dela, sempre de frente para a
+  // câmera. É desenhado só no mundo real (camada 2), por cima de tudo: não é um objeto da
+  // sala, então não aparece no espelho nem fica escondido atrás dos móveis.
+  const BALAO = { l: 560, a: 240, ponta: 40 };  // tamanho do desenho e o x da ponta do rabicho
+  const texBalao = {};
+  // lado: -1 = rabicho no canto de baixo à esquerda (o balão fica à direita do rosto); +1 = o contrário
+  function texturaDoBalao(texto, lado) {
+    const chave = texto + lado;
+    return texBalao[chave] || (texBalao[chave] = texturaCanvas(BALAO.l, BALAO.a, (g, l, a) => {
+      const x = v => lado < 0 ? v : l - v, fundo = a - 62;
+      g.lineJoin = 'round';
+      g.beginPath();
+      if (g.roundRect) g.roundRect(5, 5, l - 10, fundo - 5, 44); else g.rect(5, 5, l - 10, fundo - 5);
+      g.moveTo(x(96), fundo - 4); g.lineTo(x(BALAO.ponta), a - 5); g.lineTo(x(170), fundo - 4);
+      g.fillStyle = '#ffffff'; g.strokeStyle = '#20262c'; g.lineWidth = 8;
+      g.stroke(); g.fill();                     // o preenchimento por cima apaga o traço entre o balão e o rabicho
+      g.fillStyle = '#14181c'; g.font = 'bold 60px Arial, sans-serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(texto, l / 2, fundo / 2 + 6, l - 60);
+    }));
+  }
+  const balao = new T.Sprite(new T.SpriteMaterial({ map: texturaDoBalao(FALAS.pedido, -1), transparent: true, depthTest: false, depthWrite: false, toneMapped: false }));
+  balao.scale.set(0.84, 0.84 * BALAO.a / BALAO.l, 1);
+  balao.renderOrder = 998;
+  balao.layers.set(2);
+  balao.visible = false;
+  cena.add(balao);
+  // Põe o balão ao lado do rosto, do lado que fica mais para o meio da tela, e o esconde
+  // quando a pessoa não disse nada ou há uma parede entre ela e a câmera.
+  function atualizarBalao() {
+    balao.visible = false;
+    if (!pessoa || !pessoa.fala) return;
+    const cx = camera.position.x, cz = camera.position.z, r = pessoa.rosto, parede = centro(pessoa.sala) + SALA.L / 2;
+    if ((cx - parede) * (r.x - parede) < 0) {               // câmera na outra sala: só pela porta aberta
+      const z = cz + (r.z - cz) * (parede - cx) / (r.x - cx);
+      if (!portaAberta || Math.abs(z - Z_PORTA) > LARGURA_PORTA / 2 - 0.1) return;
+    }
+    const yaw = camera.rotation.y, dx = Math.cos(yaw), dz = -Math.sin(yaw);   // a direita da câmera
+    const lado = (r.x - cx) * dx + (r.z - cz) * dz > 0 ? -1 : 1;              // pessoa à direita do meio: balão à esquerda dela
+    balao.material.map = texturaDoBalao(pessoa.fala, -lado);
+    balao.center.set(lado > 0 ? BALAO.ponta / BALAO.l : 1 - BALAO.ponta / BALAO.l, 5 / BALAO.a);
+    balao.position.set(r.x + dx * lado * 0.14, 1.1, r.z + dz * lado * 0.14);
+    balao.visible = true;
   }
 
-  (function criarRobo() {
+  // ---------- robôs ----------
+  // Monta um robô, olhando para -z. O do jogador e o outro robô (desafio 2) são idênticos.
+  // Devolve o grupo com as peças, o braço direito (que gira no ombro) e `escrever`, que põe
+  // um texto na tela do peito. Com `comBorda`, devolve também `contorno`: a borda de
+  // destaque, feita de uma casca um pouco maior em volta de cada peça grande.
+  function montarRobo(comBorda) {
+    const grupo = new T.Group(), braco = new T.Group(), cascas = [];
     const claro = mat(0xe6eaee, { roughness: 0.32 }), escuro = mat(0x2c333b, { roughness: 0.4 }), laranja = mat(0xff8a3d, { roughness: 0.4 });
-    const caixa = (l, a, p) => caixaSuave(l, a, p, Math.min(0.025, Math.min(l, a, p) / 4));
+    const BORDA = 0.022;
+    const caixa = (pai, l, a, p, material, x, y, z, naBorda) => {
+      malha(pai, caixaSuave(l, a, p, Math.min(0.025, Math.min(l, a, p) / 4)), material, x, y, z);
+      if (comBorda && naBorda) cascas.push(malha(pai, caixaSuave(l + 2 * BORDA, a + 2 * BORDA, p + 2 * BORDA, 0.03), M.contorno, x, y, z));
+    };
+    const mao = (pai, x, y) => {
+      malha(pai, new T.SphereGeometry(0.065, 16, 12), laranja, x, y, 0);
+      if (comBorda) cascas.push(malha(pai, new T.SphereGeometry(0.065 + BORDA, 16, 12), M.contorno, x, y, 0));
+    };
 
-    malha(robo, caixa(0.46, 0.2, 0.4), escuro, 0, 0.1, 0);                       // base
-    malha(robo, caixa(0.5, 0.56, 0.32), claro, 0, 0.5, 0);                       // tronco
-    malha(robo, caixa(0.52, 0.06, 0.34), laranja, 0, 0.25, 0);                   // cinto
-    malha(robo, new T.CylinderGeometry(0.07, 0.07, 0.08, 20), escuro, 0, 0.82, 0);
-    malha(robo, caixa(0.42, 0.32, 0.36), claro, 0, 1.02, 0);                     // cabeça
-    malha(robo, caixa(0.34, 0.15, 0.02), escuro, 0, 1.04, -0.18);                // visor
+    caixa(grupo, 0.46, 0.2, 0.4, escuro, 0, 0.1, 0, true);                        // base
+    caixa(grupo, 0.5, 0.56, 0.32, claro, 0, 0.5, 0, true);                        // tronco
+    caixa(grupo, 0.52, 0.06, 0.34, laranja, 0, 0.25, 0);                          // cinto
+    malha(grupo, new T.CylinderGeometry(0.07, 0.07, 0.08, 20), escuro, 0, 0.82, 0);
+    caixa(grupo, 0.42, 0.32, 0.36, claro, 0, 1.02, 0, true);                      // cabeça
+    caixa(grupo, 0.34, 0.15, 0.02, escuro, 0, 1.04, -0.18);                       // visor
     const olho = luminoso({ color: 0x4fe3ff });
     for (const x of [-0.085, 0.085])
-      malha(robo, new T.CircleGeometry(0.042, 24), olho, x, 1.04, -0.192).rotation.y = Math.PI;
+      malha(grupo, new T.CircleGeometry(0.042, 24), olho, x, 1.04, -0.192).rotation.y = Math.PI;
     // antena só de um lado: o robô não é simétrico
-    malha(robo, new T.CylinderGeometry(0.012, 0.012, 0.2, 8), escuro, 0.12, 1.28, 0);
-    malha(robo, new T.SphereGeometry(0.035, 16, 12), laranja, 0.12, 1.4, 0);
+    malha(grupo, new T.CylinderGeometry(0.012, 0.012, 0.2, 8), escuro, 0.12, 1.28, 0);
+    malha(grupo, new T.SphereGeometry(0.035, 16, 12), laranja, 0.12, 1.4, 0);
 
     // tela do peito
-    peito.canvas.width = 512; peito.canvas.height = 256;
-    peito.textura = new T.CanvasTexture(peito.canvas);
-    peito.textura.colorSpace = T.SRGBColorSpace;
-    peito.textura.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    malha(robo, new T.PlaneGeometry(0.4, 0.2), luminoso({ map: peito.textura }), 0, 0.56, -0.162).rotation.y = Math.PI;
-    desenharPeito('');
+    const tela = document.createElement('canvas');
+    tela.width = 512; tela.height = 256;
+    const textura = new T.CanvasTexture(tela);
+    textura.colorSpace = T.SRGBColorSpace;
+    textura.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    malha(grupo, new T.PlaneGeometry(0.4, 0.2), luminoso({ map: textura }), 0, 0.56, -0.162).rotation.y = Math.PI;
+    const escrever = texto => {
+      const g = tela.getContext('2d');
+      g.fillStyle = '#06120c'; g.fillRect(0, 0, tela.width, tela.height);
+      g.strokeStyle = '#2a6b48'; g.lineWidth = 10; g.strokeRect(5, 5, tela.width - 10, tela.height - 10);
+      g.fillStyle = '#5dffa0'; g.font = 'bold 76px Consolas, "Courier New", monospace';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(texto, tela.width / 2, tela.height / 2 + 4, tela.width - 40);
+      textura.needsUpdate = true;
+    };
+    escrever('');
 
     // braços (o direito levanta para segurar objetos)
-    malha(robo, caixa(0.1, 0.46, 0.1), claro, -0.31, 0.5, 0);
-    malha(robo, new T.SphereGeometry(0.065, 16, 12), laranja, -0.31, 0.25, 0);
-    bracoDireito.position.set(0.31, 0.72, 0);
-    robo.add(bracoDireito);
-    malha(bracoDireito, caixa(0.1, 0.46, 0.1), claro, 0, -0.22, 0);
-    malha(bracoDireito, new T.SphereGeometry(0.065, 16, 12), laranja, 0, -0.47, 0);
+    caixa(grupo, 0.1, 0.46, 0.1, claro, -0.31, 0.5, 0, true);
+    mao(grupo, -0.31, 0.25);
+    braco.position.set(0.31, 0.72, 0);
+    grupo.add(braco);
+    caixa(braco, 0.1, 0.46, 0.1, claro, 0, -0.22, 0, true);
+    mao(braco, 0, -0.47);
 
-    sombraNoChao(robo, 0.4, 0.006);
+    sombraNoChao(grupo, 0.4, 0.006);
+    fazSombra(grupo);
+    cascas.forEach(c => { c.visible = false; });
+    return { grupo, braco, escrever, contorno: { set visible(v) { cascas.forEach(c => { c.visible = v; }); } } };
+  }
 
-    // Camada 1 = só aparece no reflexo. Em primeira pessoa o jogador não vê o próprio
-    // corpo, exceto o braço direito quando levantado (camadas 0 e 1).
-    robo.traverse(o => o.layers.set(1));
-    bracoDireito.traverse(o => o.layers.enable(0));
-    fazSombra(robo);
-  })();
+  // ---------- pessoa (desafio 3) ----------
+  // Uma pessoa sentada numa poltrona, olhando para -z; a origem é o chão, no meio da poltrona.
+  // Devolve o grupo e `contorno`, a borda de destaque em volta do corpo (não da poltrona).
+  function montarPessoa() {
+    const grupo = new T.Group(), cascas = [];
+    const pele = mat(0xd8a47f, { roughness: 0.6 }), cabelo = mat(0x2b1d15, { roughness: 0.85 }), escuro = mat(0x1c1512, { roughness: 0.5 });
+    const blusa = mat(0x2f4f7f, { roughness: 0.85 }), calca = mat(0x4b5563, { roughness: 0.85 }), sapato = mat(0x2a2320, { roughness: 0.5 });
+    const tecido = mat(0xa85a3c, { roughness: 0.95 });
+    const BORDA = 0.028;
+    const caixa = (l, a, p, material, x, y, z, naBorda) => {
+      const r = Math.min(0.05, Math.min(l, a, p) / 3);
+      malha(grupo, caixaSuave(l, a, p, r), material, x, y, z);
+      if (naBorda) cascas.push(malha(grupo, caixaSuave(l + 2 * BORDA, a + 2 * BORDA, p + 2 * BORDA, r + BORDA * 0.6), M.contorno, x, y, z));
+    };
+    const bola = (raio, material, x, y, z, naBorda) => {
+      malha(grupo, new T.SphereGeometry(raio, 24, 16), material, x, y, z);
+      if (naBorda) cascas.push(malha(grupo, new T.SphereGeometry(raio + BORDA, 24, 16), M.contorno, x, y, z));
+    };
+
+    // poltrona: base, assento, encosto, braços e pés
+    caixa(0.80, 0.30, 0.76, tecido, 0, 0.19, 0);
+    caixa(0.54, 0.14, 0.58, tecido, 0, 0.39, -0.06);
+    caixa(0.80, 0.72, 0.18, tecido, 0, 0.70, 0.29);
+    for (const x of [-0.335, 0.335]) caixa(0.13, 0.32, 0.64, tecido, x, 0.48, -0.06);
+    for (const x of [-0.33, 0.33]) for (const z of [-0.3, 0.3])
+      malha(grupo, new T.CylinderGeometry(0.025, 0.02, 0.05, 12), M.nogueira, x, 0.025, z);
+
+    // pernas: coxas no assento, canelas para baixo
+    for (const x of [-0.1, 0.1]) {
+      caixa(0.15, 0.14, 0.50, calca, x, 0.53, -0.215, true);
+      caixa(0.13, 0.42, 0.13, calca, x, 0.27, -0.455, true);
+      caixa(0.13, 0.08, 0.26, sapato, x, 0.045, -0.5);
+    }
+    caixa(0.38, 0.52, 0.22, blusa, 0, 0.74, 0.06, true);                                 // tronco
+    for (const lado of [-1, 1]) {
+      caixa(0.1, 0.30, 0.1, blusa, lado * 0.245, 0.80, 0.06, true);                      // braço
+      caixa(0.09, 0.09, 0.30, blusa, lado * 0.3, 0.69, -0.07, true);                     // antebraço, apoiado no braço da poltrona
+      bola(0.05, pele, lado * 0.3, 0.69, -0.26);                                         // mão
+    }
+    malha(grupo, new T.CylinderGeometry(0.05, 0.055, 0.1, 16), pele, 0, 1.03, 0.05);     // pescoço
+    const CX = 0.04, CY = 1.17;                  // centro da cabeça
+    bola(0.115, pele, 0, CY, CX, true);
+    // cabelo: uma calota inclinada para trás, que deixa a testa e o rosto de fora
+    malha(grupo, new T.SphereGeometry(0.124, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.5), cabelo, 0, CY + 0.004, CX + 0.004).rotation.x = 0.45;
+    for (const x of [-0.042, 0.042]) bola(0.014, escuro, x, CY + 0.02, CX - 0.105);      // olhos
+    bola(0.016, pele, 0, CY - 0.012, CX - 0.117);                                        // nariz
+    malha(grupo, new T.BoxGeometry(0.046, 0.01, 0.01), mat(0x8a3b32, { roughness: 0.6 }), 0, CY - 0.05, CX - 0.102);   // boca
+
+    sombraNoChao(grupo, 0.6, 0.006);
+    fazSombra(grupo);
+    cascas.forEach(c => { c.visible = false; });
+    return { grupo, contorno: { set visible(v) { cascas.forEach(c => { c.visible = v; }); } } };
+  }
+
+  // O robô do jogador. Camada 1 = só aparece no reflexo: em primeira pessoa o jogador não
+  // vê o próprio corpo, exceto o braço direito quando levantado (camadas 0 e 1).
+  const eu = montarRobo(false);
+  const robo = eu.grupo, bracoDireito = eu.braco;
+  raiz.add(robo);
+  robo.traverse(o => o.layers.set(1));
+  bracoDireito.traverse(o => o.layers.enable(0));
 
   // ---------- estado ----------
   // `estado` é a verdade do jogo e muda na hora; `visual` só persegue o estado para animar.
   // rumo: múltiplos de 45°, 0 = de frente para o espelho; segurando / naCabeca: objeto ou null
-  // O robô começa a 1 m do espelho, de costas para ele.
-  const estado = { x: 0, z: Z_ESPELHO + 1, rumo: 4, sala: 1, segurando: null, naCabeca: null, maoLevantada: false, texto: '', ganhou: false };
+  const estado = { x: 0, z: REGRAS.inicio.z, rumo: REGRAS.inicio.rumo, sala: 1, segurando: null, naCabeca: null, maoLevantada: false, texto: '', ganhou: false };
   const visual = { x: estado.x, z: estado.z, yaw: estado.rumo * GIRO, braco: 0, luz: 0 };
   let modoIA = false;
 
@@ -671,6 +1072,7 @@
 
   // Onde o robô pode estar: na sala atual e, com a porta aberta, também no vão e na sala seguinte.
   function livre(x, z) {
+    if (noMovel(x, z, RAIO_ROBO)) return false;
     if (!portaAberta) return dentro(estado.sala, x, z);
     return dentro(portaAberta, x, z) || dentro(portaAberta + 1, x, z) ||
       (Math.abs(x - centro(portaAberta) - SALA.L / 2) <= MARGEM_PAREDE && noVao(z));
@@ -695,7 +1097,21 @@
     if (maisVelha) { raiz.remove(maisVelha.parede); delete salas[estado.sala - 3]; }
   }
 
-  // ---------- comandos (a mesma interface que o MCP vai usar) ----------
+  // Um objeto que não está no chão: na mão, na cabeça, na cesta, já entregue ou dentro da geladeira fechada.
+  const foraDoChao = o => o === estado.segurando || o.naCabeca || o.naCesta || o.entregue || o.fechado;
+  // Tudo o que ocupa lugar no chão da sala `s`: objetos soltos, a cesta e o outro robô.
+  // (Os móveis e a poltrona da pessoa são retângulos: ver blocos.)
+  const noCaminho = s => [...s.objetos.filter(o => !foraDoChao(o)), s.cesta, s.outroRobo].filter(Boolean);
+
+  // Põe um objeto na mão do robô. Ele passa a andar junto; a posição exata vem de aplicarVisual.
+  function segurar(o) {
+    estado.segurando = o;
+    robo.add(o.malha);
+    o.malha.rotation.set(0, 0, 0);
+    o.sombra.visible = false;
+  }
+
+  // ---------- comandos ----------
   function mover(direcao) {
     const giro = GIRO_DA_DIRECAO[direcao];
     if (giro === undefined) return resposta(`mover ${direcao}`, false, 'direção inválida');
@@ -707,19 +1123,18 @@
       if (Math.abs(v.fx) > 1e-6 && Math.abs(v.fz) > 1e-6 && livre(nx, estado.z)) nz = estado.z;
       else if (Math.abs(v.fx) > 1e-6 && Math.abs(v.fz) > 1e-6 && livre(estado.x, nz)) nx = estado.x;
       else {
-        const lado = nx - centro(estado.sala);
+        const lado = nx - centro(estado.sala), movel = noMovel(nx, nz, RAIO_ROBO);
         const naPorta = noVao(nz) && ((salas[estado.sala].porta && lado > SALA.L / 2 - MARGEM_PAREDE) || (estado.sala > 1 && lado < MARGEM_PAREDE - SALA.L / 2));
-        return resposta(`mover ${direcao}`, false, (naPorta ? 'bloqueado: porta fechada' : 'bloqueado: parede') + virou);
+        return resposta(`mover ${direcao}`, false, (movel ? `bloqueado: ${movel.nome} no caminho` : naPorta ? 'bloqueado: porta fechada' : 'bloqueado: parede') + virou);
       }
     }
-    for (const s of Object.values(salas)) for (const o of [...s.objetos, s.cesta]) {
-      if (o === estado.segurando || o.naCesta || o.naCabeca) continue;
+    for (const s of Object.values(salas)) for (const o of noCaminho(s)) {
       const depois = Math.hypot(nx - o.x, nz - o.z), antes = Math.hypot(estado.x - o.x, estado.z - o.z);
       if (depois < RAIO_ROBO + o.raio && depois < antes) return resposta(`mover ${direcao}`, false, `bloqueado: ${o.nome} no caminho` + virou);
     }
     estado.x = nx; estado.z = nz;
     estado.sala = salaDe(nx);
-    if (portaAberta && dentro(portaAberta + 1, nx, nz)) {   // entrou de vez na sala seguinte
+    if (portaAberta && !REGRAS.portaManual && dentro(portaAberta + 1, nx, nz)) {   // entrou de vez na sala seguinte
       fecharPorta();
       return resposta(`mover ${direcao}`, true, `ok — você entrou na sala ${numero(estado.sala)} e a porta fechou atrás de você`);
     }
@@ -745,28 +1160,71 @@
     return resposta('levantar', true, estado.maoLevantada ? 'mão levantada' : 'mão abaixada');
   }
 
-  // O que o comando pegar pegaria (ou a cesta, se ele fosse colocar nela) agora. É isso
-  // que ganha a borda de destaque.
+  // O que o comando pegar pegaria agora — ou em quem ele agiria, se fosse entregar ou
+  // guardar o que está na mão. É isso que ganha a borda de destaque.
+  //   segurando algo:       o outro robô, se estiver ao alcance (com a mão no alto ou embaixo)
+  //   a pessoa ao alcance:  ela — para entregar o que está na mão ou, de mão vazia e embaixo, falar com ela
+  //   porta ou geladeira fechada, ao alcance: ela, para abrir (a porta, só a que o jogador abre)
   //   mão no alto, vazia:   o objeto que está na cabeça
   //   mão embaixo, cheia:   a cesta, se estiver ao alcance
-  //   mão embaixo, vazia:   o objeto do chão mais próximo ao alcance
+  //   mão embaixo, vazia:   o objeto do chão (ou da geladeira aberta) mais próximo ao alcance
   function alvoAtual() {
-    const s = salas[estado.sala];
+    const s = salas[estado.sala], perto = a => alcance(a) < Infinity;
+    if (estado.segurando && s.outroRobo && !s.outroRobo.recebeu && perto(s.outroRobo)) return s.outroRobo;
+    if (s.pessoa && !s.pessoa.recebeu && (estado.segurando || !estado.maoLevantada) && perto(s.pessoa)) return s.pessoa;
+    if (REGRAS.portaManual && s.porta && !s.porta.aberta && perto(s.porta)) return s.porta;
+    if (s.geladeira && !s.geladeira.aberta && perto(s.geladeira)) return s.geladeira;
     if (estado.maoLevantada) return estado.segurando ? null : estado.naCabeca;
-    if (estado.segurando) return alcance(s.cesta) < Infinity ? s.cesta : null;
+    if (estado.segurando) return s.cesta && perto(s.cesta) ? s.cesta : null;
     // Com a porta aberta não há o que pegar: a sala atual está completa, e os objetos da
-    // próxima só valem depois que o robô entra nela e a porta fecha.
-    if (portaAberta) return null;
+    // próxima só valem depois que o robô entra nela e a porta fecha. (Não vale para a porta
+    // que o jogador abre: aí as salas são um lugar só, e um objeto pode ter sido solto em qualquer uma.)
+    if (portaAberta && !REGRAS.portaManual) return null;
     let alvo = null, menor = Infinity;
-    for (const o of s.objetos) {
-      const dist = o.naCesta || o.naCabeca ? Infinity : alcance(o);   // o que já está na cesta fica lá
+    for (const o of REGRAS.portaManual ? Object.values(salas).flatMap(q => q.objetos) : s.objetos) {
+      const dist = foraDoChao(o) ? Infinity : alcance(o);   // o que já foi guardado ou entregue fica onde está
       if (dist < menor) { menor = dist; alvo = o; }
     }
     return alvo;
   }
 
+  // Passa o objeto da mão para quem o recebe (o outro robô ou a pessoa), que fica com ele e
+  // agradece. É a vitória dos desafios 2 e 3.
+  function entregar(o, r) {
+    estado.segurando = null;
+    o.entregue = true;
+    r.recebeu = o;
+    o.malha.rotation.set(0, 0, 0);
+    r.receber(o);
+    estado.ganhou = true;
+    faixa.visible = true;
+  }
+
   function pegar() {
     const v = vetores(), s = salas[estado.sala], alvo = alvoAtual();
+    if (alvo && alvo === s.outroRobo) {
+      const o = estado.segurando;
+      entregar(o, alvo);
+      return resposta('pegar', true, `entregou: ${o.nome} ao outro robô — venceu`);
+    }
+    if (alvo && alvo === s.pessoa) {
+      const o = estado.segurando;
+      if (!o) {                                 // de mão vazia: fala com ela, e ela diz o que quer
+        alvo.fala = FALAS.pedido;
+        return resposta('pegar', true, `a pessoa disse: "${alvo.fala}"`);
+      }
+      entregar(o, alvo);
+      return resposta('pegar', true, `entregou: ${o.nome} à pessoa — venceu`);
+    }
+    if (alvo && alvo === s.porta) {
+      abrirPorta(s);
+      return resposta('pegar', true, 'abriu a porta');
+    }
+    if (alvo && alvo === s.geladeira) {
+      alvo.aberta = true;
+      alvo.dentro.forEach(o => { o.fechado = false; });
+      return resposta('pegar', true, 'abriu a geladeira');
+    }
     if (estado.maoLevantada) {                  // mão no alto: tira da cabeça ou põe na cabeça
       const o = estado.segurando;
       if (o) {
@@ -792,7 +1250,7 @@
         s.cesta.itens.push(o);
         estado.segurando = null;
         let msg = `colocou: ${o.nome} na cesta (${s.cesta.itens.length}/${s.objetos.length})`;
-        if (!s.chapeu.apareceu && s.cesta.itens.length === s.objetos.length - 1) {
+        if (s.chapeu && !s.chapeu.apareceu && s.cesta.itens.length === s.objetos.length - 1) {
           s.chapeu.apareceu = true;             // o chão ficou vazio: agora falta só o que acaba de surgir na cabeça
           porNaCabeca(s.chapeu);
           msg += ` — apareceu na cabeça: ${s.chapeu.nome}`;
@@ -811,7 +1269,7 @@
       }
       const x = s.cx + limitar(estado.x + v.fx * 0.75 - s.cx, SALA.L / 2 - o.raio - 0.1);
       const z = limitar(estado.z + v.fz * 0.75, SALA.P / 2 - o.raio - 0.03);
-      if ([...s.objetos, s.cesta].some(p => p !== o && !p.naCesta && !p.naCabeca && Math.hypot(p.x - x, p.z - z) < p.raio + o.raio))
+      if (noMovel(x, z, o.raio) || Object.values(salas).some(q => noCaminho(q).some(p => Math.hypot(p.x - x, p.z - z) < p.raio + o.raio)))
         return resposta('pegar', false, 'sem espaço para soltar aqui');
       assentar(s, o, x, z, o.alt / 2);
       o.sombra.visible = true;
@@ -819,16 +1277,13 @@
       return resposta('pegar', true, `soltou: ${o.nome}`);
     }
     if (!alvo) return resposta('pegar', false, 'nada ao alcance');
-    estado.segurando = alvo;
-    robo.add(alvo.malha);                       // passa a andar junto com o robô; a posição na mão vem de aplicarVisual
-    alvo.malha.rotation.set(0, 0, 0);
-    alvo.sombra.visible = false;
+    segurar(alvo);
     return resposta('pegar', true, `pegou: ${alvo.nome}`);
   }
 
   function escrever(texto) {
     estado.texto = Array.from(String(texto == null ? '' : texto)).slice(0, 10).join('');
-    desenharPeito(estado.texto);
+    eu.escrever(estado.texto);
     return resposta(`escrever "${estado.texto}"`, true, 'ok');
   }
 
@@ -849,16 +1304,37 @@
     return imagem;
   }
 
+  // Recomeça o desafio atual. Tudo o que o jogo guarda está na página, então basta recarregá-la.
   const reiniciar = () => location.reload();
+  // Começa o desafio n: recarrega a página com ?desafio=n (o resto do endereço fica como está).
+  function comecar(n) {
+    if (!existeDesafio(n)) return;
+    const p = new URLSearchParams(location.search);
+    p.set('desafio', n);
+    if ('?' + p.toString() === location.search) location.reload();
+    else location.search = p.toString();
+  }
 
   // ---------- desenho ----------
+  // Ângulos do braço direito: caído, estendido para carregar, mão levantada.
+  const BRACO = { caido: 0, estendido: 1.13, levantado: 2.45 };
   // Aproxima o que se vê do estado do jogo: k = fração do caminho (1 = chega de uma vez).
   function animar(k, kPorta) {
-    // braço direito: 0 = caído, 65° = estendido para segurar, 140° = mão levantada
-    const braco = estado.maoLevantada ? 2.45 : estado.segurando ? 1.13 : 0;
+    const carregando = REGRAS.bracoCaido ? BRACO.caido : BRACO.estendido;
+    const braco = estado.maoLevantada ? BRACO.levantado : estado.segurando ? carregando : BRACO.caido;
     const alvo = { x: estado.x, z: estado.z, yaw: estado.rumo * GIRO, braco, luz: centro(estado.sala) };
     for (const c in alvo) visual[c] += (alvo[c] - visual[c]) * k;
     for (const s of Object.values(salas)) {
+      const r = s.outroRobo;
+      if (r) {                                  // o outro robô estende o braço quando recebe o presente
+        r.braco += ((r.recebeu ? BRACO.estendido : BRACO.caido) - r.braco) * k;
+        r.corpo.braco.rotation.x = r.braco;
+      }
+      const gel = s.geladeira;
+      if (gel) {                                // as duas portas da geladeira giram para fora, uma para cada lado
+        gel.vis += ((gel.aberta ? 1 : 0) - gel.vis) * kPorta;
+        gel.folhas.forEach((eixo, i) => { eixo.rotation.y = (i ? 1 : -1) * 1.9 * gel.vis; });
+      }
       const p = s.porta;
       if (!p) continue;
       p.vis += ((p.aberta ? 1 : 0) - p.vis) * kPorta;
@@ -869,13 +1345,15 @@
     robo.position.set(visual.x, 0, visual.z);
     robo.rotation.y = visual.yaw;
     bracoDireito.rotation.x = visual.braco;
-    if (estado.segurando) {                     // o objeto acompanha a mão, logo acima dela
-      const b = visual.braco;
-      estado.segurando.malha.position.set(0.31, 0.76 - 0.47 * Math.cos(b), -0.015 - 0.47 * Math.sin(b));
+    if (estado.segurando) {                     // o objeto acompanha a mão
+      const b = visual.braco, o = estado.segurando.malha;
+      if (REGRAS.bracoCaido) o.position.set(0.31, 0.72 - 0.56 * Math.cos(b), -0.56 * Math.sin(b));   // na ponta do braço, depois da mão
+      else o.position.set(0.31, 0.76 - 0.47 * Math.cos(b), -0.015 - 0.47 * Math.sin(b));              // logo acima da mão
     }
     lampada.position.x = visual.luz;
     camera.position.set(visual.x, ALTURA_OLHOS, visual.z);
     camera.rotation.set(INCLINACAO, visual.yaw, 0);
+    atualizarBalao();
   }
   const alvoDescartavel = new T.WebGLRenderTarget(1, 1);
   function desenhar() {
@@ -898,7 +1376,7 @@
     renderer.setRenderTarget(null);
     // 2) o mundo real por cima; o corpo do robô fica de fora (primeira pessoa) e entra o contador
     renderer.clearDepth();
-    vidro.visible = true;
+    vidro.visible = !REGRAS.espelhoDisfarcado;
     camera.layers.disable(1);
     camera.layers.enable(2);
     renderer.render(cena, camera);
@@ -935,11 +1413,12 @@
   const elModo = document.getElementById('modo'), elAjuda = document.getElementById('ajuda');
   const elCaixa = document.getElementById('caixa'), elEntrada = document.getElementById('entrada');
   const elMensagem = document.getElementById('mensagem');
-  const linhas = ['jogo começou'];
+  elMensagem.textContent = REGRAS.mensagem;
+  const linhas = [REGRAS.mensagem];
   let destacado = null, ultima = null;
   // Painel de depuração: mostra tudo o que o jogo esconde, então não pode estar ao alcance
   // de quem joga. Não há tecla para ele; só abre com ?depurar no endereço da página.
-  if (new URLSearchParams(location.search).has('depurar')) {
+  if (ENDERECO.has('depurar')) {
     elLog.hidden = elStatus.hidden = false;
     elMensagem.hidden = true;
   }
@@ -961,10 +1440,12 @@
       elLog.appendChild(d);
     });
     const s = salas[estado.sala];
-    desenharContador(`${s.cesta.itens.length}/${s.objetos.length}`);
-    elStatus.textContent = `sala: ${numero(s.n)}\ncesta: ${s.cesta.itens.length}/${s.objetos.length}\n` +
+    const feitos = s.objetos.filter(o => o.naCesta || o.entregue).length;   // guardados na cesta ou entregues
+    if (REGRAS.contador) desenharContador(`${feitos}/${s.objetos.length}`);
+    elStatus.textContent = `desafio: ${DESAFIO}\nsala: ${numero(s.n)}\nfeitos: ${feitos}/${s.objetos.length}\n` +
       `na cabeça: ${estado.naCabeca ? estado.naCabeca.nome : 'nada'}\nmão: ${estado.maoLevantada ? 'levantada' : 'abaixada'}\n` +
-      `segurando: ${estado.segurando ? estado.segurando.nome : 'nada'}\npeito: ${estado.texto || '—'}`;
+      `segurando: ${estado.segurando ? estado.segurando.nome : 'nada'}\npeito: ${estado.texto || '—'}` +
+      (pessoa ? `\npessoa: ${pessoa.fala ? `"${pessoa.fala}"` : 'calada'}` : '');
   }
 
   // ---------- botões ----------
@@ -1015,12 +1496,18 @@
         break;
       case 'KeyH': elAjuda.hidden = !elAjuda.hidden; break;
       case 'KeyR': reiniciar(); break;
+      case 'Digit1': case 'Numpad1': comecar(1); break;
+      case 'Digit2': case 'Numpad2': comecar(2); break;
+      case 'Digit3': case 'Numpad3': comecar(3); break;
     }
   });
 
   // ---------- início ----------
-  criarSala(1);
-  window.jogo = { apertar, mover, virar, pegar, levantar, escrever, frame, reiniciar, estado, salas, diagnostico: () => ultima };
+  const primeira = criarSala(1);
+  if (REGRAS.portaManual) for (let n = 2; n <= REGRAS.salas; n++) criarSala(n);   // desafio 3: a cozinha já existe atrás da porta
+  if (primeira.presente) segurar(primeira.presente);   // desafio 2: o jogador já começa com o presente na mão
+  contador.malha.visible = REGRAS.contador;
+  window.jogo = { apertar, comecar, mover, virar, pegar, levantar, escrever, frame, reiniciar, estado, salas, desafio: DESAFIO, diagnostico: () => ultima };
   ajustarTamanho();
   aplicarVisual();
   resposta('início', true, 'ok');

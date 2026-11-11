@@ -55,9 +55,9 @@
       if (resposta.status !== 200) continue;     // ninguém pediu nada: pendura de novo
 
       const c = await resposta.json();
-      if (c.comando === 'comecar') {             // recomeça do zero: avisa e recarrega a página
+      if (c.comando === 'comecar') {             // começa o desafio pedido: avisa e recarrega a página nele
         try { await fetch(eu + '&id=' + c.id + '&fim=1', { method: 'POST' }); } catch (e) { }
-        location.reload();
+        jogo.comecar(c.args[0]);
         return;
       }
       const saida = jogo.apertar(c.args[0], c.args[1] || '');     // comando 'apertar': [botão, texto]

@@ -1,12 +1,20 @@
 {
-  "respostaComecar": "jogo começou",
+  "desafios": {
+    "1": { "respostaComecar": "jogo começou" },
+    "2": { "respostaComecar": "Dê o objeto para o robô." },
+    "3": { "respostaComecar": "jogo começou" }
+  },
   "respostaComando": "recebido",
   "respostaVitoria": "Parabéns! Você conseguiu!",
   "ferramentas": [
     {
       "name": "comecar",
-      "description": "Começa.",
-      "inputSchema": { "type": "object", "properties": {} }
+      "description": "Começa um desafio.",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "desafio": { "type": "integer", "enum": [1, 2, 3] } },
+        "required": ["desafio"]
+      }
     },
     {
       "name": "apertar_botao",

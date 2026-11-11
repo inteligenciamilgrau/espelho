@@ -27,6 +27,7 @@ $ferramentasJson = ConvertTo-Json -InputObject @($config.ferramentas) -Depth 20 
 
 $VERSOES = '2025-06-18', '2025-03-26', '2024-11-05'      # versoes do protocolo MCP aceitas
 $BOTOES = @(($config.ferramentas | Where-Object { $_.name -eq 'apertar_botao' }).inputSchema.properties.botao.enum)   # os botoes que existem
+$DESAFIOS = @($config.desafios.PSObject.Properties.Name)       # os desafios que existem: '1', '2'...
 $ARQUIVOS = @{
   '/'                    = 'index.html', 'text/html; charset=utf-8'
   '/index.html'          = 'index.html', 'text/html; charset=utf-8'
@@ -120,8 +121,8 @@ function Despachar {
 function Concluir([byte[]]$corpo, [bool]$ganhou) {
   $a = $script:atual
   $script:atual = $null
-  if ($a.ferramenta -eq 'comecar') {
-    $r = Texto $config.respostaComecar $false
+  if ($a.ferramenta -eq 'comecar') {          # cada desafio comeca com o seu texto
+    $r = Texto ($config.desafios.PSObject.Properties[$a.argumentos[0]].Value.respostaComecar) $false
   } elseif ($corpo -and $corpo.Length) {      # o botao devolveu uma imagem (o frame)
     $r = '{"content":[{"type":"image","data":"' + [Convert]::ToBase64String($corpo) + '","mimeType":"image/png"}],"isError":false}'
   } elseif ($ganhou) {                        # jogo vencido: daqui em diante todo comando recebe os parabens
@@ -198,7 +199,10 @@ function TratarMcp($ctx) {
       $argumentos = @()
       $invalido = $null
       switch -CaseSensitive ($nome) {
-        'comecar' { }
+        'comecar' {                             # a pagina recarrega no desafio pedido
+          $argumentos = @([string]$a.desafio)
+          if ($DESAFIOS -cnotcontains $argumentos[0]) { $invalido = 'desafio inexistente' }
+        }
         'apertar_botao' {                       # a pagina e quem sabe o que cada botao faz
           $comando = 'apertar'
           $texto = [string]$a.texto

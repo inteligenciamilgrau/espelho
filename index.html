@@ -40,16 +40,18 @@
 <body>
 <canvas id="tela"></canvas>
 
-<!-- Só quais botões existem: o jogo não diz o objetivo nem o que cada botão faz.
-     (M, R e H são da página, não do jogo: modo iA, recomeçar e esta lista.) -->
+<!-- Só quais botões existem: o jogo não diz o que cada botão faz.
+     (A última linha é da página, não do jogo: 1, 2 e 3 começam um desafio, M é o modo iA,
+     R recomeça e H esconde esta lista.) -->
 <div id="ajuda" class="painel">  W
 A S D
 Espaço
 L T F
 
-M R H</div>
+1 2 3 M R H</div>
 
-<div id="mensagem" class="painel">jogo começou</div>
+<!-- O que o jogo diz ao jogador no começo do desafio (jogo.js preenche). -->
+<div id="mensagem" class="painel"></div>
 
 <!-- Painel de depuração: mostra o que cada comando fez. Sem tecla; só aparece com ?depurar no endereço. -->
 <div id="status" class="painel" hidden></div>
