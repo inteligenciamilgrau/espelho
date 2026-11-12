@@ -1,7 +1,13 @@
 # Servidor do jogo: MCP pela rede (Streamable HTTP), sem instalar nada.
 #
-#   http://localhost:8765/        a pagina do jogo (tem de ficar aberta num navegador)
-#   http://localhost:8765/mcp     o endereco MCP, o mesmo para todas as iAs
+#   http://localhost:8765/jogo-CHAVE/   a pagina do jogo (tem de ficar aberta num navegador)
+#   http://localhost:8765/mcp           o endereco MCP, o mesmo para todas as iAs
+#
+# As iAs so conhecem o endereco do MCP. A pagina do jogo, os arquivos dela (o codigo do jogo)
+# e a ponte ficam atras de um endereco com uma chave secreta: quem so tem o endereco do MCP
+# nao chega a arquivo nenhum -- nao consegue ler o codigo para descobrir como se ganha, nem se
+# passar pela pagina. (Isso so segura quem chega pela rede. Uma iA com acesso aos arquivos ou
+# ao terminal deste computador acha a pasta do projeto do mesmo jeito: ver o README.)
 #
 # O jogo roda no navegador. Este servidor so faz a ponte: cada botao que a iA aperta vira um
 # comando para a pagina (/ponte), que aperta o mesmo botao em window.jogo e avisa quando acabou.
@@ -24,7 +30,8 @@
 
 param(
   [int]$Porta = 8765,
-  [switch]$SemNavegador      # nao abre a pagina do jogo sozinho
+  [switch]$SemNavegador,     # nao abre a pagina do jogo sozinho
+  [switch]$SemChave          # a pagina do jogo fica em http://localhost:PORTA/, sem chave no endereco (qualquer um le o codigo)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -45,6 +52,18 @@ $ARQUIVOS = @{
   '/ponte.js'            = 'ponte.js', 'text/javascript; charset=utf-8'
   '/vendor/three.min.js' = 'vendor\three.min.js', 'text/javascript; charset=utf-8'
 }
+# A chave do endereco da pagina: 32 letras ao acaso. Fica guardada fora da pasta do projeto,
+# para o endereco ser o mesmo toda vez que o servidor liga (da para deixar nos favoritos).
+$CHAVE = ''
+if (-not $SemChave) {
+  $guardada = Join-Path $env:LOCALAPPDATA 'espelho-jogo\chave.txt'
+  try { $CHAVE = ([IO.File]::ReadAllText($guardada)).Trim() } catch { }
+  if ($CHAVE -cnotmatch '^[a-f0-9]{32}$') {
+    $CHAVE = [guid]::NewGuid().ToString('N')
+    try { [void](New-Item -ItemType Directory -Force (Split-Path $guardada)); [IO.File]::WriteAllText($guardada, $CHAVE) } catch { }
+  }
+}
+$RAIZ = if ($CHAVE) { "/jogo-$CHAVE" } else { '' }     # o endereco em que a pagina do jogo mora
 $LIMITE_CONEXOES = 500    # quantas iAs diferentes o servidor guarda de memoria
 $HOSTS = "localhost:$Porta", "127.0.0.1:$Porta"      # os unicos nomes pelos quais o servidor atende
 $LIMITE_CORPO = 8MB       # maior pedido aceito (um frame em PNG tem menos de 1 MB)
@@ -61,6 +80,7 @@ $script:dona = $null        # a aba do navegador que esta com o jogo: aba, desde
 $script:proximoId = 0
 $script:conexoes = New-Object System.Collections.Hashtable   # as iAs que ja chamaram: identidade (ver Identidade) -> numero, pela ordem de chegada
 $script:nomes = New-Object System.Collections.Hashtable      # os nomes de guerra que ja apareceram em cada sessao: sessao -> lista
+$script:propostas = New-Object System.Collections.Hashtable  # nomes de guerra propostos e ainda nao confirmados: sessao -> lista (ver 'comecar')
 $script:proximaConexao = 0
 $script:desafioAtual = ''   # o ultimo desafio que alguem pediu
 
@@ -197,7 +217,7 @@ function Notas($req) {
     $frase = [string]$modelo.Value
     foreach ($p in $n.PSObject.Properties) {  # os dados vem do jogo (nomes de guerra, pontos): sem controle, sem chaves, curtos
       $valor = ([string]$p.Value) -replace '[\x00-\x1f\x7f{}]', ''
-      if ($valor.Length -gt 40) { $valor = $valor.Substring(0, 40) }
+      if ($valor.Length -gt 110) { $valor = $valor.Substring(0, 110) }
       $frase = $frase.Replace('{' + $p.Name + '}', $valor)
     }
     $frases += $frase
@@ -211,7 +231,7 @@ function Notas($req) {
 # comecar para essa iA, que ainda nao tinha recebido o texto dele) e nota (ver Notas).
 function Concluir($a, [byte[]]$corpo, $req) {
   $q = $req.QueryString
-  $ganhou = [bool]$q['ganhou']; $perdeu = [bool]$q['perdeu']; $espera = [bool]$q['espera']; $inicio = [string]$q['inicio']
+  $ganhou = [bool]$q['ganhou']; $perdeu = [bool]$q['perdeu']; $espera = [bool]$q['espera']; $aguarde = [bool]$q['aguarde']; $inicio = [string]$q['inicio']
   $texto = ''; $imagem = ''; $erro = $false; $neutro = $false
   if ($q['lotado']) {
     $texto = $config.respostaLotado; $erro = $true
@@ -225,6 +245,8 @@ function Concluir($a, [byte[]]$corpo, $req) {
     $texto = $config.desafios.PSObject.Properties[$inicio].Value.respostaComecar
   } elseif ($espera) {
     $texto = $config.respostaEspera
+  } elseif ($aguarde) {                       # o outro jogador nao jogou a tempo: o jogo esta parado, esperando por ele
+    $texto = $config.respostaAguarde
   } elseif ($ganhou) {                        # jogo vencido: daqui em diante todo comando recebe os parabens
     if (-not $script:avisouVitoria) { Registrar ("a iA{0} venceu o jogo" -f (Quem $a.quem)); $script:avisouVitoria = $true }
     $texto = $config.respostaVitoria
@@ -322,28 +344,52 @@ function TratarMcp($ctx, [string]$sufixo) {
       $comando = $nome
       $argumentos = @()
       $invalido = $null
+      $pergunta = $null
       # O nome de guerra, que as duas ferramentas aceitam: e ele que separa duas iAs na mesma sessao.
       $nomeDeGuerra = (([string]$a.nome) -replace '[\x00-\x1f\x7f]', '').Trim()
+      $modelo = (([string]$a.modelo) -replace '[\x00-\x1f\x7f]', '').Trim()         # que modelo a iA e (opcional): vai embaixo do nome dela
+      if ($modelo.Length -gt 24) { $modelo = $modelo.Substring(0, 24).Trim() }
       if ($nomeDeGuerra.Length -gt 12) { $nomeDeGuerra = $nomeDeGuerra.Substring(0, 12).Trim() }   # o mesmo limite que a ferramenta declara
       switch -CaseSensitive ($nome) {
         'comecar' {                             # a pagina vai para o desafio pedido; o nome de guerra vai junto
-          $argumentos = @([string]$a.desafio, $nomeDeGuerra)
+          $argumentos = @([string]$a.desafio, $nomeDeGuerra, $modelo)
           if ($DESAFIOS -cnotcontains $argumentos[0]) { $invalido = 'desafio inexistente' }
           elseif (-not $nomeDeGuerra -and $config.desafios.PSObject.Properties[$argumentos[0]].Value.exigeNome) { $invalido = [string]$config.respostaSemNome }
+          elseif ($nomeDeGuerra -and $config.respostaConfirmarNome -and $config.desafios.PSObject.Properties[$argumentos[0]].Value.exigeNome) {
+            # Um nome de guerra novo nesta conexao so vale depois de confirmado: o nome nao pode ser
+            # trocado durante a partida, entao antes de entrar a iA le o nome que escolheu e chama
+            # comecar de novo com ele -- ou com outro, se quiser corrigir. O nome proposto fica
+            # guardado a parte: enquanto nao e confirmado, nao conta como jogador da conexao.
+            $conhecidos = $script:nomes[$chave]
+            if (-not ($conhecidos -and ($conhecidos -ccontains $nomeDeGuerra))) {
+              if ($script:propostas.Count -gt $LIMITE_CONEXOES) { $script:propostas.Clear() }
+              if (-not $script:propostas.ContainsKey($chave)) { $script:propostas[$chave] = New-Object System.Collections.ArrayList }
+              $propostos = $script:propostas[$chave]
+              if ($propostos -ccontains $nomeDeGuerra) { $propostos.Remove($nomeDeGuerra) }      # confirmou: segue em frente
+              else {
+                if ($propostos.Count -ge 16) { $propostos.Clear() }
+                [void]$propostos.Add($nomeDeGuerra)
+                $doModelo = if ($modelo) { ([string]$config.respostaConfirmarModelo).Replace('{modelo}', ($modelo -replace '[{}]', '')) } else { '' }
+                $pergunta = ([string]$config.respostaConfirmarNome).Replace('{modelo}', $doModelo).Replace('{nome}', $nomeDeGuerra)
+              }
+            }
+          }
         }
         'apertar_botao' {                       # a pagina e quem sabe o que cada botao faz
           $comando = 'apertar'
           $texto = [string]$a.texto
-          if ($texto.Length -gt 10) { $texto = $texto.Substring(0, 10) }    # o mesmo limite que a ferramenta declara
-          $argumentos = @([string]$a.botao, $texto, $nomeDeGuerra)    # o nome vai junto: quem volta depois de cair retoma o seu robo por ele
+          if ($texto.Length -gt 140) { $texto = $texto.Substring(0, 140) }  # o mesmo limite que a ferramenta declara (a pagina corta de novo: 10 letras na barriga)
+          $argumentos = @([string]$a.botao, $texto, $nomeDeGuerra, $modelo)    # o nome vai junto: quem volta depois de cair retoma o seu robo por ele
           if ($BOTOES -cnotcontains $argumentos[0]) { $invalido = 'botao inexistente' }
         }
         default { [void](EnviarJson $ctx 200 (Erro $id -32602 "Ferramenta desconhecida: $nome")); return }
       }
       if ($invalido) { [void](EnviarJson $ctx 200 (Resultado $id (Texto $invalido $true))); return }
+      if ($pergunta) { Registrar "comecar: pede a confirmacao do nome $nomeDeGuerra"; [void](EnviarJson $ctx 200 (Resultado $id (Texto $pergunta $false))); return }
       # Mudou o desafio: a pagina recarrega e ninguem mais tem lugar. Os nomes de guerra
       # tambem comecam do zero (assim uma iA pode trocar de nome de um desafio para o outro).
-      if ($nome -eq 'comecar' -and $argumentos[0] -cne $script:desafioAtual) { $script:nomes.Clear(); $script:desafioAtual = $argumentos[0] }
+      # (Entrar como comentarista nao muda o desafio: a partida continua como esta.)
+      if ($nome -eq 'comecar' -and $argumentos[0] -cne $script:desafioAtual -and -not $config.desafios.PSObject.Properties[$argumentos[0]].Value.espectador) { $script:nomes.Clear(); $script:desafioAtual = $argumentos[0] }
       $identidade = Identidade $chave $nomeDeGuerra
       if ($null -eq $identidade) { [void](EnviarJson $ctx 200 (Resultado $id (Texto ([string]$config.respostaQuem) $true))); return }
       $quem = NumeroDe $identidade
@@ -381,6 +427,12 @@ function Tratar($ctx) {
 
   if ($caminho -eq '/mcp') { TratarMcp $ctx ''; return }
   if ($caminho -cmatch '^/mcp/([A-Za-z0-9_-]{1,32})$') { TratarMcp $ctx $Matches[1]; return }
+  # Daqui para baixo e a pagina do jogo (os arquivos dela e a ponte): so com a chave no endereco.
+  if ($RAIZ) {
+    if ($caminho -ceq $RAIZ) { $ctx.Response.Headers['Location'] = "$RAIZ/"; [void](Enviar $ctx 302 $null $null); return }
+    if (-not $caminho.StartsWith("$RAIZ/", [StringComparison]::Ordinal)) { [void](Enviar $ctx 404 $null $null); return }
+    $caminho = $caminho.Substring($RAIZ.Length)
+  }
   if ($caminho -eq '/ponte' -and $req.HttpMethod -eq 'POST') { TratarPonte $ctx; return }
   $arq = $ARQUIVOS[$caminho]
   if ($arq -and $req.HttpMethod -eq 'GET') {
@@ -407,7 +459,7 @@ function Tique {
     if ($a.cmdId) { $script:emCurso.Remove($a.cmdId) }
     $script:fila.Remove($a)
     Registrar "sem resposta da pagina do jogo para '$($a.ferramenta)'"
-    [void](EnviarJson $a.ctx 200 (Resultado $a.rpcId (Texto "sem resposta do jogo: a pagina http://localhost:$Porta/ precisa estar aberta" $true)))
+    [void](EnviarJson $a.ctx 200 (Resultado $a.rpcId (Texto "sem resposta do jogo: a pagina do jogo precisa estar aberta no navegador" $true)))
   }
   if ($vencidas.Count) { Despachar }
 }
@@ -425,11 +477,12 @@ try { $ouvinte.Start() } catch {
 }
 
 Write-Host ""
-Write-Host "  Jogo:  http://localhost:$Porta/      (deixe esta pagina aberta no navegador)"
+Write-Host "  Jogo:  http://localhost:$Porta$RAIZ/      (deixe esta pagina aberta no navegador)"
 Write-Host "  MCP:   http://localhost:$Porta/mcp   (Streamable HTTP; o mesmo endereco para todas as iAs)"
 Write-Host "  Ctrl+C encerra."
 Write-Host ""
-if (-not $SemNavegador) { Start-Process "http://localhost:$Porta/" }
+if ($RAIZ) { Write-Host "  (O endereco do jogo tem uma chave: assim as iAs, que so conhecem o do MCP, nao chegam ao codigo.)"; Write-Host "" }
+if (-not $SemNavegador) { Start-Process "http://localhost:$Porta$RAIZ/" }
 
 try {
   $tarefa = $ouvinte.GetContextAsync()

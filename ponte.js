@@ -34,13 +34,15 @@
   }
 
   // Quem é esta aba e quando foi carregada: o servidor entrega o jogo à aba mais nova.
-  const eu = '/ponte?aba=' + Math.random().toString(36).slice(2) + '&desde=' + Date.now();
+  // (O endereço é relativo ao da página: ela mora num endereço com uma chave que só o navegador conhece.)
+  const eu = 'ponte?aba=' + Math.random().toString(36).slice(2) + '&desde=' + Date.now();
 
   // Avisa o servidor que o comando `id` terminou. Junto vai o que a iA precisa saber no
   // lugar do "recebido" de sempre:
   //   o resultado do jogo para quem apertou (ganhou ou perdeu);
   //   um aviso da quadra (saida.aviso): 'espera' = o outro jogador ainda não entrou;
   //   'lotado' = não há lugar para essa iA na partida;
+  //   'aguarde' = o outro jogador não jogou a tempo: o jogo está parado e a jogada não valeu;
   //   'inicio' = a partida começou agora, e a iA recebe o texto de início do desafio.
   async function concluir(id, quem, corpo, saida) {
     let extra = '';
@@ -49,6 +51,7 @@
       if (fim) extra += '&' + fim + '=1';
       if (saida && saida.aviso === 'espera') extra += '&espera=1';
       if (saida && saida.aviso === 'lotado') extra += '&lotado=1';
+      if (saida && saida.aviso === 'aguarde') extra += '&aguarde=1';
       if (saida && saida.aviso === 'inicio') extra += '&inicio=' + encodeURIComponent(jogo.desafio);
       // notas da quadra para essa iA ler junto com a resposta (o placar que mudou, por exemplo)
       const notas = jogo.novidades ? jogo.novidades(quem) : [];
@@ -62,7 +65,7 @@
   // desafios, o botão termina na hora. Só o botão do frame devolve uma imagem.
   async function executar(c) {
     let saida;
-    try { saida = await jogo.apertar(c.args[0], c.args[1] || '', c.quem, c.args[2] || ''); } catch (e) { }
+    try { saida = await jogo.apertar(c.args[0], c.args[1] || '', c.quem, c.args[2] || '', c.args[3] || ''); } catch (e) { }
     await concluir(c.id, c.quem, typeof saida === 'string' ? bytesDoPng(saida) : null, saida);
   }
   // A página foi recarregada para atender ao `comecar` de uma iA (ver o fim de arena.js):
@@ -94,15 +97,15 @@
       if (resposta.status !== 200) continue;     // ninguém pediu nada: pendura de novo
 
       const c = await resposta.json();
-      if (c.comando === 'comecar') {             // começa o desafio pedido: [desafio, nome de guerra]
+      if (c.comando === 'comecar') {             // começa o desafio pedido: [desafio, nome de guerra, modelo]
         const desafio = String(c.args[0]);
-        if (desafio !== 'M' && desafio !== 'T') {          // desafios 1 a 3: responde e recarrega a página no desafio
+        if (desafio !== 'M' && desafio !== 'T' && desafio !== 'C') {   // desafios 1 a 3: responde e recarrega a página no desafio
           await concluir(c.id, c.quem, null);
           if (jogo.comecar(desafio, c.quem)) return;
           continue;
         }
         // Na quadra, a resposta pode demorar: no desafio M a iA aguarda o outro jogador.
-        const saida = jogo.comecar(desafio, c.quem, c.id, c.args[1] || '');
+        const saida = jogo.comecar(desafio, c.quem, c.id, c.args[1] || '', c.args[2] || '');
         if (saida === true) return;              // recarregando: quem responde é a página nova
         Promise.resolve(saida).then(s => concluir(c.id, c.quem, null, s));
         continue;

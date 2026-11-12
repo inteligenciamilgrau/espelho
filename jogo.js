@@ -1314,13 +1314,14 @@
   // página nova (a conexão da iA, o número do pedido no servidor e o nome de guerra) vai
   // pelo sessionStorage, que só esta página enxerga — não pelo endereço, que qualquer link
   // de fora poderia forjar.
-  function comecar(n, quem, cmd, nome) {
-    const arena = String(n) === 'M' || String(n) === 'T';
+  function comecar(n, quem, cmd, nome, modelo) {
+    // "C" é a cadeira do comentarista do Galinha Pong: a página vai para a quadra (desafio M) e a iA entra só para assistir.
+    const comentarista = String(n) === 'C', arena = comentarista || String(n) === 'M' || String(n) === 'T';
     if (!arena && !existeDesafio(n)) return false;
     const p = new URLSearchParams(location.search);
-    p.set('desafio', n);
+    p.set('desafio', comentarista ? 'M' : n);
     try {
-      if (arena && Number.isInteger(quem) && quem > 0) sessionStorage.setItem('quadra.entrada', JSON.stringify({ quem, cmd: cmd || 0, nome: nome || '' }));
+      if (arena && Number.isInteger(quem) && quem > 0) sessionStorage.setItem('quadra.entrada', JSON.stringify({ quem, cmd: cmd || 0, nome: nome || '', modelo: modelo || '', papel: comentarista ? 'C' : '' }));
       else sessionStorage.removeItem('quadra.entrada');
     } catch (e) { }
     if ('?' + p.toString() === location.search) location.reload();
