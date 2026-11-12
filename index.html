@@ -41,14 +41,16 @@
 <canvas id="tela"></canvas>
 
 <!-- Só quais botões existem: o jogo não diz o que cada botão faz.
-     (A última linha é da página, não do jogo: 1, 2 e 3 começam um desafio, M é o modo iA,
-     R recomeça e H esconde esta lista.) -->
+     (As duas últimas linhas são da página, não do jogo: 1, 2, 3, M e Shift+T começam um desafio,
+     I é o modo iA, R recomeça e H esconde esta lista. Nos desafios M e T, arena.js troca esta
+     lista pela dos dois jogadores.) -->
 <div id="ajuda" class="painel">  W
 A S D
 Espaço
 L T F
 
-1 2 3 M R H</div>
+1 2 3 M Shift+T
+I R H</div>
 
 <!-- O que o jogo diz ao jogador no começo do desafio (jogo.js preenche). -->
 <div id="mensagem" class="painel"></div>
@@ -56,7 +58,7 @@ L T F
 <!-- Painel de depuração: mostra o que cada comando fez. Sem tecla; só aparece com ?depurar no endereço. -->
 <div id="status" class="painel" hidden></div>
 <div id="log" class="painel" hidden></div>
-<div id="modo" class="painel" hidden>M</div>
+<div id="modo" class="painel" hidden>I</div>
 
 <!-- Estado da ligação com o servidor MCP (ver ponte.js). Não aparece quando a página é aberta direto do arquivo. -->
 <div id="ponte" class="painel" hidden></div>
@@ -67,6 +69,7 @@ L T F
 
 <script src="vendor/three.min.js"></script>
 <script src="jogo.js"></script>
+<script src="arena.js"></script>
 <script src="ponte.js"></script>
 </body>
 </html>

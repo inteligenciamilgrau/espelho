@@ -23,6 +23,7 @@
  */
 (() => {
   'use strict';
+  if (/^[MT]$/.test(new URLSearchParams(location.search).get('desafio') || '')) return;   // os desafios M (multiplayer) e T (treino) são outro jogo: ver arena.js
   const T = THREE;
 
   // ---------- configuração ----------
@@ -1307,12 +1308,24 @@
   // Recomeça o desafio atual. Tudo o que o jogo guarda está na página, então basta recarregá-la.
   const reiniciar = () => location.reload();
   // Começa o desafio n: recarrega a página com ?desafio=n (o resto do endereço fica como está).
-  function comecar(n) {
-    if (!existeDesafio(n)) return;
+  // Devolve true quando a página vai ser recarregada. Os desafios M (multiplayer) e T (treino)
+  // são os da quadra (arena.js). Quando quem pede um deles é uma iA, a página nova já entra
+  // com essa iA e é ela que responde ao pedido (ver o fim de arena.js). O recado para a
+  // página nova (a conexão da iA, o número do pedido no servidor e o nome de guerra) vai
+  // pelo sessionStorage, que só esta página enxerga — não pelo endereço, que qualquer link
+  // de fora poderia forjar.
+  function comecar(n, quem, cmd, nome) {
+    const arena = String(n) === 'M' || String(n) === 'T';
+    if (!arena && !existeDesafio(n)) return false;
     const p = new URLSearchParams(location.search);
     p.set('desafio', n);
+    try {
+      if (arena && Number.isInteger(quem) && quem > 0) sessionStorage.setItem('quadra.entrada', JSON.stringify({ quem, cmd: cmd || 0, nome: nome || '' }));
+      else sessionStorage.removeItem('quadra.entrada');
+    } catch (e) { }
     if ('?' + p.toString() === location.search) location.reload();
     else location.search = p.toString();
+    return true;
   }
 
   // ---------- desenho ----------
@@ -1475,6 +1488,7 @@
       return;
     }
     if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (e.code === 'KeyT' && e.shiftKey) { if (!e.repeat) comecar('T'); return; }   // Shift+T: o treino na quadra (T sozinho é o botão do texto)
     const botao = BOTAO_DA_TECLA[e.code];
     if (botao) {
       e.preventDefault();
@@ -1489,7 +1503,8 @@
     }
     if (e.repeat) return;
     switch (e.code) {                           // controles da página, fora do jogo
-      case 'KeyM':
+      case 'KeyM': comecar('M'); break;         // o desafio multiplayer
+      case 'KeyI':                              // modo iA: a tela congela até a próxima imagem ser pedida
         modoIA = !modoIA;
         elModo.hidden = !modoIA;
         resposta('modo iA', true, modoIA ? 'ligado: a tela congela até pedir frame' : 'desligado');

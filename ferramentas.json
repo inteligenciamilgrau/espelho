@@ -2,17 +2,35 @@
   "desafios": {
     "1": { "respostaComecar": "jogo começou" },
     "2": { "respostaComecar": "Dê o objeto para o robô." },
-    "3": { "respostaComecar": "jogo começou" }
+    "3": { "respostaComecar": "jogo começou" },
+    "M": { "respostaComecar": "Galinha Pong. Regras: dois robôs, cada um na sua metade da quadra, sem passar das linhas. Marca ponto quem acerta o outro com um objeto arremessado; vence quem fizer 3 pontos. Depois de cada ponto, os dois voltam para o lugar de início, de mãos vazias, e os objetos são arrumados de novo. Botões: W anda um passo para a frente. A e D viram 45 graus para a esquerda e para a direita, sem sair do lugar. S dá meia-volta e anda um passo. Não existe andar de lado. ESPACO pega o objeto que está perto e à sua frente, se houver uma mão livre para ele (o escudo vai na mão esquerda; o objeto de arremessar, na direita); sem nada para pegar, arremessa o que está na mão direita para onde você está olhando. L levanta ou abaixa o escudo. T escreve na sua barriga o texto do parâmetro texto. F devolve a imagem do que você está vendo. Na imagem, a borda azul-clara mostra em que o ESPACO vai agir: no objeto que seria pego ou, se for arremessar, no adversário, quando o arremesso acertaria. O objeto arremessado voa 4,5 metros por rodada. O escudo levantado defende o que vem de frente, mas quem está com ele levantado não arremessa, e a cada defesa o escudo cai longe. O jogo é por rodadas: cada botão é a sua jogada da rodada (menos o F, que não gasta jogada), as jogadas dos dois valem ao mesmo tempo e a resposta só chega quando a rodada fecha; aí já é a sua vez de novo. Depois que um jogou, o outro tem 15 segundos; se não jogar, a rodada fecha sem ele.", "exigeNome": true },
+    "T": { "respostaComecar": "Treino de Galinha Pong. Regras: dois robôs, cada um na sua metade da quadra, sem passar das linhas. Marca ponto quem acerta o outro com um objeto arremessado; vence quem fizer 3 pontos. Depois de cada ponto, os dois voltam para o lugar de início, de mãos vazias, e os objetos são arrumados de novo. Botões: W anda um passo para a frente. A e D viram 45 graus para a esquerda e para a direita, sem sair do lugar. S dá meia-volta e anda um passo. Não existe andar de lado. ESPACO pega o objeto que está perto e à sua frente, se houver uma mão livre para ele (o escudo vai na mão esquerda; o objeto de arremessar, na direita); sem nada para pegar, arremessa o que está na mão direita para onde você está olhando. L levanta ou abaixa o escudo. T escreve na sua barriga o texto do parâmetro texto. F devolve a imagem do que você está vendo. Na imagem, a borda azul-clara mostra em que o ESPACO vai agir: no objeto que seria pego ou, se for arremessar, no adversário, quando o arremesso acertaria. O objeto arremessado voa 4,5 metros por rodada. O escudo levantado defende o que vem de frente, mas quem está com ele levantado não arremessa, e a cada defesa o escudo cai longe. O jogo é por rodadas: cada botão é a sua jogada da rodada (menos o F, que não gasta jogada), as jogadas dos dois valem ao mesmo tempo e a resposta só chega quando a rodada fecha; aí já é a sua vez de novo. Aqui o adversário é o robô da casa, que joga na hora.", "exigeNome": true }
   },
   "respostaComando": "recebido",
   "respostaVitoria": "Parabéns! Você conseguiu!",
+  "respostaDerrota": "Você perdeu.",
+  "respostaEspera": "Aguardando o outro jogador.",
+  "respostaLotado": "A partida está cheia. Se você já estava nela, entre de novo com o mesmo nome de guerra.",
+  "respostaSemNome": "Escolha um nome de guerra e mande no parâmetro nome.",
+  "respostaQuem": "Há mais de um jogador nesta conexão: mande o seu nome de guerra no parâmetro nome.",
+  "notas": {
+    "placar": "Placar: {eu} {meus} x {dele} {ele}.",
+    "partidaNova": "Partida nova.",
+    "quadraArrumada": "A quadra foi arrumada: os dois voltaram ao lugar de início, de mãos vazias.",
+    "vez": "É a sua vez: rodada {rodada}.",
+    "rodada": "Rodada {n} encerrada. É a sua vez: rodada {rodada}.",
+    "rodadaPerdida": "A rodada {n} fechou sem a sua jogada. É a sua vez: rodada {rodada}."
+  },
   "ferramentas": [
     {
       "name": "comecar",
       "description": "Começa um desafio.",
       "inputSchema": {
         "type": "object",
-        "properties": { "desafio": { "type": "integer", "enum": [1, 2, 3] } },
+        "properties": {
+          "desafio": { "type": "string", "enum": ["1", "2", "3", "M", "T"], "description": "M: Galinha Pong, um contra o outro. T: treino de Galinha Pong." },
+          "nome": { "type": "string", "maxLength": 12, "description": "Seu nome de guerra." }
+        },
         "required": ["desafio"]
       }
     },
@@ -26,7 +44,8 @@
             "type": "string",
             "enum": ["W", "A", "S", "D", "ESPACO", "L", "T", "F"]
           },
-          "texto": { "type": "string", "maxLength": 10 }
+          "texto": { "type": "string", "maxLength": 10 },
+          "nome": { "type": "string", "maxLength": 12, "description": "Seu nome de guerra." }
         },
         "required": ["botao"]
       }
