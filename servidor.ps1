@@ -1,6 +1,7 @@
 # Servidor do jogo: MCP pela rede (Streamable HTTP), sem instalar nada.
 #
 #   http://localhost:8765/jogo-CHAVE/   a pagina do jogo (tem de ficar aberta num navegador)
+#   http://localhost:8765/jogo-CHAVE/replays.html   as partidas gravadas, para assistir depois
 #   http://localhost:8765/mcp           o endereco MCP, o mesmo para todas as iAs
 #
 # As iAs so conhecem o endereco do MCP. A pagina do jogo, os arquivos dela (o codigo do jogo)
@@ -31,7 +32,8 @@
 param(
   [int]$Porta = 8765,
   [switch]$SemNavegador,     # nao abre a pagina do jogo sozinho
-  [switch]$SemChave          # a pagina do jogo fica em http://localhost:PORTA/, sem chave no endereco (qualquer um le o codigo)
+  [switch]$SemChave,         # a pagina do jogo fica em http://localhost:PORTA/, sem chave no endereco (qualquer um le o codigo)
+  [string]$Gravacoes = ''    # a pasta em que as gravacoes das partidas ficam guardadas (sem isto, ao lado da chave: ver PASTA_PARTIDAS)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -50,6 +52,8 @@ $ARQUIVOS = @{
   '/jogo.js'             = 'jogo.js', 'text/javascript; charset=utf-8'
   '/arena.js'            = 'arena.js', 'text/javascript; charset=utf-8'
   '/ponte.js'            = 'ponte.js', 'text/javascript; charset=utf-8'
+  '/gravacao.js'         = 'gravacao.js', 'text/javascript; charset=utf-8'
+  '/replays.html'        = 'replays.html', 'text/html; charset=utf-8'
   '/vendor/three.min.js' = 'vendor\three.min.js', 'text/javascript; charset=utf-8'
 }
 # A chave do endereco da pagina: 32 letras ao acaso. Fica guardada fora da pasta do projeto,
@@ -70,6 +74,11 @@ $LIMITE_CORPO = 8MB       # maior pedido aceito (um frame em PNG tem menos de 1 
 $ESPERA_COMANDO = 10      # segundos que uma chamada da iA espera a pagina vir busca-la
 $ESPERA_RESPOSTA = 45     # segundos que a pagina tem para terminar um comando (no desafio M, a rodada inteira)
 $ESPERA_SONDAGEM = 20     # segundos que a pagina fica pendurada esperando um comando
+# As gravacoes das partidas (ver gravacao.js e TratarPartidas): ficam fora da pasta do projeto.
+$PASTA_PARTIDAS = if ($Gravacoes) { $Gravacoes } else { Join-Path $env:LOCALAPPDATA 'espelho-jogo\partidas' }
+$FORMA_DO_ID = '^[0-9]{8}-[0-9]{6}-[a-z0-9]{6}$'     # o nome de uma gravacao: data, hora e seis letras ao acaso
+$LIMITE_PARTIDA = 1MB     # maior gravacao aceita
+$LIMITE_PARTIDAS = 300    # quantas gravacoes ficam guardadas: passando disso, as mais antigas saem
 
 # ---------- estado ----------
 # Uma chamada: ctx, rpcId, ferramenta, comando, argumentos, quem (o numero da iA), prazo e, depois de enviada, cmdId.
@@ -305,6 +314,68 @@ function TratarPonte($ctx) {
   Despachar
 }
 
+# ---------- gravacoes das partidas ----------
+# A pagina do jogo grava cada partida e manda a gravacao inteira de novo a cada novidade. Aqui
+# ela so e guardada num arquivo e devolvida a quem pede para assistir (a aba de replays).
+#   GET  /partidas             a lista: de cada gravacao, o id e a primeira linha (o resumo)
+#   GET  /partidas?id=ID       a gravacao inteira
+#   POST /partidas?id=ID       guarda (por cima da anterior); com &apagar=1, apaga
+# O nome do arquivo e o id, que tem forma fixa: nada do que a pagina manda vira caminho de
+# arquivo. O conteudo e texto que so a pagina do jogo le (e trata como dados, nunca como codigo).
+function TratarPartidas($ctx) {
+  $req = $ctx.Request
+  $id = [string]$req.QueryString['id']
+  if ($id -and $id -cnotmatch $FORMA_DO_ID) { [void](Enviar $ctx 400 $null $null); return }
+  $arquivo = if ($id) { Join-Path $PASTA_PARTIDAS "$id.txt" } else { '' }
+  if ($req.HttpMethod -eq 'GET') {
+    if ($id) {
+      if (-not (Test-Path -LiteralPath $arquivo)) { [void](Enviar $ctx 404 $null $null); return }
+      [void](Enviar $ctx 200 'text/plain; charset=utf-8' ([IO.File]::ReadAllBytes($arquivo)))
+      return
+    }
+    $itens = @()
+    if (Test-Path -LiteralPath $PASTA_PARTIDAS) {
+      foreach ($f in (Get-ChildItem -LiteralPath $PASTA_PARTIDAS -Filter '*.txt' | Sort-Object Name -Descending | Select-Object -First $LIMITE_PARTIDAS)) {
+        if ($f.BaseName -cnotmatch $FORMA_DO_ID) { continue }
+        # So o comeco do arquivo e lido: um resumo e curto (ate 2000 letras), e um arquivo
+        # estragado, com uma linha enorme, nao pode fazer a lista demorar.
+        $linha = ''
+        try {
+          $leitor = New-Object IO.StreamReader($f.FullName, $utf8)
+          try {
+            $pedaco = New-Object char[] 2001
+            $lidos = $leitor.ReadBlock($pedaco, 0, $pedaco.Length)
+            $comeco = [string]::new($pedaco, 0, $lidos)
+            $fim = $comeco.IndexOf("`n")
+            if ($fim -ge 0) { $linha = $comeco.Substring(0, $fim).TrimEnd("`r") } elseif ($lidos -le 2000) { $linha = $comeco }
+          } finally { $leitor.Close() }
+        } catch { }
+        $itens += '{"id":"' + $f.BaseName + '","resumo":' + (ConvertTo-Json -InputObject $linha -Compress) + '}'
+      }
+    }
+    [void](EnviarJson $ctx 200 ('[' + ($itens -join ',') + ']'))
+    return
+  }
+  if ($req.HttpMethod -ne 'POST' -or -not $id) { [void](Enviar $ctx 405 $null $null); return }
+  if ($req.QueryString['apagar']) {
+    try { if (Test-Path -LiteralPath $arquivo) { Remove-Item -LiteralPath $arquivo -Force; Registrar "gravacao $id apagada" } } catch { }
+    [void](Enviar $ctx 204 $null $null)
+    return
+  }
+  $corpo = LerCorpo $req
+  if ($null -eq $corpo -or $corpo.Length -gt $LIMITE_PARTIDA) { [void](Enviar $ctx 413 $null $null); return }
+  if ($corpo.Length -eq 0) { [void](Enviar $ctx 400 $null $null); return }
+  $nova = -not (Test-Path -LiteralPath $arquivo)
+  if ($nova) { [void](New-Item -ItemType Directory -Force $PASTA_PARTIDAS) }
+  [IO.File]::WriteAllBytes($arquivo, $corpo)
+  if ($nova) {                                # uma gravacao nova: as mais antigas que passam do limite saem
+    Registrar "gravando a partida $id"
+    $velhas = @(Get-ChildItem -LiteralPath $PASTA_PARTIDAS -Filter '*.txt' | Sort-Object Name -Descending | Select-Object -Skip $LIMITE_PARTIDAS)
+    foreach ($v in $velhas) { try { Remove-Item -LiteralPath $v.FullName -Force } catch { } }
+  }
+  [void](Enviar $ctx 204 $null $null)
+}
+
 # ---------- MCP ----------
 # $sufixo e o que vem depois de /mcp/ no endereco (vazio no endereco normal).
 function TratarMcp($ctx, [string]$sufixo) {
@@ -357,6 +428,9 @@ function TratarMcp($ctx, [string]$sufixo) {
         'comecar' {                             # a pagina vai para o desafio pedido; o nome de guerra vai junto
           $argumentos = @([string]$a.desafio, $nomeDeGuerra, $modelo)
           if ($DESAFIOS -cnotcontains $argumentos[0]) { $invalido = 'desafio inexistente' }
+          # Nos desafios 1 a 3 a iA diz quem e (nome de guerra e modelo) antes de comecar: e o que a
+          # gravacao e quem assiste mostram. Sem confirmacao: ali ha um jogador so, e o nome nao separa ninguem.
+          elseif ($config.desafios.PSObject.Properties[$argumentos[0]].Value.exigeNomeEModelo -and (-not $nomeDeGuerra -or -not $modelo)) { $invalido = [string]$config.respostaSemNomeEModelo }
           elseif (-not $nomeDeGuerra -and $config.desafios.PSObject.Properties[$argumentos[0]].Value.exigeNome) { $invalido = [string]$config.respostaSemNome }
           elseif ($nomeDeGuerra -and $config.respostaConfirmarNome -and $config.desafios.PSObject.Properties[$argumentos[0]].Value.exigeNome) {
             # Um nome de guerra novo nesta conexao so vale depois de confirmado: o nome nao pode ser
@@ -382,7 +456,12 @@ function TratarMcp($ctx, [string]$sufixo) {
           $comando = 'apertar'
           $texto = [string]$a.texto
           if ($texto.Length -gt 140) { $texto = $texto.Substring(0, 140) }  # o mesmo limite que a ferramenta declara (a pagina corta de novo: 10 letras na barriga)
-          $argumentos = @([string]$a.botao, $texto, $nomeDeGuerra, $modelo)    # o nome vai junto: quem volta depois de cair retoma o seu robo por ele
+          # A intencao: o que a iA diz que pretende com o botao. E so para quem assiste (a pagina
+          # mostra ao lado do jogo, nunca na imagem que vai para a iA). Nos desafios 1 a 3 e
+          # obrigatoria, e quem cobra e a pagina, que sabe qual jogo esta aberto (aviso semIntencao).
+          $intencao = (([string]$a.intencao) -replace '[\x00-\x1f\x7f]', ' ').Trim()
+          if ($intencao.Length -gt 140) { $intencao = $intencao.Substring(0, 140).Trim() }
+          $argumentos = @([string]$a.botao, $texto, $nomeDeGuerra, $modelo, $intencao)    # o nome vai junto: quem volta depois de cair retoma o seu robo por ele
           if ($BOTOES -cnotcontains $argumentos[0]) { $invalido = 'botao inexistente' }
         }
         default { [void](EnviarJson $ctx 200 (Erro $id -32602 "Ferramenta desconhecida: $nome")); return }
@@ -392,7 +471,11 @@ function TratarMcp($ctx, [string]$sufixo) {
       # Mudou o desafio: a pagina recarrega e ninguem mais tem lugar. Os nomes de guerra
       # tambem comecam do zero (assim uma iA pode trocar de nome de um desafio para o outro).
       # (Entrar como comentarista nao muda o desafio: a partida continua como esta.)
-      if ($nome -eq 'comecar' -and $argumentos[0] -cne $script:desafioAtual -and -not $config.desafios.PSObject.Properties[$argumentos[0]].Value.espectador) { $script:nomes.Clear(); $script:desafioAtual = $argumentos[0] }
+      # (Num desafio de um jogador so, todo comecar zera os nomes: quem corrige o proprio nome nao vira "outro jogador da mesma conexao".)
+      if ($nome -eq 'comecar') {
+        $d = $config.desafios.PSObject.Properties[$argumentos[0]].Value
+        if (-not $d.espectador -and ($argumentos[0] -cne $script:desafioAtual -or $d.exigeNomeEModelo)) { $script:nomes.Clear(); $script:desafioAtual = $argumentos[0] }
+      }
       $identidade = Identidade $chave $nomeDeGuerra
       if ($null -eq $identidade) { [void](EnviarJson $ctx 200 (Resultado $id (Texto ([string]$config.respostaQuem) $true))); return }
       $quem = NumeroDe $identidade
@@ -437,6 +520,7 @@ function Tratar($ctx) {
     $caminho = $caminho.Substring($RAIZ.Length)
   }
   if ($caminho -eq '/ponte' -and $req.HttpMethod -eq 'POST') { TratarPonte $ctx; return }
+  if ($caminho -eq '/partidas') { TratarPartidas $ctx; return }
   $arq = $ARQUIVOS[$caminho]
   if ($arq -and $req.HttpMethod -eq 'GET') {
     [void](Enviar $ctx 200 $arq[1] ([IO.File]::ReadAllBytes((Join-Path $pasta $arq[0]))))

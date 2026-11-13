@@ -25,9 +25,13 @@
   'use strict';
   if (/^[MT]$/.test(new URLSearchParams(location.search).get('desafio') || '')) return;   // os desafios M (multiplayer) e T (treino) são outro jogo: ver arena.js
   const T = THREE;
+  // As partidas são gravadas para assistir depois (ver gravacao.js e, aqui, "a intenção e a
+  // gravação"). Com ?assistir=<id> a página não aceita jogadas: só toca a gravação pedida.
+  const GRAVACAO = window.gravacao || null;
+  const ASSISTINDO = !!(GRAVACAO && GRAVACAO.assistindo);
 
   // ---------- configuração ----------
-  const TOTAL_SALAS = 1;                        // quantas salas tem o desafio 1; completar a última é a vitória
+  const TOTAL_SALAS = 1;                       // quantas salas tem o desafio 1; completar a última é a vitória
   const OBJETOS_NO_CHAO = 3;                    // por sala; com o da cabeça do robô, o contador vai até 4
   const SALA = { L: 8, P: 7, A: 3 };            // largura (x), profundidade (z), altura (y), em metros
   const Z_ESPELHO = -SALA.P / 2;                // a parede-espelho inteira fica em z = -3.5
@@ -1323,6 +1327,8 @@
     try {
       if (arena && Number.isInteger(quem) && quem > 0) sessionStorage.setItem('quadra.entrada', JSON.stringify({ quem, cmd: cmd || 0, nome: nome || '', modelo: modelo || '', papel: comentarista ? 'C' : '' }));
       else sessionStorage.removeItem('quadra.entrada');
+      // nos desafios 1 a 3, a página nova fica sabendo quem está jogando (ver "quem joga, a intenção e a gravação")
+      if (!arena && Number.isInteger(quem) && quem > 0) sessionStorage.setItem('desafio.quem', JSON.stringify({ quem, nome: nome || '', modelo: modelo || '' }));
     } catch (e) { }
     if ('?' + p.toString() === location.search) location.reload();
     else location.search = p.toString();
@@ -1414,9 +1420,13 @@
   window.addEventListener('resize', ajustarTamanho);
 
   let anterior = performance.now();
+  let toca = null;                              // quem toca a gravação, quando a página está assistindo a uma (ver o fim do arquivo)
   function quadro(agora) {
-    const dt = Math.min(0.1, (agora - anterior) / 1000);
+    const real = Math.min(0.1, (agora - anterior) / 1000);
     anterior = agora;
+    // Assistindo a uma gravação, o tempo é o dela: parado na pausa, mais depressa quando se acelera.
+    const dt = ASSISTINDO ? (toca ? toca.passo(real) : 0) : real;
+    if (toca) toca.soltar();                    // os botões gravados cuja hora chegou
     animar(1 - Math.exp(-dt * 14), 1 - Math.exp(-dt * 5));
     if (!modoIA) { aplicarVisual(); desenhar(); }
     requestAnimationFrame(quadro);
@@ -1428,6 +1438,22 @@
   const elCaixa = document.getElementById('caixa'), elEntrada = document.getElementById('entrada');
   const elMensagem = document.getElementById('mensagem');
   elMensagem.textContent = REGRAS.mensagem;
+  // A cara da página nos desafios 1 a 3 (as fontes e as caixas) está em index.html, sob esta classe.
+  document.body.classList.add('desafio');
+  // A lista de teclas, desenhada como teclas: em cima as do jogo, arrumadas como no teclado, e
+  // embaixo as da página. Continua dizendo só quais existem, não o que cada uma faz.
+  elAjuda.textContent = '';
+  for (const [classe, fileiras] of [['do-jogo', [['W'], ['A', 'S', 'D'], ['Espaço'], ['L', 'T', 'F']]], ['da-pagina', [['1', '2', '3', 'M', 'Shift+T'], ['I', 'R', 'H', 'G']]]]) {
+    const grupo = document.createElement('div');
+    grupo.className = classe;
+    for (const teclas of fileiras) {
+      const fileira = document.createElement('div');
+      fileira.className = 'fileira';
+      for (const t of teclas) { const k = document.createElement('kbd'); k.textContent = t; fileira.appendChild(k); }
+      grupo.appendChild(fileira);
+    }
+    elAjuda.appendChild(grupo);
+  }
   const linhas = [REGRAS.mensagem];
   let destacado = null, ultima = null;
   // Painel de depuração: mostra tudo o que o jogo esconde, então não pode estar ao alcance
@@ -1472,9 +1498,86 @@
     T: texto => escrever(texto),                // o único que usa o texto que vem junto
     F: () => frame(),                           // o único que devolve algo: a imagem
   };
-  function apertar(botao, texto) {
+  function acionar(botao, texto) {
     const acao = Object.prototype.hasOwnProperty.call(BOTOES, botao) && BOTOES[botao];
     return acao ? acao(texto) : resposta(`apertar ${botao}`, false, 'botão inexistente');
+  }
+
+  // ---------- quem joga, a intenção e a gravação ----------
+  // Quem assiste fica sabendo de duas coisas que a iA diz: quem ela é (um nome de guerra e o
+  // modelo) e o que pretende com cada botão. As duas aparecem num campo da página, por cima do
+  // jogo, e vão para a gravação. Nenhuma entra na imagem que a iA recebe, que é só o desenho do
+  // jogo: o nome dela à vista, no quarto do espelho, seria a maior das pistas.
+  //   quem joga:  a iA diz ao começar o desafio (o servidor só deixa começar com nome e modelo:
+  //               ver ferramentas.json), e a página nova recebe o recado da anterior (ver
+  //               comecar). O botão de uma iA que a página não conhece (outra conexão, ou a
+  //               página foi aberta sem `comecar`) não é apertado: ela recebe o aviso 'semNome'
+  //               e aperta de novo, mandando o nome e o modelo.
+  //   a intenção: vem junto com cada botão (o parâmetro intencao). Não muda o que o botão faz,
+  //               e a iA continua sem saber o resultado. Sem ela o botão não é apertado: aviso
+  //               'semIntencao'.
+  // O teclado não precisa dizer nada. Depois da vitória, nada disso é cobrado.
+  //
+  // Cada vez que a página abre num desafio começa uma gravação (ver gravacao.js), com dois
+  // acontecimentos: `quem` (o nome e o modelo de quem passou a jogar) e `botao`, com b (o
+  // botão), x (o texto, no botão T) e q (a intenção).
+  const semControle = (texto, letras) => Array.from(String(texto == null ? '' : texto).replace(/[\u0000-\u001f\u007f]/g, ' ').trim()).slice(0, letras).join('');
+  const quemJoga = { quem: 0, nome: '', modelo: '' }, contagem = { botoes: 0, imagens: 0 };
+  const gravando = !ASSISTINDO && GRAVACAO
+    ? GRAVACAO.gravar(DESAFIO, () => ({ nome: quemJoga.nome, modelo: quemJoga.modelo, botoes: contagem.botoes, imagens: contagem.imagens, ganhou: estado.ganhou }))
+    : null;
+  const NOME_DO_BOTAO = { ESPACO: 'Espaço', F: 'F · imagem' };
+  const elQuer = document.getElementById('quer'), intencoes = [];
+  // O campo de quem assiste: quem está jogando e as últimas quatro intenções, a mais nova embaixo, acesa.
+  function desenharQuer() {
+    if (!elQuer) return;
+    const pedaco = (tag, texto) => { const el = document.createElement(tag); el.textContent = texto; return el; };   // sempre como texto: tudo aqui vem da iA
+    const linha = (classe, ...partes) => { const d = document.createElement('div'); d.className = classe; d.append(...partes); elQuer.appendChild(d); };
+    elQuer.textContent = '';
+    if (quemJoga.nome || quemJoga.modelo) linha('quem', pedaco('b', quemJoga.nome || 'sem nome'), ' ', pedaco('span', quemJoga.modelo));
+    if (intencoes.length) linha('titulo', 'o que pretende');
+    intencoes.forEach((x, i) => linha(i === intencoes.length - 1 ? 'linha ultima' : 'linha', pedaco('b', NOME_DO_BOTAO[x.botao] || x.botao), pedaco('span', x.quer)));
+    elQuer.hidden = !elQuer.childNodes.length;
+  }
+  function mostrarIntencao(botao, quer) {
+    if (!quer) return;
+    intencoes.push({ botao, quer });
+    if (intencoes.length > 4) intencoes.shift();
+    desenharQuer();
+  }
+  // Quem está jogando é a iA da conexão `quem`, com esse nome e esse modelo. O que vier vazio
+  // fica como estava, se a iA for a mesma; de outra iA, o nome da anterior não vale.
+  function apresentar(quem, nome, modelo) {
+    const antes = quemJoga.nome + '|' + quemJoga.modelo;
+    if (quemJoga.quem !== quem) Object.assign(quemJoga, { quem, nome: '', modelo: '' });
+    quemJoga.nome = semControle(nome, 12) || quemJoga.nome;
+    quemJoga.modelo = semControle(modelo, 24) || quemJoga.modelo;
+    try { sessionStorage.setItem('desafio.quem', JSON.stringify(quemJoga)); } catch (e) { }   // para continuar valendo se a página recarregar
+    if (quemJoga.nome + '|' + quemJoga.modelo === antes || !(quemJoga.nome || quemJoga.modelo)) return;   // (quem chega sem dizer nada ainda não aparece: o botão dela nem é apertado)
+    if (gravando) gravando.anotar('quem', { nome: quemJoga.nome, modelo: quemJoga.modelo });
+    desenharQuer();
+  }
+  // A iA que começou este desafio, ou que já estava jogando quando a página recarregou.
+  if (!ASSISTINDO) try {
+    const antes = JSON.parse(sessionStorage.getItem('desafio.quem'));
+    if (antes && Number.isInteger(antes.quem) && antes.quem > 0) apresentar(antes.quem, antes.nome, antes.modelo);
+  } catch (e) { }
+  // Aperta um botão. `quem` é a conexão da iA que apertou (o teclado não manda nada).
+  function apertar(botao, texto, quem, nome, modelo, intencao) {
+    if (ASSISTINDO) return undefined;           // numa gravação ninguém joga
+    const existe = Object.prototype.hasOwnProperty.call(BOTOES, botao), deIA = Number.isInteger(quem) && quem > 0, quer = semControle(intencao, 140);
+    if (deIA) apresentar(quem, nome, modelo);
+    if (deIA && existe && !estado.ganhou) {     // (depois da vitória nada disso é cobrado)
+      if (!quemJoga.nome || !quemJoga.modelo) return { aviso: 'semNome' };
+      if (!quer) return { aviso: 'semIntencao' };
+    }
+    const saida = acionar(botao, texto);
+    if (existe) {
+      mostrarIntencao(botao, quer);
+      if (botao === 'F') contagem.imagens++; else contagem.botoes++;
+      if (gravando) gravando.anotar('botao', Object.assign({ b: botao }, botao === 'T' ? { x: estado.texto } : null, quer ? { q: quer } : null), true);
+    }
+    return saida;
   }
 
   // ---------- teclado ----------
@@ -1483,6 +1586,7 @@
   let ultimoPasso = 0;
 
   window.addEventListener('keydown', e => {
+    if (ASSISTINDO) return;                     // numa gravação o teclado não joga (as teclas de quem assiste estão em gravacao.js)
     if (!elCaixa.hidden) {                      // digitando o texto do botão T
       if (e.code === 'Enter' || e.code === 'NumpadEnter') { apertar('T', elEntrada.value); elCaixa.hidden = true; }
       else if (e.code === 'Escape') elCaixa.hidden = true;
@@ -1511,6 +1615,7 @@
         resposta('modo iA', true, modoIA ? 'ligado: a tela congela até pedir frame' : 'desligado');
         break;
       case 'KeyH': elAjuda.hidden = !elAjuda.hidden; break;
+      case 'KeyG': if (GRAVACAO && GRAVACAO.noServidor) GRAVACAO.abrirLista(); break;   // as gravações, em outra aba
       case 'KeyR': reiniciar(); break;
       case 'Digit1': case 'Numpad1': comecar(1); break;
       case 'Digit2': case 'Numpad2': comecar(2); break;
@@ -1527,5 +1632,28 @@
   ajustarTamanho();
   aplicarVisual();
   resposta('início', true, 'ok');
+  // Assistindo a uma gravação: os botões gravados são apertados de novo, na ordem, sem as
+  // esperas de quem jogava — só com o tempo de ler a intenção de cada um. Para voltar a um
+  // ponto anterior a página recarrega já nele (o jogo não sabe desfazer um botão).
+  if (ASSISTINDO) {
+    elAjuda.hidden = true;
+    GRAVACAO.carregar(GRAVACAO.assistindo).then(gravada => {
+      const nome = semControle(gravada.resumo.nome, 12), modelo = semControle(gravada.resumo.modelo, 24);
+      toca = GRAVACAO.tocador(gravada, {
+        titulo: `Desafio ${DESAFIO}` + (nome ? ` · ${nome}` : '') + (modelo ? ` (${modelo})` : ''),
+        nomeDoPasso: 'botão',
+        doComeco: false,
+        ehPasso: ev => ev.e === 'botao' && ev.b !== 'F',       // a imagem pedida não muda nada no jogo: não conta como passo
+        aplicar(ev) {
+          if (ev.e === 'quem') { quemJoga.nome = semControle(ev.nome, 12); quemJoga.modelo = semControle(ev.modelo, 24); desenharQuer(); return; }   // quem estava jogando, na tela como ao vivo
+          if (ev.e !== 'botao') return;
+          if (ev.b !== 'F') acionar(String(ev.b), ev.x);
+          mostrarIntencao(String(ev.b), semControle(ev.q, 140));
+        },
+        espera: (ev, intervalo, anterior) => Math.min(intervalo, (anterior.b === 'F' ? 500 : 900) + 35 * semControle(anterior.q, 140).length),
+        assentar() { animar(1, 1); aplicarVisual(); },
+      });
+    }).catch(() => GRAVACAO.avisar('Não achei essa gravação.'));
+  }
   requestAnimationFrame(quadro);
 })();

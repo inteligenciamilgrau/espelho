@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Replays</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cline x1='42' y1='17' x2='42' y2='7' stroke='%232c333b' stroke-width='3'/%3E%3Ccircle cx='42' cy='7' r='5' fill='%23ff8a3d'/%3E%3Crect x='7' y='17' width='50' height='40' rx='10' fill='%23e6eaee' stroke='%232c333b' stroke-width='3'/%3E%3Crect x='14' y='27' width='36' height='18' rx='6' fill='%232c333b'/%3E%3Ccircle cx='24' cy='36' r='5' fill='%234fe3ff'/%3E%3Ccircle cx='40' cy='36' r='5' fill='%234fe3ff'/%3E%3C/svg%3E">
+<style>
+  html, body { margin: 0; min-height: 100%; background: #0c1116; color: #e8eef2; font: 14px/1.5 Consolas, "Cascadia Mono", monospace; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 22px; margin: 0; }
+  #conta { color: #9fb0ba; }
+  #atualizar { margin-left: auto; cursor: pointer; color: #7dffb0; user-select: none; }
+  #atualizar:hover { text-decoration: underline; }
+  .dica { color: #9fb0ba; margin: 8px 0 20px; }
+  .partida { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin: 8px 0; border-radius: 8px; background: #151c23; border: 1px solid #222c36; cursor: pointer; }
+  .partida:hover { border-color: #7dffb0; background: #19222b; }
+  .partida .corpo { flex: 1; min-width: 0; }
+  .partida .titulo { font-size: 16px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .partida .linha { color: #9fb0ba; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .partida .jogo { flex: none; width: 92px; font-size: 12px; text-align: center; padding: 3px 0; border-radius: 6px; background: #223041; color: #cfe6f2; }
+  .partida .apagar { flex: none; color: #7c8b94; padding: 2px 6px; border-radius: 5px; }
+  .partida .apagar:hover { color: #fff; background: #b3261e; }
+  .laranja { color: #ff7a3d; } .verde { color: #22b3a6; }
+  #vazio { color: #9fb0ba; padding: 24px 0; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>▶ Replays</h1>
+    <span id="conta"></span>
+    <span id="atualizar">atualizar</span>
+  </header>
+  <p class="dica">Toda partida é gravada sozinha enquanto é jogada. Escolha uma para assistir: ela passa sem as esperas das iAs, e dá para pausar, acelerar e ir de rodada em rodada. Esta aba não mexe no jogo que está aberto na outra.</p>
+  <div id="lista"></div>
+  <div id="vazio" hidden></div>
+</main>
+
+<script src="gravacao.js"></script>
+<script>
+(() => {
+  'use strict';
+  const gravacao = window.gravacao;
+  const elLista = document.getElementById('lista'), elVazio = document.getElementById('vazio'), elConta = document.getElementById('conta');
+  const JOGOS = { 1: 'Desafio 1', 2: 'Desafio 2', 3: 'Desafio 3', M: 'Galinha Pong', T: 'Treino' };
+  // Tudo o que vem de uma gravação é tratado como texto: os nomes e os modelos são das iAs.
+  const texto = (v, letras) => Array.from(String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').trim()).slice(0, letras).join('');
+  const numero = v => Math.max(0, Math.round(Number(v)) || 0);
+  function elemento(pai, tag, conteudo, classe) {
+    const el = document.createElement(tag);
+    el.textContent = conteudo;
+    if (classe) el.className = classe;
+    pai.appendChild(el);
+    return el;
+  }
+  const quantoDurou = ms => { const s = Math.round(numero(ms) / 1000); return s < 90 ? `${s} s` : `${Math.round(s / 60)} min`; };
+
+  function linhaDe({ id, resumo }) {
+    const desafio = String(resumo.desafio);
+    if (!Object.prototype.hasOwnProperty.call(JOGOS, desafio)) return null;
+    const item = document.createElement('div');
+    item.className = 'partida';
+    elemento(item, 'div', JOGOS[desafio], 'jogo');
+    const corpo = elemento(item, 'div', '', 'corpo'), titulo = elemento(corpo, 'div', '', 'titulo');
+    const detalhes = [gravacao.quandoFoi(resumo.quando)];
+    if (desafio === 'M' || desafio === 'T') {
+      const nomes = [0, 1].map(i => texto(Array.isArray(resumo.nomes) && resumo.nomes[i], 12) || `Jogador ${i + 1}`);
+      const placar = [0, 1].map(i => numero(Array.isArray(resumo.placar) && resumo.placar[i]));
+      const modelos = [0, 1].map(i => texto(Array.isArray(resumo.modelos) && resumo.modelos[i], 24));
+      elemento(titulo, 'span', nomes[0], 'laranja');
+      elemento(titulo, 'span', `  ${placar[0]} × ${placar[1]}  `);
+      elemento(titulo, 'span', nomes[1], 'verde');
+      const fim = numero(resumo.fim);
+      detalhes.push(numero(resumo.rodadas) === 1 ? '1 rodada' : `${numero(resumo.rodadas)} rodadas`, `ao vivo durou ${quantoDurou(resumo.duracao)}`, fim === 1 || fim === 2 ? `venceu ${nomes[fim - 1]}` : 'sem fim de jogo');
+      if (modelos[0] || modelos[1]) detalhes.push(modelos.map(m => m || '—').join(' × '));
+      if (texto(resumo.narrador, 12)) detalhes.push('🎙 ' + texto(resumo.narrador, 12));
+    } else {
+      const nome = texto(resumo.nome, 12), modelo = texto(resumo.modelo, 24);
+      elemento(titulo, 'span', nome || 'sem nome', nome ? 'laranja' : '');
+      if (modelo) elemento(titulo, 'span', `  ${modelo}`);
+      const tantos = (n, um, varios) => `${numero(n)} ${numero(n) === 1 ? um : varios}`;
+      detalhes.push(tantos(resumo.botoes, 'botão', 'botões'), tantos(resumo.imagens, 'imagem', 'imagens'), `ao vivo durou ${quantoDurou(resumo.duracao)}`, resumo.ganhou === true ? 'venceu' : 'não terminou');
+    }
+    elemento(corpo, 'div', detalhes.filter(Boolean).join(' · '), 'linha');
+    const apagar = elemento(item, 'div', 'apagar', 'apagar');
+    apagar.title = 'apagar esta gravação';
+    apagar.addEventListener('click', async e => {
+      e.stopPropagation();
+      if (!confirm('Apagar esta gravação? Não dá para desfazer.')) return;
+      try { await gravacao.apagar(id); } catch (erro) { }
+      mostrar();
+    });
+    // (o id e o desafio foram conferidos: o endereço não leva nada escrito por uma iA)
+    item.addEventListener('click', () => { location.href = './?desafio=' + desafio + '&assistir=' + id; });
+    return item;
+  }
+
+  async function mostrar() {
+    let lista = null;
+    try { lista = await gravacao.listar(); } catch (e) { }
+    elLista.textContent = '';
+    const linhas = (lista || []).map(linhaDe).filter(Boolean);
+    linhas.forEach(l => elLista.appendChild(l));
+    elConta.textContent = lista ? (linhas.length === 1 ? '1 gravação' : `${linhas.length} gravações`) : '';
+    elVazio.hidden = linhas.length > 0;
+    elVazio.textContent = !lista ? 'Não consegui falar com o servidor do jogo. Ele está ligado?' : 'Nenhuma partida gravada ainda. Jogue uma (ou ponha as iAs para jogar) e ela aparece aqui.';
+  }
+  document.getElementById('atualizar').addEventListener('click', mostrar);
+  window.addEventListener('focus', mostrar);      // voltou para esta aba: a lista pode ter mudado
+  mostrar();
+})();
+</script>
+</body>
+</html>

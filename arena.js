@@ -69,6 +69,14 @@
   // a contar quando as duas respondem (botão PRONTO). ?pronto=0 tira a pergunta.
   const PERGUNTAR_PRONTO = ENDERECO.get('pronto') !== '0';
   const NARRACAO = 140;                         // quantas letras cabem numa fala do comentarista
+  // As partidas são gravadas para assistir depois (ver gravacao.js e, aqui, "a gravação da
+  // partida"). Com ?assistir=<id> esta página não joga nada: só toca a gravação pedida.
+  const GRAVACAO = window.gravacao || null;
+  const ASSISTINDO = !!(GRAVACAO && GRAVACAO.assistindo);
+  // Quanto as esperas encolhem para quem assiste (em milissegundos): o intervalo entre duas
+  // rodadas vira no máximo `rodada`; entre outros acontecimentos, no máximo `resto`; e depois
+  // de uma fala do comentarista o jogo espera o tempo de ler a legenda.
+  const RITMO_GRAVADO = { rodada: 1800, resto: 1200, fala: 1000, porLetra: 45 };
 
   // ---------- cena ----------
   const canvas = document.getElementById('tela');
@@ -668,6 +676,7 @@
       malha: malhaP, vivas: 0,
       // solta um punhado em (x, y, z); (dx, dz) é para onde ia o que bateu: os estilhaços voltam um pouco
       soltar(jeito, x, y, z, dx, dz, cores, quantos) {
+        if (pulando) return;                    // quem assiste pulou para outro ponto da gravação: sem estilhaços do caminho
         const j = JEITOS[jeito];
         for (let i = 0; i < (quantos || j.n); i++) {
           const a = rnd() * 6.283, v = j.vel * (0.35 + rnd() * 0.65), pt = lista[vez];
@@ -1135,6 +1144,7 @@
     if ((!nome || nome === J.nome) && (!modelo || modelo === J.modelo)) return;
     if (nome && nome !== J.nome) { J.nome = nome; J.modelo = ''; }        // outro nome é outra iA
     if (modelo) J.modelo = modelo;
+    registrar('nome', { n: J.n, nome: J.nome, modelo: J.modelo });
     hudVelho = true;
     desenharPlacar();
     desenharRegistro();
@@ -1152,7 +1162,7 @@
   const narrador = { dono: null, nome: '', modelo: '', sinal: 0, novas: [], esperas: [], fala: null };
   // O comentarista está na cabine? (Dois minutos sem nenhuma chamada dele e a cadeira aparece
   // vazia; o lugar continua sendo dele, e qualquer chamada o traz de volta.)
-  const naCabine = () => !!narrador.dono && Date.now() - narrador.sinal < 120000;
+  const naCabine = () => !!narrador.dono && (ASSISTINDO || Date.now() - narrador.sinal < 120000);   // (numa gravação, fica até sair)
   function narrar(nota) {
     if (!narrador.dono) return;
     narrador.novas.push(nota);
@@ -1173,6 +1183,7 @@
     if (n.dono && n.dono !== quem && n.nome !== nome && agora - n.sinal < ABANDONO * 1000) return 'cadeiraOcupada';
     for (const e of n.esperas.splice(0)) { clearTimeout(e.relogio); e.pronto(); }
     Object.assign(n, { dono: quem, nome, modelo: limparModelo(modelo) || (nome === n.nome ? n.modelo : ''), sinal: agora, novas: [] });
+    registrar('narrador', { nome: n.nome, modelo: n.modelo });
     cabine.figura.visible = true;
     if (valendo()) n.novas.push({ tipo: 'narraPlacar', a: nomeDe(jog[1]), pa: jog[1].pontos, pb: jog[2].pontos, b: nomeDe(jog[2]), rodada: rodadas + 1 });
     try { sessionStorage.setItem('quadra.narrador', JSON.stringify({ quem, nome })); } catch (e) { }   // para continuar na cadeira se a página recarregar
@@ -1183,6 +1194,7 @@
   function largarCadeira() {
     for (const e of narrador.esperas.splice(0)) { clearTimeout(e.relogio); e.pronto(); }
     Object.assign(narrador, { dono: null, nome: '', modelo: '', novas: [], fala: null });
+    registrar('narrador', { nome: '', modelo: '' });
     try { sessionStorage.removeItem('quadra.narrador'); } catch (e) { }
     escreverPlaca();
     hudVelho = true;
@@ -1214,13 +1226,14 @@
   function falar(texto) {
     texto = Array.from(String(texto == null ? '' : texto).replace(/[\u0000-\u001f\u007f]/g, ' ').trim()).slice(0, NARRACAO).join('');
     if (!texto) return;
-    narrador.fala = { texto, ate: performance.now() + Math.max(5000, 2500 + texto.length * 75) };
+    registrar('fala', { texto });
+    narrador.fala = { texto, ate: hora() + Math.max(5000, 2500 + texto.length * 75) };
     historico.push({ marca: `🎙 ${narrador.nome}: ${texto}`, fala: true });
     if (historico.length > 400) historico.shift();
     hudVelho = true;
     desenharRegistro();
     try {                                        // em voz alta, se o som está ligado e o navegador sabe falar
-      if (!nivelDoSom('narracao') || !window.speechSynthesis) return;      // narração no mudo: fica só a legenda
+      if (pulando || !nivelDoSom('narracao') || !window.speechSynthesis) return;      // narração no mudo: fica só a legenda
       const voz = new SpeechSynthesisUtterance(texto);
       voz.lang = 'pt-BR'; voz.rate = 1.15; voz.volume = nivelDoSom('narracao');
       window.speechSynthesis.cancel();
@@ -1267,6 +1280,59 @@
   const diagnosticos = { 1: null, 2: null };
   const sorte = aleatorio(20261111);
 
+  // ---------- o relógio do jogo ----------
+  // Ao vivo é o relógio do navegador. Assistindo a uma gravação é um relógio próprio, que anda
+  // junto com o desenho (ver quadro): para quando quem assiste pausa e corre quando ele acelera.
+  // `daqui` marca uma coisa para acontecer dali a tantos milissegundos nesse relógio.
+  let horaGravada = 0;
+  const hora = () => ASSISTINDO ? horaGravada : performance.now();
+  const alarmes = [];
+  function daqui(fn, ms) {
+    if (!ASSISTINDO) return setTimeout(fn, ms);
+    const a = { fn, em: horaGravada + ms };
+    alarmes.push(a);
+    return a;
+  }
+  function desmarcar(a) {
+    if (!ASSISTINDO) return clearTimeout(a);
+    const i = alarmes.indexOf(a);
+    if (i >= 0) alarmes.splice(i, 1);
+  }
+
+  // ---------- a gravação da partida ----------
+  // Cada partida vira uma gravação (ver gravacao.js): começa em novaPartida, com uma foto de
+  // quem está em cada robô, e daí em diante guarda só o que muda o jogo ou o que se vê dele:
+  //   comeco      quem joga em cada robô (controle, nome, modelo, pronto) e quem comenta
+  //   entrou      o robô n passou a ser jogado por outro tipo de jogador
+  //   nome        o nome de guerra e o modelo do jogador n
+  //   pronto      o jogador n respondeu ao juiz
+  //   rodada      j: o botão de cada jogador (null = não jogou); ms: quanto cada um levou para
+  //               jogar; olhou: quantas imagens cada um pediu antes; c: como o jogo ficou (ver
+  //               conferencia), para quem assiste poder conferir que a partida refeita é a mesma
+  //   barriga     o texto que o jogador n escreveu na barriga
+  //   semPassar   o jogador n tentou passar a vez duas rodadas seguidas
+  //   narrador    quem sentou na cadeira do comentarista (nome vazio: saiu)
+  //   fala        o que o comentarista disse
+  // As rodadas de depois do fim do jogo (botões que chegam atrasados) não são gravadas.
+  let gravando = null, gravadas = 0;
+  const registrar = (e, dados, conta) => { if (gravando) gravando.anotar(e, dados, conta); };
+  function comecarGravacao() {
+    if (ASSISTINDO || !GRAVACAO) return;
+    if (gravando) gravando.fechar();
+    gravadas = 0;
+    gravando = GRAVACAO.gravar(MODO, () => ({ nomes: [nomeDe(jog[1]), nomeDe(jog[2])], modelos: [1, 2].map(n => jog[n].controle === 'ia' ? jog[n].modelo : ''),
+      controles: [jog[1].controle, jog[2].controle], placar: [jog[1].pontos, jog[2].pontos], rodadas: gravadas, fim, narrador: narrador.dono ? narrador.nome : '' }));
+    registrar('comeco', { jog: [1, 2].map(n => ({ controle: jog[n].controle, nome: jog[n].nome || '', modelo: jog[n].modelo || '', pronto: !!jog[n].pronto })),
+      narrador: narrador.dono ? { nome: narrador.nome, modelo: narrador.modelo } : null });
+  }
+  // Como o jogo está, numa linha: onde está e para onde olha cada robô, os pontos, quem está
+  // caído, e de cada objeto se está no chão, na mão ou no ar e de quem é.
+  let conferencia = '';
+  const comoEsta = () => [jog[1], jog[2]].map(J => [Math.round(J.x * 2), Math.round(J.z * 2), ((J.rumo % 8) + 8) % 8, J.pontos, J.caido].join(',')).join(';') + ';' + objetos.map(o => o.estado[0] + o.dono).join('');
+  // Quem assiste pulou para outro ponto da gravação: os acontecimentos são refeitos de uma vez,
+  // sem som, sem estilhaços e sem a pausa (e a reprise) de cada ponto.
+  let pulando = false;
+
   // manter: os jogadores continuam prontos (é a partida começando, depois de os dois
   // responderem ao juiz). Sem isso, o juiz pergunta de novo a cada iA antes de valer.
   function novaPartida(manter) {
@@ -1305,6 +1371,7 @@
     desenharPlacar();
     desenharRegistro();
     soltarPausa();                               // se a partida foi zerada no meio da pausa de um ponto
+    comecarGravacao();                           // partida nova, gravação nova
   }
   // O lugar em que o objeto i começa: os de índice par ficam com o jogador 1.
   function vagaDe(i) {
@@ -1318,7 +1385,7 @@
   // respostas dessa rodada só saem depois que a quadra foi arrumada.
   const pausa = { ativa: false, relogio: null, prontos: [] };
   function soltarPausa() {
-    clearTimeout(pausa.relogio);
+    desmarcar(pausa.relogio);
     pausa.ativa = false;
     pausa.prontos.splice(0).forEach(pronto => pronto());
   }
@@ -1603,6 +1670,7 @@
       cair(o, vitima.x + dir.x * 0.7 + 0.2, vitima.z + dir.z * 0.7, 0.9, 0, [chegada]);    // quica para trás dele
     }
     for (const J of [jog[1], jog[2]]) { if (jaAcabou) J.feito = null; else anunciar(J, de[J.n], jogadas[J.n]); }   // para quem assiste: o que cada um fez
+    conferencia = comoEsta();                    // (antes de a quadra ser arrumada, se saiu ponto: é o que vai para a gravação)
     // Vence quem chega aos pontos na frente. Se os dois chegam juntos, o jogo segue até um passar.
     const [a, b] = [jog[1].pontos, jog[2].pontos];
     if (!fim && Math.max(a, b) >= PONTOS_PARA_VENCER && a !== b) fim = a > b ? 1 : 2;
@@ -1642,14 +1710,14 @@
       narrar({ tipo: fim ? 'narraFim' : 'narraPonto', a: nomeDe(jog[1]), pa: a, pb: b, b: nomeDe(jog[2]), venceu: fim ? nomeDe(jog[fim]) : '' });
       // A reprise: daqui a pouco, o lance passa de novo em câmera lenta. Com a aba escondida
       // o navegador não desenha nada, e a reprise só atrasaria o jogo.
-      const reprisa = REPLAY && reprises.length > 0 && !document.hidden;
+      const reprisa = REPLAY && reprises.length > 0 && !document.hidden && !pulando;
       if (reprisa) {
         reprises.forEach((r, i) => Object.assign(r, { dur: duracaoDoReplay(rodadas - r.desde, r.chega), parte: reprises.length > 1 ? `${i + 1}/${reprises.length}` : '' }));
-        replay.pedido = { em: performance.now() + ANTES_DO_REPLAY * 1000, fila: reprises };
+        replay.pedido = { em: hora() + ANTES_DO_REPLAY * 1000, fila: reprises };
       }
       if (!fim) {
-        const espera = reprisa ? ANTES_DO_REPLAY + reprises.reduce((soma, r) => soma + r.dur, 0) + 0.1 : PAUSA_DO_PONTO;
-        if (espera > 0) { pausa.ativa = true; pausa.relogio = setTimeout(arrumarQuadra, espera * 1000); }
+        const espera = pulando ? 0 : reprisa ? ANTES_DO_REPLAY + reprises.reduce((soma, r) => soma + r.dur, 0) + 0.1 : PAUSA_DO_PONTO;
+        if (espera > 0) { pausa.ativa = true; pausa.relogio = daqui(arrumarQuadra, espera * 1000); }
         else arrumarQuadra();
       }
     }
@@ -1698,6 +1766,7 @@
     if (antes === tipo) return false;
     J.controle = tipo;
     J.pronto = tipo !== 'ia' || !PERGUNTAR_PRONTO;                // a iA ainda vai responder ao juiz (ver ficarPronto)
+    registrar('entrou', { n, controle: tipo, pronto: J.pronto });
     if (tipo === 'humano') { J.avisado = true; J.dono = null; }   // quem está no teclado vê a tela: não precisa de aviso
     hudVelho = true;
     desenharPlacar();
@@ -1739,6 +1808,7 @@
     if (valendo()) return Promise.resolve();     // a partida já está valendo: não muda nada
     if (!J.pronto) {
       J.pronto = true;
+      registrar('pronto', { n: J.n });
       rotular(J, 'PRONTO!', '#1f9d55');
       tocar('pega');
       hudVelho = true;
@@ -1752,6 +1822,7 @@
     const f = frenteDe(J);
     J.texto = Array.from(String(texto == null ? '' : texto)).slice(0, 10).join('');
     J.corpo.escrever(J.texto);
+    registrar('barriga', { n: J.n, texto: J.texto });
     diagnosticos[J.n] = { comando: 'T', ok: true, mensagem: `escreveu "${J.texto}"` };
     rotular(J, J.texto ? `NA BARRIGA: "${J.texto.toUpperCase()}"` : 'APAGOU A BARRIGA', COR_CSS[J.n]);
     particulas.soltar('brilho', J.x + f.x * 0.3, 0.6, J.z + f.z * 0.3, 0, 0, [0x5dffa0, 0xffffff], 6);
@@ -1761,10 +1832,18 @@
     atualizarPainel();
     desenharRegistro();
   }
+  // A passada que não valeu (ver pedir): o que quem assiste vê e ouve.
+  function naoPassa(J) {
+    diagnosticos[J.n] = { comando: 'PASSAR', ok: false, mensagem: 'já passou a vez na rodada anterior: tem de jogar' };
+    rotular(J, '✖ JÁ PASSOU: TEM DE JOGAR', '#b3261e');
+    tocar('erro');
+    atualizarPainel();
+  }
   // Registra a jogada de um jogador e devolve uma promessa que se cumpre quando a rodada
   // fecha. A promessa pode trazer um aviso em vez de a jogada valer: 'espera' (o outro
   // jogador ainda não entrou) ou 'inicio' (a partida começou; só para a iA que ainda não sabia).
   function pedir(n, botao, texto, tipo) {
+    if (ASSISTINDO) return Promise.resolve();    // numa gravação ninguém joga
     entrar(n, tipo);
     const J = jog[n];
     if (botao === 'T') { escreverNaBarriga(J, texto); return Promise.resolve(); }      // o texto não é jogada: vale na hora
@@ -1774,10 +1853,8 @@
     if (!J.pronto) return Promise.resolve({ aviso: 'pronto' });                         // o juiz ainda espera a resposta dele: o botão não vale
     if (!valendo()) return aguardar(J, tipo === 'ia' ? ESPERA.ia : 0, 'esperaPronto');  // ele está pronto; o outro, ainda não
     if (botao === 'PASSAR' && J.passou) {        // não se passa a vez duas rodadas seguidas: esta não vale, ele tem de jogar outra coisa
-      diagnosticos[n] = { comando: 'PASSAR', ok: false, mensagem: 'já passou a vez na rodada anterior: tem de jogar' };
-      rotular(J, '✖ JÁ PASSOU: TEM DE JOGAR', '#b3261e');
-      tocar('erro');
-      atualizarPainel();
+      naoPassa(J);
+      registrar('semPassar', { n });
       return Promise.resolve({ aviso: 'semPassar' });
     }
     if (J.pendente) J.pendente.pronto();         // trocou de ideia antes de a rodada fechar (só no teclado)
@@ -1841,6 +1918,7 @@
     clearTimeout(relogio);
     relogio = null;
     const jogadas = {}, prontos = [], agora = Date.now();
+    const gastoAntes = [jog[1].gasto, jog[2].gasto], olhou = [jog[1].olhadas, jog[2].olhadas], acabado = !!fim;   // para a gravação
     for (const J of [jog[1], jog[2]]) {
       if (J.pendente) {
         jogadas[J.n] = J.pendente;
@@ -1858,6 +1936,11 @@
       } else J.gasto += J.banco;
     }
     resolver(jogadas);
+    if (!acabado) {
+      gravadas++;
+      registrar('rodada', { j: [1, 2].map(n => jogadas[n] ? jogadas[n].botao : null), ms: [1, 2].map(n => Math.round(jog[n].gasto - gastoAntes[n - 1])), olhou, c: conferencia }, true);
+      if (fim && gravando) gravando.guardar();   // acabou o jogo: a gravação é guardada já
+    }
     abrirRodada();                               // começa a contar a rodada seguinte
     if (pausa.ativa) pausa.prontos.push(...prontos);         // saiu ponto: as respostas esperam a quadra ser arrumada
     else prontos.forEach(pronto => pronto());
@@ -1867,12 +1950,12 @@
   // O tempo total do jogador: a soma de tudo o que ele levou para jogar em cada rodada, mais
   // o que já passou desta, se ainda não jogou. É um relógio que só corre enquanto ele pensa.
   function tempoDe(J) {
-    if (!valendo() || fim || pausa.ativa || J.controle === 'bot') return J.gasto;
+    if (ASSISTINDO || !valendo() || fim || pausa.ativa || J.controle === 'bot') return J.gasto;   // (numa gravação, só o que cada jogada levou)
     return J.gasto + J.banco + (J.pendente ? Math.max(0, J.jogouEm - J.desde) : J.ausente ? 0 : Math.max(0, Date.now() - J.desde));
   }
   // O que o jogador está fazendo nesta rodada: null (não se aplica), ou se já jogou e um texto com o tempo.
   function situacao(J) {
-    if (!valendo() || fim || pausa.ativa || J.controle === 'bot' || jog[3 - J.n].controle === 'bot') return null;   // contra o robô da casa ninguém espera ninguém
+    if (ASSISTINDO || !valendo() || fim || pausa.ativa || J.controle === 'bot' || jog[3 - J.n].controle === 'bot') return null;   // contra o robô da casa ninguém espera ninguém (nem numa gravação)
     const agora = Date.now();
     if (J.pendente) return { jogou: true, texto: `jogou em ${relogioDe(J.jogouEm - aberta)}` };
     if (J.ausente) return { jogou: false, texto: 'sumiu' };
@@ -2107,7 +2190,7 @@
     else if (sumido) faixa(g, l, a, COR_DE_ESPERA, [`JOGO PARADO: AGUARDANDO ${nomeDe(sumido).toUpperCase()}`], a * 0.1, a * 0.17);
     // o comentarista: uma etiqueta com o nome dele e, enquanto fala, a legenda (só na transmissão)
     if (naCabine()) {
-      if (narrador.fala && performance.now() > narrador.fala.ate) narrador.fala = null;
+      if (narrador.fala && hora() > narrador.fala.ate) narrador.fala = null;
       g.textAlign = 'left'; g.textBaseline = 'middle';
       if (narrador.fala) {
         const LARG = 580, x = l / 2 - LARG / 2, linhas = [];
@@ -2277,7 +2360,7 @@
       v.cara = caido ? 'tonto' : fim === J.n ? 'feliz' : 'normal';
       c.olhar(v.cara);
       // em cima do robô, o cronômetro de quem está pensando (ou o ✓ de quem já jogou e espera o outro)
-      J.sinal3d.visible = valendo() && !fim && !pausa.ativa && J.controle !== 'bot' && !J.caido && !J.pow;
+      J.sinal3d.visible = !ASSISTINDO && valendo() && !fim && !pausa.ativa && J.controle !== 'bot' && !J.caido && !J.pow;   // (numa gravação ninguém está pensando)
       if (J.sinal3d.visible) { cronometrar(J); J.sinal3d.position.set(v.x, 1.74, v.z); }
       const estouro = parado ? 1 : 0.3 + 0.7 * v.estouro + 0.35 * Math.sin(Math.PI * v.estouro);    // o balão do grito aparece estourando
       J.grito.sprite.visible = J.pow > 0 && !antes;
@@ -2377,7 +2460,7 @@
   };
   const duracaoDoReplay = (rodadasAntes, chega) => rodadasAntes * CORTE / 0.7 + tempoNaFita(chega + 1.0, chega) + 0.3;
   function gravar() {
-    clipes.push({ rodada: rodadas, t0: performance.now(), quadros: [] });
+    clipes.push({ rodada: rodadas, t0: hora(), quadros: [] });
     if (clipes.length > 4) clipes.shift();
   }
   function filmar(agora) {
@@ -2507,7 +2590,7 @@
     }
     olhoR.x = limitar(olhoR.x, -4.5, 4.6); olhoR.z = limitar(olhoR.z, -6.5, 6.5);
     if (Math.hypot(olhoR.x - A.x, olhoR.z - A.z) < 0.8) olhoR.y = Math.max(olhoR.y, 1.8);   // em cima de quem arremessou: passa por cima da cabeça dele
-    const agora = performance.now(), k = r.antes ? 1 - Math.exp(-(agora - r.antes) / 1000 * 7) : 1;
+    const agora = hora(), k = r.antes ? 1 - Math.exp(-(agora - r.antes) / 1000 * 7) : 1;
     r.antes = agora;
     camReplay.position.lerp(olhoR, k);
     r.alvo.lerp(miraR, k);
@@ -2621,7 +2704,7 @@
   let hudEm = 0;
   function desenhar(semVistas) {                 // a tela da página: a transmissão e, embaixo, o que cada jogador vê
     // o placar é refeito quando algo muda e, com a partida andando, quatro vezes por segundo (os relógios)
-    const agora = performance.now();
+    const agora = hora();
     if (hudVelho || ((valendo() && !fim || narrador.fala) && agora - hudEm > 250)) { desenharHud(); hudEm = agora; }
     apontarCamera(1); apontarCamera(2);
     // Na reprise, a cena mostra por um instante o lance filmado (e depois volta ao jogo de agora).
@@ -2724,10 +2807,21 @@
   window.addEventListener('resize', () => definirTamanho(window.innerWidth, window.innerHeight));
 
   let anterior = performance.now(), quadros = 0;
-  function quadro(agora) {
+  function quadro(real) {
     quadros++;
-    const dt = Math.min(0.1, (agora - anterior) / 1000), k = 1 - Math.exp(-dt * 12);
-    anterior = agora;
+    const dtReal = Math.min(0.1, (real - anterior) / 1000), kReal = 1 - Math.exp(-dtReal * 12);
+    anterior = real;
+    // Assistindo a uma gravação, o jogo anda no relógio dela (ver "o relógio do jogo"): os
+    // alarmes que venceram tocam, e os acontecimentos gravados cuja hora chegou acontecem.
+    let dt = dtReal, agora = real;
+    if (ASSISTINDO) {
+      dt = fita.toca ? fita.toca.passo(dtReal) : 0;
+      horaGravada += dt * 1000;
+      agora = horaGravada;
+      for (const a of alarmes.filter(a => a.em <= horaGravada)) { desmarcar(a); a.fn(); }
+      if (fita.toca) fita.toca.soltar();
+    }
+    const k = 1 - Math.exp(-dt * 12);
     tempo += dt;
     posar(k, dt);
     particulas.mover(dt);
@@ -2737,9 +2831,116 @@
     filmar(agora);
     if (replay.pedido && agora >= replay.pedido.em) comecarReplay(agora);
     dirigir(dt);
-    moverCamera(k, dt);
+    moverCamera(kReal, dtReal);                  // (a câmera segue o mouse mesmo com a gravação em pausa)
     desenhar();
     requestAnimationFrame(quadro);
+  }
+
+  // ---------- assistir a uma gravação ----------
+  // A página foi aberta com ?assistir=<id>: em vez de jogadores, quem move o jogo é a gravação.
+  // Cada acontecimento dela é refeito aqui pelo mesmo caminho do jogo ao vivo (a rodada passa
+  // por resolver, a fala por falar...), e por isso o que se vê é a mesma transmissão — as
+  // etiquetas, a câmera do diretor, a torcida, a reprise de cada ponto — só que sem as esperas.
+  // fita.desvios conta as rodadas em que o jogo refeito não ficou igual ao gravado (não deve
+  // acontecer: seria sinal de que as regras mudaram depois da gravação).
+  const fita = { toca: null, desvios: 0 };
+  const CONTROLES = new Set(['ia', 'humano', 'bot', 'ninguem']);
+  function aplicarGravado(ev, rapido) {
+    const J = jog[ev.n === 2 ? 2 : 1];
+    pulando = rapido;
+    try {
+      switch (ev.e) {
+        case 'comeco': {                         // o estado inicial: quem joga, quem comenta, e a partida do zero
+          [1, 2].forEach(n => {
+            const d = (Array.isArray(ev.jog) && ev.jog[n - 1]) || {};
+            Object.assign(jog[n], { controle: CONTROLES.has(d.controle) ? d.controle : 'ninguem', nome: limparNome(d.nome), modelo: limparModelo(d.modelo), pronto: !!d.pronto, avisado: true, dono: null });
+          });
+          const c = ev.narrador;
+          Object.assign(narrador, { dono: c ? -1 : null, nome: c ? limparNome(c.nome) || 'Comentarista' : '', modelo: c ? limparModelo(c.modelo) : '', fala: null });
+          fita.desvios = 0;
+          novaPartida(true);
+          escreverPlaca();
+          escreverCartazes();
+          break;
+        }
+        case 'entrou':
+          J.controle = CONTROLES.has(ev.controle) ? ev.controle : 'ninguem';
+          J.pronto = !!ev.pronto;
+          break;
+        case 'nome':
+          J.nome = limparNome(ev.nome); J.modelo = limparModelo(ev.modelo);
+          escreverCartazes();
+          break;
+        case 'pronto':
+          J.pronto = true;
+          rotular(J, 'PRONTO!', '#1f9d55');
+          tocar('pega');
+          break;
+        case 'rodada': {
+          const jogadas = {};
+          for (const n of [1, 2]) {
+            const botao = Array.isArray(ev.j) ? ev.j[n - 1] : null, K = jog[n];
+            jogadas[n] = typeof botao === 'string' ? { botao, texto: '' } : null;
+            K.olhadas = Array.isArray(ev.olhou) ? Number(ev.olhou[n - 1]) || 0 : 0;
+            K.gasto += Array.isArray(ev.ms) ? Math.max(0, Number(ev.ms[n - 1]) || 0) : 0;   // o relógio de cada um mostra o tempo que ele levou ao vivo
+            if (jogadas[n] && K.controle !== 'bot') K.jogadas++;
+          }
+          resolver(jogadas);
+          abrirRodada();
+          if (typeof ev.c === 'string' && ev.c !== conferencia) fita.desvios++;
+          break;
+        }
+        case 'barriga': escreverNaBarriga(J, ev.texto); break;
+        case 'semPassar': naoPassa(J); break;
+        case 'narrador': {
+          const nome = limparNome(ev.nome);
+          Object.assign(narrador, { dono: nome ? -1 : null, nome, modelo: nome ? limparModelo(ev.modelo) : '', fala: nome ? narrador.fala : null });
+          escreverPlaca();
+          break;
+        }
+        case 'fala': falar(ev.texto); break;
+      }
+    } finally { pulando = false; }
+    hudVelho = true;
+    if (ev.e === 'entrou' || ev.e === 'nome') { desenharPlacar(); desenharRegistro(); }
+  }
+  // Antes de um pulo: o que estava no meio termina já (a reprise sai do ar, a quadra é arrumada).
+  function destravarGravado() {
+    acabarReplay();
+    if (pausa.ativa) arrumarQuadra();
+  }
+  // Depois de um pulo: tudo no lugar, sem animação pela metade, sem legenda nem estilhaços do caminho.
+  function assentarGravado() {
+    for (const J of [jog[1], jog[2]]) { J.vis.pulo = 0; J.vis.brilho = 0; }
+    posar(1, 0);
+    particulas.mover(99);
+    narrador.fala = null;
+    cam.tranco = 0;
+    juiz.gesto = '';
+    try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) { }
+    hudVelho = true;
+  }
+  function assistir(gravada) {
+    const r = gravada.resumo, nomes = Array.isArray(r.nomes) ? r.nomes.map(limparNome) : [];
+    fita.toca = GRAVACAO.tocador(gravada, {
+      titulo: nomes.length === 2 ? `${nomes[0]} × ${nomes[1]}` : NOME_DO_JOGO,
+      nomeDoPasso: 'rodada',
+      doComeco: true,
+      ehPasso: ev => ev.e === 'rodada',
+      aplicar: aplicarGravado,
+      livre: ev => ev.e !== 'rodada' || !pausa.ativa,       // depois de um ponto, a rodada seguinte espera a reprise e a quadra ser arrumada
+      espera(ev, intervalo, anterior) {
+        if (anterior.e === 'comeco') return 900;
+        if (anterior.e === 'fala') return Math.min(intervalo, RITMO_GRAVADO.fala + RITMO_GRAVADO.porLetra * String(anterior.texto || '').length);
+        return Math.min(intervalo, ev.e === 'rodada' ? RITMO_GRAVADO.rodada : RITMO_GRAVADO.resto);
+      },
+      destravar: destravarGravado,
+      assentar: assentarGravado,
+    });
+    // o painel de quem assiste fica onde, ao vivo, fica a lista de teclas (ver arrumarPaineis) e, como os outros, sai da frente na reprise
+    fita.toca.painel.classList.add('painel');
+    fita.toca.painel.style.pointerEvents = 'auto';
+    arrumarPaineis();
   }
 
   // ---------- interface (a mesma de jogo.js) ----------
@@ -2781,6 +2982,7 @@
   // devolvem uma promessa, cumprida quando a rodada fecha (ver pedir). Sem lugar na partida,
   // a promessa traz o aviso 'lotado'.
   function apertar(botao, texto, quem, nome, modelo) {
+    if (ASSISTINDO) return undefined;            // numa gravação ninguém joga
     // SAIR é do comentarista: ele deixa a cadeira, e outra iA pode sentar. Para os outros não faz nada (nem os põe na partida).
     if (botao === 'SAIR') {
       if (!conexao(quem) || narrador.dono !== quem) return undefined;
@@ -2794,7 +2996,7 @@
     if (jogando && narrador.dono === quem) largarCadeira();
     if (!jogando && conexao(quem) && narrador.dono && (narrador.dono === quem ? !dito || dito === narrador.nome : dito === narrador.nome && ![jog[1], jog[2]].some(J => J.nome === dito))) {
       narrador.dono = quem;
-      if (limparModelo(modelo) && limparModelo(modelo) !== narrador.modelo) { narrador.modelo = limparModelo(modelo); hudVelho = true; }
+      if (limparModelo(modelo) && limparModelo(modelo) !== narrador.modelo) { narrador.modelo = limparModelo(modelo); hudVelho = true; registrar('narrador', { nome: narrador.nome, modelo: narrador.modelo }); }
       return botaoDoNarrador(botao, texto);
     }
     const n = conexao(quem) ? sentar(quem, nome) : 0;
@@ -2815,6 +3017,7 @@
   //                   outro jogador ainda não entrou, a chamada fica aguardando por ele.
   //   este desafio, pedido por quem já estava (ou pelo teclado): começa uma partida nova.
   function comecar(desafio, quem, cmd, nome, modelo) {
+    if (ASSISTINDO) return false;                // numa gravação ninguém começa nada
     desafio = String(desafio);
     const deIA = conexao(quem);
     if (desafio === 'C') {                       // a cadeira do comentarista: não mexe na partida
@@ -2830,6 +3033,7 @@
       try {                                      // o recado para a página nova (ver o fim deste arquivo)
         if (arena && deIA) sessionStorage.setItem('quadra.entrada', JSON.stringify({ quem, cmd: cmd || 0, nome: nome || '', modelo: modelo || '' }));
         else sessionStorage.removeItem('quadra.entrada');
+        if (!arena && deIA) sessionStorage.setItem('desafio.quem', JSON.stringify({ quem, nome: nome || '', modelo: modelo || '' }));   // nos desafios 1 a 3, a página nova mostra quem está jogando (ver jogo.js)
       } catch (e) { }
       location.search = p.toString();
       return true;
@@ -2871,7 +3075,8 @@
   const elAjuda = document.getElementById('ajuda'), elMensagem = document.getElementById('mensagem');
   const elLog = document.getElementById('log'), elStatus = document.getElementById('status');
   const elCaixa = document.getElementById('caixa'), elEntrada = document.getElementById('entrada');
-  elAjuda.textContent = 'J1:  W A S D  Q E  Espaço  L X T\nJ2:  ↑ ← ↓ →  , .  Enter   O / P\n1 2 3 M Shift+T   R H J C V B N';
+  elAjuda.textContent = 'J1:  W A S D  Q E  Espaço  L X T\nJ2:  ↑ ← ↓ →  , .  Enter   O / P\n1 2 3 M Shift+T   R H J C V B N G';
+  if (ASSISTINDO) elAjuda.hidden = true;         // numa gravação essas teclas não valem (as de quem assiste estão no painel dela)
   elMensagem.textContent = MENSAGEM;
 
   // Registro das jogadas: uma linha por rodada, com o que cada jogador fez. É só para quem
@@ -2938,6 +3143,7 @@
   function arrumarPaineis() {
     const l = Math.round(Math.min(window.innerWidth * 0.27, 420)), acima = `${Math.round(56 + l * FRAME.a / FRAME.l + 16)}px`;
     Object.assign(elAjuda.style, { top: 'auto', left: '14px', bottom: acima });
+    if (fita.toca) Object.assign(fita.toca.painel.style, { top: 'auto', left: '14px', bottom: acima });   // assistindo a uma gravação: o painel dela, no lugar das teclas
     elCameras.style.bottom = acima;
     elRegistro.style.width = `${Math.max(240, Math.min(760, window.innerWidth - 2 * (14 + l) - 24))}px`;
     Object.assign(elMensagem.style, { maxWidth: `${l - 20}px`, whiteSpace: 'normal', fontSize: '12px', lineHeight: '1.3', padding: '6px 10px', bottom: '8px' });
@@ -2965,6 +3171,17 @@
       return;
     }
     if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (ASSISTINDO) {                            // numa gravação o teclado não joga: ficam as teclas de quem assiste (as do painel estão em gravacao.js)
+      if (e.repeat) return;
+      switch (e.code) {
+        case 'KeyJ': elRegistro.hidden = !elRegistro.hidden; break;
+        case 'KeyC': escolherVista((cam.vista + 1) % VISTAS.length); break;
+        case 'KeyV': alternarSom('musica'); break;
+        case 'KeyB': alternarSom('efeitos'); break;
+        case 'KeyN': alternarSom('narracao'); break;
+      }
+      return;
+    }
     if (e.code === 'KeyT' && e.shiftKey) { if (!e.repeat) comecar('T'); return; }   // Shift+T: o treino (T sozinho é o botão do texto)
     const tecla = TECLAS[e.code];
     if (tecla) {
@@ -2985,6 +3202,7 @@
       case 'KeyB': alternarSom('efeitos'); break;
       case 'KeyN': alternarSom('narracao'); break;
       case 'KeyR': novaPartida(); break;
+      case 'KeyG': if (GRAVACAO && GRAVACAO.noServidor) GRAVACAO.abrirLista(); break;   // as gravações, em outra aba
       case 'KeyM': comecar('M'); break;
       case 'Digit1': case 'Numpad1': comecar(1); break;
       case 'Digit2': case 'Numpad2': comecar(2); break;
@@ -3070,7 +3288,7 @@
   // duração em segundos); `quando`: daqui a quantos segundos. Sem som ligado, não faz nada.
   function tocar(qual, forca = 1, quando = 0) {
     const kit = som.kit && som.kit.fx;
-    if (!kit || !nivelDoSom('efeitos') || kit.ctx.state !== 'running') return;
+    if (pulando || !kit || !nivelDoSom('efeitos') || kit.ctx.state !== 'running') return;
     const t = kit.ctx.currentTime + 0.01 + quando, desce = (o, ate, em) => o.frequency.exponentialRampToValueAtTime(ate, t + em);
     switch (qual) {
       case 'arremesso': chiado(kit, t, 0.16, 0.22, kit.prato); chiado(kit, t, 0.2, 0.3, kit.tarol); break;
@@ -3246,22 +3464,39 @@
   // continua em aberto: a ponte responde quando esta promessa se cumprir. O recado vale uma
   // vez só. (Ele não vem pelo endereço da página de propósito: um link de fora poderia
   // forjar um endereço, mas não escreve no sessionStorage desta página.)
+  // (Assistindo a uma gravação, nada disso vale: a página não fala com iA nenhuma.)
   let pendenteDoInicio = null, entrada = null;
-  try { entrada = JSON.parse(sessionStorage.getItem('quadra.entrada')); sessionStorage.removeItem('quadra.entrada'); } catch (e) { }
+  if (!ASSISTINDO) try { entrada = JSON.parse(sessionStorage.getItem('quadra.entrada')); sessionStorage.removeItem('quadra.entrada'); } catch (e) { }
   // Quem estava na cadeira do comentarista continua nela depois de a página recarregar.
-  try {
+  if (!ASSISTINDO) try {
     const antes = JSON.parse(sessionStorage.getItem('quadra.narrador'));
-    if (antes && conexao(antes.quem)) Object.assign(narrador, { dono: antes.quem, nome: limparNome(antes.nome) || 'Comentarista', sinal: Date.now() });
+    if (antes && conexao(antes.quem)) {
+      Object.assign(narrador, { dono: antes.quem, nome: limparNome(antes.nome) || 'Comentarista', sinal: Date.now() });
+      registrar('narrador', { nome: narrador.nome, modelo: narrador.modelo });
+    }
   } catch (e) { }
   escreverCartazes();
   escreverPlaca();
+  // As gravações: o atalho da página (index.html) ficaria por cima do placar; aqui ele vai no painel das câmeras.
+  const elAtalho = document.getElementById('replays');
+  if (elAtalho) elAtalho.hidden = true;
+  if (GRAVACAO && GRAVACAO.noServidor && !ASSISTINDO) {
+    const el = document.createElement('div');
+    el.textContent = '▶ replays · G';
+    el.title = 'as partidas gravadas, em outra aba';
+    Object.assign(el.style, { position: 'absolute', top: '6px', right: '10px', cursor: 'pointer', color: '#7dffb0' });   // na linha da primeira vista, à direita: não deixa o painel mais alto
+    el.addEventListener('click', () => GRAVACAO.abrirLista());
+    elCameras.appendChild(el);
+  }
+  if (ASSISTINDO) GRAVACAO.carregar(GRAVACAO.assistindo).then(assistir).catch(() => GRAVACAO.avisar('Não achei essa gravação.'));
   if (entrada && conexao(entrada.quem)) {
     const espera = Promise.resolve(comecar(entrada.papel === 'C' ? 'C' : MODO, entrada.quem, null, entrada.nome, entrada.modelo));
     if (Number.isInteger(entrada.cmd) && entrada.cmd > 0) pendenteDoInicio = { id: entrada.cmd, quem: entrada.quem, espera };
   }
   window.jogo = { apertar, comecar, frame, pedir, resultado, novidades, ensaiarTrilha, reiniciar: novaPartida, desafio: MODO, pendenteDoInicio,
     estado: { jog, objetos, get rodadas() { return rodadas; }, get fim() { return fim; }, get ganhou() { return !!fim; }, get camera() { return cam.meta; },
-      get replay() { return replay.ativo; }, get reprise() { return replay.ativo ? replay.dados.parte || '1/1' : ''; }, narrador, torcida, juiz, diretor },
+      get replay() { return replay.ativo; }, get reprise() { return replay.ativo ? replay.dados.parte || '1/1' : ''; }, narrador, torcida, juiz, diretor, fita,
+      get gravando() { return gravando ? gravando.id : ''; } },
     diagnostico: n => diagnosticos[Number(n) === 2 ? 2 : 1] };   // o diagnóstico é por robô (1 ou 2), não por conexão
   const estilo = document.createElement('style');
   estilo.textContent = 'body.reprise .painel { visibility: hidden; }';       // durante a reprise, a tela é só do lance

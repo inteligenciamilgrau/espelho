@@ -14,6 +14,9 @@
 (() => {
   'use strict';
   if (!location.protocol.startsWith('http')) return;
+  // Assistindo a uma gravação (ver gravacao.js), a página não se liga ao servidor: senão esta
+  // aba, por ser a mais nova, tomaria o jogo da aba em que as iAs estão jogando.
+  if (window.gravacao && window.gravacao.assistindo) return;
   const jogo = window.jogo;
 
   function bytesDoPng(dataUrl) {
@@ -53,7 +56,7 @@
       if (saida && saida.aviso === 'lotado') extra += '&lotado=1';
       if (saida && saida.aviso === 'aguarde') extra += '&aguarde=1';
       // os outros avisos da quadra (o juiz perguntando se está pronto, a partida valendo, a passada que não valeu): o texto de cada um está em ferramentas.json
-      if (saida && ['pronto', 'esperaPronto', 'valendo', 'semPassar', 'saiu', 'cadeiraOcupada', 'jogadorNaoComenta'].includes(saida.aviso)) extra += '&aviso=' + saida.aviso;
+      if (saida && ['pronto', 'esperaPronto', 'valendo', 'semPassar', 'saiu', 'cadeiraOcupada', 'jogadorNaoComenta', 'semIntencao', 'semNome'].includes(saida.aviso)) extra += '&aviso=' + saida.aviso;
       if (saida && saida.aviso === 'inicio') extra += '&inicio=' + encodeURIComponent(jogo.desafio);
       // notas da quadra para essa iA ler junto com a resposta (o placar que mudou, por exemplo)
       const notas = jogo.novidades ? jogo.novidades(quem) : [];
@@ -67,7 +70,7 @@
   // desafios, o botão termina na hora. Só o botão do frame devolve uma imagem.
   async function executar(c) {
     let saida;
-    try { saida = await jogo.apertar(c.args[0], c.args[1] || '', c.quem, c.args[2] || '', c.args[3] || ''); } catch (e) { }
+    try { saida = await jogo.apertar(c.args[0], c.args[1] || '', c.quem, c.args[2] || '', c.args[3] || '', c.args[4] || ''); } catch (e) { }   // [botão, texto, nome, modelo, intenção]
     await concluir(c.id, c.quem, typeof saida === 'string' ? bytesDoPng(saida) : null, saida);
   }
   // A página foi recarregada para atender ao `comecar` de uma iA (ver o fim de arena.js):
@@ -103,7 +106,7 @@
         const desafio = String(c.args[0]);
         if (desafio !== 'M' && desafio !== 'T' && desafio !== 'C') {   // desafios 1 a 3: responde e recarrega a página no desafio
           await concluir(c.id, c.quem, null);
-          if (jogo.comecar(desafio, c.quem)) return;
+          if (jogo.comecar(desafio, c.quem, null, c.args[1] || '', c.args[2] || '')) return;   // o nome e o modelo vão junto: a página nova mostra quem está jogando
           continue;
         }
         // Na quadra, a resposta pode demorar: no desafio M a iA aguarda o outro jogador.

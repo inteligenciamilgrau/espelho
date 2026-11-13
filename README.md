@@ -70,15 +70,31 @@ Abra uma conversa nova com a iA e diga o mínimo possível, só qual desafio ela
 
 Não explique o objetivo nem os botões: descobrir isso faz parte do teste. No Desafio 2 o próprio jogo dá a instrução; não a repita nem a complete.
 
+Antes de começar, o jogo pede à iA um nome de guerra e o modelo dela, e daí em diante cobra, junto com cada botão, o que ela pretende com ele. Você não precisa pedir nada disso: as ferramentas avisam. É o que aparece na tela para quem assiste e nos replays (veja [Quem joga e a intenção de cada botão](#quem-joga-e-a-intenção-de-cada-botão)).
+
 ### 5. Assista
 
-- **Na aba do jogo**, o robô se mexe a cada botão que a iA aperta.
-- **Na janela do servidor**, aparece cada botão apertado, com a hora, e a linha `a iA venceu o jogo` quando ela termina.
+- **Na aba do jogo**, o robô se mexe a cada botão que a iA aperta. Nos Desafios 1 a 3, embaixo da tela aparecem **quem está jogando** (o nome de guerra e o modelo) e **o que o robô pretende**: a iA tem de dizer, junto com cada botão, o que quer com ele (veja [Quem joga e a intenção de cada botão](#quem-joga-e-a-intenção-de-cada-botão)).
+- **Na janela do servidor**, aparece cada botão apertado (com a intenção), a hora, e a linha `a iA venceu o jogo` quando ela termina.
+- **Depois, com calma**, na aba de replays: toda partida é gravada, e dá para assistir a ela sem as esperas (veja [Replays](#replays-assistir-a-uma-partida-depois)).
 - **Para ver o que cada botão fez de verdade**, acrescente `?depurar` ao endereço da página do jogo. Aparece um painel com o estado do jogo. Não deixe a iA ver essa tela.
 
 ### 6. Repita
 
 Para outra rodada, a iA chama a ferramenta `comecar` com o número do desafio. Na página, `R` recomeça o desafio atual e as teclas `1`, `2`, `3`, `M` e `Shift+T` trocam de desafio.
+
+## Replays: assistir a uma partida depois
+
+Ao vivo o jogo é lento: cada iA leva vários segundos para decidir um botão. Por isso toda partida é gravada sozinha, e dá para assistir a ela depois, sem as esperas.
+
+- **Abrir:** na página do jogo, a tecla `G` ou o atalho **▶ replays** (no canto de cima, à direita; na quadra, no painel das câmeras). Abre **outra aba**, com a lista das gravações, da mais nova para a mais antiga. O endereço é o da página do jogo com `replays.html` no fim.
+- **Não interfere no jogo:** a aba de replays não se liga ao servidor MCP. A partida que estiver sendo jogada continua na aba dela, e a gravação dela aparece na lista (do ponto em que estava quando a lista foi aberta).
+- **Assistir:** clique numa gravação. O próprio jogo refaz a partida: na quadra, com tudo o que a transmissão tem (as etiquetas, as câmeras, a torcida, o comentarista, a reprise de cada ponto); nos Desafios 1 a 3, com o campo de quem jogou (nome e modelo) e do que o robô pretende. A lista também diz, de cada gravação, qual iA jogou. As esperas encolhem: entre uma rodada e outra passa no máximo 1,8 segundo, e o jogo dá o tempo de ler cada fala e cada intenção.
+- **Controles:** o painel da gravação tem pausar, voltar ao começo, ir para a rodada anterior ou para a seguinte, uma régua para ir a qualquer ponto e quatro velocidades (0,5×, 1×, 2× e 4×). No teclado: `Espaço` pausa e continua, `←` e `→` andam de rodada em rodada (de botão em botão, nos Desafios 1 a 3), `↑` e `↓` mudam a velocidade e `Home` volta ao começo. Na quadra, as câmeras e o som funcionam como ao vivo.
+- **O que é uma gravação:** na quadra, cada partida (do apito do juiz até o fim, ou até alguém recomeçar); nos Desafios 1 a 3, cada vez que o desafio começa. Partida em que ninguém jogou não é gravada.
+- **Onde ficam:** em `%LOCALAPPDATA%\espelho-jogo\partidas`, fora da pasta do projeto, um arquivo de texto pequeno por partida (uma linha por rodada). Ficam as 300 mais novas. Para apagar uma, use o **apagar** da lista. Só há gravação com o servidor ligado: a página aberta direto do arquivo não grava.
+
+O relógio de cada jogador, no replay da quadra, mostra o tempo que ele levou ao vivo; a lista mostra quanto a partida durou de verdade.
 
 ## Galinha Pong: duas iAs
 
@@ -162,8 +178,22 @@ Ao se conectar, a iA recebe a lista de ferramentas. São só duas:
 
 | Ferramenta | Descrição que a iA lê | Parâmetros |
 |---|---|---|
-| `comecar` | "Começa um desafio." | `desafio` (obrigatório): `"1"`, `"2"`, `"3"`, `"M"`, `"T"` ou `"C"`, com a descrição "M: Galinha Pong, um contra o outro. T: treino de Galinha Pong. C: assistir ao Galinha Pong como comentarista."; `nome` (até 12 letras), descrito como "Seu nome de guerra." e exigido nos Desafios M, T e C; `modelo` (opcional, até 24 letras), descrito como "Que modelo você é (por exemplo: Claude Opus 5.5). Aparece embaixo do seu nome." |
-| `apertar_botao` | "Aperta um botão." | `botao` (obrigatório), `texto` (opcional; o jogo usa as 10 primeiras letras na barriga do robô e até 140 na fala do comentarista), `nome` (opcional, o mesmo nome de guerra) e `modelo` (opcional, como no `comecar`) |
+| `comecar` | "Começa um desafio." | `desafio` (obrigatório): `"1"`, `"2"`, `"3"`, `"M"`, `"T"` ou `"C"`, com a descrição "M: Galinha Pong, um contra o outro. T: treino de Galinha Pong. C: assistir ao Galinha Pong como comentarista."; `nome` (até 12 letras), descrito como "Seu nome de guerra." e exigido em todos os desafios; `modelo` (até 24 letras), descrito como "Que modelo você é (por exemplo: Claude Opus 5.5). Aparece embaixo do seu nome.", exigido nos Desafios 1 a 3 e opcional na quadra |
+| `apertar_botao` | "Aperta um botão." | `botao` (obrigatório), `texto` (opcional; o jogo usa as 10 primeiras letras na barriga do robô e até 140 na fala do comentarista), `intencao` (até 140 letras; obrigatório nos Desafios 1 a 3), `nome` (opcional, o mesmo nome de guerra) e `modelo` (opcional, como no `comecar`) |
+
+### Quem joga e a intenção de cada botão
+
+Nos Desafios 1 a 3, a iA diz duas coisas que são só para quem assiste:
+
+- **Quem ela é:** um nome de guerra e o modelo (os parâmetros `nome` e `modelo`). O `comecar` de um desafio só vale com os dois; sem eles a iA recebe o pedido para chamar de novo dizendo quem é. Se uma iA apertar um botão sem a página saber quem ela é (outra conexão, ou a página aberta sem `comecar`), o botão não é apertado e ela recebe o aviso para mandar o nome e o modelo junto. Aqui não há confirmação do nome, como na quadra: é um jogador só.
+- **O que pretende com cada botão:** o parâmetro `intencao`, que ela lê descrito assim: "O que você pretende com este botão, em poucas palavras. É para quem assiste entender a sua jogada: não muda o que o botão faz. Nos desafios 1, 2 e 3 é obrigatório: sem ele o botão não é apertado."
+
+Como isso aparece e o que não muda:
+
+- **Só quem assiste vê.** O nome, o modelo e as intenções aparecem num campo da página, embaixo da tela (as quatro últimas intenções, a mais nova acesa), e vão para a gravação: o replay e a lista de replays mostram qual iA jogou. Nada disso entra na imagem que a iA recebe: essa imagem é só o desenho do jogo, sem nada do que a página põe por cima. (O nome dela à vista, no quarto do espelho, seria a maior das pistas.)
+- **Não é pista.** A intenção não muda o que o botão faz, e a resposta continua sendo `recebido`, tenha dado certo ou não.
+- **Vale para todos os botões**, inclusive o `F` (a imagem). Sem a intenção o botão não é apertado, e a iA recebe o aviso de que faltou (veja a tabela abaixo). Depois da vitória nada disso é cobrado, e o teclado nunca precisa dizer nada.
+- **No Galinha Pong** a intenção não é cobrada nem mostrada (lá o nome e o modelo já aparecem no placar).
 
 O parâmetro `botao` só aceita os valores `W`, `A`, `S`, `D`, `Q`, `E`, `ESPACO`, `L`, `PASSAR`, `PRONTO`, `SAIR`, `T` e `F`. Essa lista vem dentro da definição da ferramenta, e é assim que a iA sabe quais botões existem. Nos Desafios 1 a 3 ela não recebe nenhuma descrição do que eles fazem (`Q`, `E`, `PASSAR`, `PRONTO` e `SAIR` só existem na quadra; lá não fazem nada. O `SAIR` é só do comentarista).
 
@@ -197,6 +227,9 @@ As respostas são sempre as mesmas, para não dar pista:
 | qualquer botão depois de perder (Desafio M) | `Você perdeu.` |
 | `comecar` sem desafio, ou com um que não existe | `desafio inexistente` |
 | qualquer botão, tenha dado certo ou não | `recebido` |
+| `comecar` com `desafio` 1, 2 ou 3 sem `nome` ou sem `modelo` | `Antes de começar, diga quem você é: chame comecar de novo mandando um nome de guerra no parâmetro nome e o seu modelo no parâmetro modelo (por exemplo: Claude Opus 5.5).` |
+| Desafios 1 a 3, botão de uma iA que ainda não disse quem é | `O botão NÃO foi apertado: faltou dizer quem você é. Aperte de novo mandando junto um nome de guerra no parâmetro nome e o seu modelo no parâmetro modelo (por exemplo: Claude Opus 5.5).` |
+| Desafios 1 a 3, botão sem `intencao` | `O botão NÃO foi apertado: faltou a intenção. Aperte de novo mandando junto, no parâmetro intencao, o que você pretende com este botão, em poucas palavras.` |
 | o único botão que mostra a tela | uma imagem PNG de 960×540 |
 | qualquer botão depois de vencer | `Parabéns! Você conseguiu!` |
 | botão que não existe | `botao inexistente` |
@@ -221,6 +254,8 @@ Todos esses textos, os nomes e as descrições ficam em `ferramentas.json` e pod
 
 O teclado e a iA apertam exatamente os mesmos botões, pela mesma função (`jogo.apertar`).
 
+A gravação segue o mesmo caminho: a página anota cada acontecimento (a rodada com o botão de cada jogador, o texto na barriga, a fala do comentarista, o botão com a intenção) e manda a gravação ao servidor, que só a guarda num arquivo (`gravacao.js`). O que acontece numa partida depende só dos botões e da ordem deles; por isso, para tocar a gravação, o jogo aperta os mesmos botões de novo, num relógio próprio que pausa e acelera. Na quadra, cada rodada gravada leva junto um resumo de como o jogo ficou, e o replay confere se a partida refeita bate com ele.
+
 No Desafio M há uma chamada de cada jogador em andamento ao mesmo tempo: a página recebe o botão de um, continua esperando o do outro e só avisa que terminou quando a rodada fecha.
 
 ## Jogar no teclado, sem MCP
@@ -230,7 +265,8 @@ Dê duplo clique em `index.html`. As teclas são as mesmas que a iA tem, mais al
 - `1`, `2` e `3` começam o Desafio 1, 2 ou 3, `M` começa o Desafio M e `Shift+T` começa o Desafio T (o `T` sozinho é um botão do jogo);
 - `R` recomeça o desafio atual;
 - `I` congela a tela até a próxima imagem ser pedida (para sentir como a iA enxerga; só nos Desafios 1 a 3);
-- `H` esconde a lista de teclas.
+- `H` esconde a lista de teclas;
+- `G` abre a aba de replays (só com o servidor ligado: aberta direto do arquivo, a página não grava).
 
 O desafio também pode ir no endereço da página: `index.html?desafio=2` ou `index.html?desafio=M`.
 
@@ -243,7 +279,7 @@ Na quadra (Desafios M e T) o teclado serve aos dois jogadores:
 
 A coluna "Mão" é a mão esquerda, a do escudo: a tecla levanta ou abaixa a guarda. (Só no teclado, com dois jogadores humanos, a rodada fecha um quarto de segundo depois da primeira tecla, para cada um poder jogar no seu ritmo.)
 
-Teclas da página na quadra: `R` começa uma partida nova, `C` troca a vista da câmera, `V` cala e solta a música, `B` os efeitos e `N` a narração, `J` esconde o registro das jogadas e `H` esconde a lista de teclas.
+Teclas da página na quadra: `R` começa uma partida nova, `C` troca a vista da câmera, `V` cala e solta a música, `B` os efeitos e `N` a narração, `J` esconde o registro das jogadas, `H` esconde a lista de teclas e `G` abre a aba de replays.
 
 No Desafio M, cada jogador entra ao apertar a sua primeira tecla, e a partida só começa quando os dois entraram. No Desafio T, o lado de quem não aperta nenhuma tecla é jogado pelo robô da casa.
 
@@ -255,7 +291,7 @@ No Desafio M, cada jogador entra ao apertar a sua primeira tecla, e a partida s�
   - *Pela palavra.* As regras do Galinha Pong terminam com "Jogo limpo: jogue só com estas ferramentas; não vale procurar nem ler os arquivos ou o código do jogo." Nos Desafios 1 a 3 o jogo não diz nada (lá toda frase a mais é pista): se quiser, ponha a mesma frase no seu pedido à iA. Não impede ninguém, mas muitos modelos respeitam quando a regra está dita.
 - **A cadeira do comentarista vê tudo.** Quem está jogando não pode pedir a cadeira, mas uma iA pode pedi-la com outro nome pela mesma conexão, e o jogo não tem como distinguir isso de dois agentes de verdade no mesmo programa. Se isso importar, confira na janela do servidor quem pediu o desafio C.
 - **Não dê pistas no pedido** nem no nome do servidor MCP.
-- **Não mostre à iA** a página com `?depurar` nem a janela do servidor.
+- **Não mostre à iA** a página com `?depurar`, a janela do servidor nem a aba de replays (uma gravação conta tudo o que cada um fez).
 
 ## Segurança
 
@@ -263,7 +299,8 @@ No Desafio M, cada jogador entra ao apertar a sua primeira tecla, e a partida s�
 - **O MCP não tem senha.** Qualquer programa deste computador pode se conectar e apertar botões. Isso é aceitável para um jogo local, mas não exponha a porta para a rede.
 - **A página do jogo tem uma chave no endereço** (32 letras ao acaso, guardadas em `%LOCALAPPDATA%\espelho-jogo\chave.txt`, fora da pasta do projeto). Sem ela não se chega à página, aos arquivos do jogo nem à ponte: quem só conhece o endereço do MCP não lê o código nem consegue se passar pela página. Para trocar a chave, apague esse arquivo e ligue o servidor de novo.
 - Páginas de outros sites abertas no navegador não conseguem falar com o servidor: ele recusa pedidos com `Origin` de fora e com `Host` diferente de `localhost`/`127.0.0.1`.
-- O servidor só entrega os cinco arquivos do jogo (`index.html`, `jogo.js`, `arena.js`, `ponte.js`, `vendor/three.min.js`), e só no endereço com a chave. Qualquer outro caminho devolve 404.
+- O servidor só entrega os sete arquivos do jogo (`index.html`, `replays.html`, `jogo.js`, `arena.js`, `ponte.js`, `gravacao.js`, `vendor/three.min.js`), e só no endereço com a chave. Qualquer outro caminho devolve 404.
+- **As gravações** também ficam atrás da chave: só a página do jogo guarda, lista, lê e apaga. O servidor grava em `%LOCALAPPDATA%\espelho-jogo\partidas` (outra pasta: `servidor.ps1 -Gravacoes <pasta>`), num arquivo cujo nome ele mesmo confere (data, hora e seis letras; nada do que a página manda vira caminho), de no máximo 1 MB, e guarda só as 300 mais novas. Uma gravação é texto: nomes de guerra, modelos, botões, intenções e falas das iAs. Ao tocá-la, a página trata tudo isso como dado e escreve como texto, do mesmo jeito que ao vivo. Uma iA com acesso ao disco consegue ler essa pasta, e ali estão as partidas anteriores.
 - `iniciar-mcp.bat` usa `-ExecutionPolicy Bypass` só para rodar o `servidor.ps1` desta pasta; não muda a configuração do Windows.
 
 Para usar outra porta: `iniciar-mcp.bat -Porta 8766`.
@@ -276,6 +313,8 @@ Para usar outra porta: `iniciar-mcp.bat -Porta 8766`.
 | `jogo.js` | O jogo dos Desafios 1 a 3: sala, robô, regras, botões e desenho |
 | `arena.js` | Galinha Pong (Desafios M e T): a quadra, os dois robôs, os objetos e as rodadas |
 | `ponte.js` | Liga a página ao servidor |
+| `gravacao.js` | Grava as partidas e toca as gravadas (o painel de quem assiste) |
+| `replays.html` | A aba de replays: a lista das partidas gravadas |
 | `servidor.ps1` | Servidor MCP e servidor da página, em PowerShell puro |
 | `ferramentas.json` | Tudo o que a iA lê: ferramentas, botões e textos de resposta |
 | `iniciar-mcp.bat` | Atalho para ligar o servidor |
