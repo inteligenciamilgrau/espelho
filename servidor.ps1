@@ -232,9 +232,12 @@ function Notas($req) {
 function Concluir($a, [byte[]]$corpo, $req) {
   $q = $req.QueryString
   $ganhou = [bool]$q['ganhou']; $perdeu = [bool]$q['perdeu']; $espera = [bool]$q['espera']; $aguarde = [bool]$q['aguarde']; $inicio = [string]$q['inicio']
+  $aviso = [string]$q['aviso']                 # um aviso da quadra com texto proprio em ferramentas.json ("avisos"); so valem as chaves que existem la
   $texto = ''; $imagem = ''; $erro = $false; $neutro = $false
   if ($q['lotado']) {
     $texto = $config.respostaLotado; $erro = $true
+  } elseif ($aviso -and $config.avisos -and $config.avisos.PSObject.Properties[$aviso]) {
+    $texto = [string]$config.avisos.PSObject.Properties[$aviso].Value     # (vem antes do texto de inicio: o comecar do comentarista pode ser recusado)
   } elseif ($a.ferramenta -eq 'comecar') {    # cada desafio comeca com o seu texto
     $script:avisouVitoria = $false
     if ($espera) { $texto = $config.respostaEspera }

@@ -65,6 +65,9 @@
   // dele. Sem a pausa do ponto (?pausa=0) ou com ?replay=0 não há reprise.
   const REPLAY = PAUSA_DO_PONTO > 0 && ENDERECO.get('replay') !== '0';
   const ANTES_DO_REPLAY = 1.5;                  // segundos entre o acerto e a reprise: o lance ao vivo acaba de acontecer
+  // Antes de a partida valer, o juiz pergunta a cada iA se ela está pronta, e o tempo só começa
+  // a contar quando as duas respondem (botão PRONTO). ?pronto=0 tira a pergunta.
+  const PERGUNTAR_PRONTO = ENDERECO.get('pronto') !== '0';
   const NARRACAO = 140;                         // quantas letras cabem numa fala do comentarista
 
   // ---------- cena ----------
@@ -821,10 +824,13 @@
     j.cabeca.rotation.y = parado ? 0 : limitar(-Math.atan2(fz, 4.6), -0.9, 0.9);        // segue o lance com a cabeça
     j.corpo.rotation.x = soprando ? -0.14 : 0;
     // os braços: no ponto, o do lado de quem marcou estica para esse lado; no começo, os dois para cima; no fim, os dois abertos
-    const abre = j.gesto === 'ponto' || j.gesto === 'fim' ? 1.45 * gesto : 0, sobe = j.gesto === 'inicio' ? 2.9 * gesto : 0;
+    // antes de a partida valer, ele pergunta se os jogadores estão prontos: os braços meio erguidos e o balão "PRONTOS?"
+    const pergunta = !parado && !soprando && presentes() && !valendo() && !fim;
+    const abre = j.gesto === 'ponto' || j.gesto === 'fim' ? 1.45 * gesto : 0, sobe = j.gesto === 'inicio' ? 2.9 * gesto : pergunta ? 1.0 + Math.sin(tempo * 3) * 0.12 : 0;
     j.bracoD.rotation.set(0.35 + sobe, 0, j.gesto === 'ponto' && j.lado !== 1 ? 0 : abre);
     j.bracoE.rotation.set(0.35 + sobe, 0, j.gesto === 'ponto' && j.lado !== 2 ? 0 : -abre);
-    j.grito.sprite.visible = soprando;
+    j.grito.escrever(pergunta ? 'PRONTOS?' : 'PRIII!');
+    j.grito.sprite.visible = soprando || pergunta;
   }
 
   // ---------- a mesa do comentarista ----------
@@ -1019,7 +1025,7 @@
     const corpo = montarBoneco(n);
     cena.add(corpo.grupo);
     jog.push({ n, corpo, grito: montarGrito(), sinal3d: montarSinal(n), lado: n === 1 ? 1 : -1, controle: TREINO ? 'bot' : 'ninguem', dono: null, sinal: 0, avisado: false, esperas: [],
-      ausente: false, faltas: 0, pendente: null, novas: [], modelo: '', desde: 0, banco: 0, vis: { x: 0, z: 0, yaw: 0, braco: 0, queda: 0, pulo: 0, guarda: 0 } });
+      ausente: false, faltas: 0, pendente: null, novas: [], modelo: '', desde: 0, banco: 0, pronto: true, passou: false, vis: { x: 0, z: 0, yaw: 0, braco: 0, queda: 0, pulo: 0, guarda: 0 } });
   }
   // O que cada um acabou de fazer, para quem assiste entender a jogada (ver anunciar): uma
   // etiqueta em cima do robô, um sinal no chão — a seta de para onde andou, a volta de para
@@ -1116,7 +1122,9 @@
     J.etiqueta.textura.needsUpdate = true;
   }
   // A partida está valendo quando os dois robôs têm quem jogue.
-  const valendo = () => jog[1].controle !== 'ninguem' && jog[2].controle !== 'ninguem';
+  const presentes = () => jog[1].controle !== 'ninguem' && jog[2].controle !== 'ninguem';
+  // ...e os dois disseram ao juiz que estão prontos (ver ficarPronto). Só então o tempo conta.
+  const valendo = () => presentes() && jog[1].pronto && jog[2].pronto;
   // O nome de guerra de cada jogador, que vai no placar. A iA manda o dela ao entrar (comecar).
   const nomeDe = J => J.nome || (J.controle === 'bot' ? 'Robô da casa' : `Jogador ${J.n}`);
   const limparNome = nome => Array.from(String(nome == null ? '' : nome).replace(/[\u0000-\u001f\u007f]/g, '').trim()).slice(0, 12).join('');
@@ -1142,21 +1150,30 @@
   // dono: a conexão MCP dela; novas: as notas que ainda não leu; esperas: as chamadas dela
   // penduradas à espera da próxima rodada; fala: a legenda que está no ar.
   const narrador = { dono: null, nome: '', modelo: '', sinal: 0, novas: [], esperas: [], fala: null };
+  // O comentarista está na cabine? (Dois minutos sem nenhuma chamada dele e a cadeira aparece
+  // vazia; o lugar continua sendo dele, e qualquer chamada o traz de volta.)
+  const naCabine = () => !!narrador.dono && Date.now() - narrador.sinal < 120000;
   function narrar(nota) {
     if (!narrador.dono) return;
     narrador.novas.push(nota);
-    if (narrador.novas.length > 5) narrador.novas.splice(0, narrador.novas.length - 5);   // o servidor manda cinco notas de cada vez: ficam as mais novas
+    // O servidor manda cinco notas de cada vez. Se o comentarista demora e a fila enche, saem
+    // as rodadas mais antigas: o ponto, o fim de jogo e a partida nova ele não pode perder.
+    while (narrador.novas.length > 5) {
+      const i = narrador.novas.findIndex(n => n.tipo === 'narraRodada' || n.tipo === 'narraBarriga');
+      narrador.novas.splice(i >= 0 ? i : 0, 1);
+    }
     for (const e of narrador.esperas.splice(0)) { clearTimeout(e.relogio); e.pronto(); }
   }
-  // A iA da conexão `quem` senta na cadeira do comentarista. Devolve false se não pode: ela
-  // está jogando, ou a cadeira é de outra iA (que não sumiu).
+  // A iA da conexão `quem` senta na cadeira do comentarista. Devolve true, ou o aviso de por
+  // que não pode: ela está jogando, ou a cadeira é de outra iA (que não saiu nem sumiu).
   function comentar(quem, nome, modelo) {
     const n = narrador, agora = Date.now();
     nome = limparNome(nome) || 'Comentarista';
-    if ([jog[1], jog[2]].some(J => J.controle === 'ia' && J.dono === quem)) return false;
-    if (n.dono && n.dono !== quem && n.nome !== nome && agora - n.sinal < ABANDONO * 1000) return false;
+    if ([jog[1], jog[2]].some(J => J.controle === 'ia' && J.dono === quem)) return 'jogadorNaoComenta';
+    if (n.dono && n.dono !== quem && n.nome !== nome && agora - n.sinal < ABANDONO * 1000) return 'cadeiraOcupada';
     for (const e of n.esperas.splice(0)) { clearTimeout(e.relogio); e.pronto(); }
     Object.assign(n, { dono: quem, nome, modelo: limparModelo(modelo) || (nome === n.nome ? n.modelo : ''), sinal: agora, novas: [] });
+    cabine.figura.visible = true;
     if (valendo()) n.novas.push({ tipo: 'narraPlacar', a: nomeDe(jog[1]), pa: jog[1].pontos, pb: jog[2].pontos, b: nomeDe(jog[2]), rodada: rodadas + 1 });
     try { sessionStorage.setItem('quadra.narrador', JSON.stringify({ quem, nome })); } catch (e) { }   // para continuar na cadeira se a página recarregar
     escreverPlaca();
@@ -1174,9 +1191,11 @@
     const g = cabine.tela.getContext('2d');
     g.fillStyle = '#12161a'; g.fillRect(0, 0, 256, 96);
     g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillStyle = '#c9b3e6'; g.font = `bold ${narrador.dono ? 20 : 26}px Arial, sans-serif`; g.fillText('COMENTARISTA', 128, narrador.dono ? 24 : 48, 236);
-    if (narrador.dono) { g.fillStyle = '#ffffff'; g.font = 'bold 38px Arial, sans-serif'; g.fillText(narrador.nome, 128, 62, 236); }
+    const presente = naCabine();
+    g.fillStyle = '#c9b3e6'; g.font = `bold ${presente ? 20 : 26}px Arial, sans-serif`; g.fillText('COMENTARISTA', 128, presente ? 24 : 48, 236);
+    if (presente) { g.fillStyle = '#ffffff'; g.font = 'bold 38px Arial, sans-serif'; g.fillText(narrador.nome, 128, 62, 236); }
     cabine.textura.needsUpdate = true;
+    marcarCadeira();
   }
   // Os botões do comentarista: F é a imagem da transmissão; T põe no ar o que ele diz e fica
   // esperando a próxima rodada (ou 20 segundos), para a resposta já trazer o que aconteceu.
@@ -1201,16 +1220,17 @@
     hudVelho = true;
     desenharRegistro();
     try {                                        // em voz alta, se o som está ligado e o navegador sabe falar
-      if (!nivelDoSom('efeitos') || !window.speechSynthesis) return;
+      if (!nivelDoSom('narracao') || !window.speechSynthesis) return;      // narração no mudo: fica só a legenda
       const voz = new SpeechSynthesisUtterance(texto);
-      voz.lang = 'pt-BR'; voz.rate = 1.15; voz.volume = nivelDoSom('efeitos');
+      voz.lang = 'pt-BR'; voz.rate = 1.15; voz.volume = nivelDoSom('narracao');
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(voz);
     } catch (e) { }
   }
   function moverComentarista() {
     const noAr = objetos.find(o => o.estado === 'voo'), fz = noAr ? noAr.grupo.position.z : (jog[1].vis.z + jog[2].vis.z) / 2;
-    cabine.figura.visible = !!narrador.dono;
+    const presente = naCabine();
+    if (presente !== cabine.figura.visible) { cabine.figura.visible = presente; escreverPlaca(); hudVelho = true; }   // chegou ou foi embora
     cabine.cabeca.rotation.y = limitar(Math.atan2(fz, 6.3), -0.8, 0.8);                 // acompanha o lance
     cabine.cabeca.rotation.x = narrador.fala ? Math.sin(tempo * 9) * 0.07 : 0;         // e balança a cabeça enquanto fala
   }
@@ -1232,7 +1252,7 @@
   const anotarVez = J => { if (valendo() && !fim) anotar(J, { tipo: 'vez', rodada: rodadas + 1 }, 'vez'); };
   // As notas pendentes da iA da conexão `quem`, na ordem em que fazem sentido lidas (a vez
   // por último). Quem pede leva: a lista fica vazia.
-  const ORDEM_DAS_NOTAS = ['partidaNova', 'placar', 'quadraArrumada', 'bracoCansado', 'rodada', 'rodadaPerdida', 'vez'];
+  const ORDEM_DAS_NOTAS = ['partidaNova', 'placar', 'quadraArrumada', 'bracoCansado', 'defendeu', 'rodada', 'rodadaFalhou', 'rodadaPerdida', 'vez'];
   function novidades(quem) {
     if (narrador.dono === quem) return narrador.novas.splice(0);
     const J = [jog[1], jog[2]].find(J => J.controle === 'ia' && J.dono === quem);
@@ -1247,7 +1267,9 @@
   const diagnosticos = { 1: null, 2: null };
   const sorte = aleatorio(20261111);
 
-  function novaPartida() {
+  // manter: os jogadores continuam prontos (é a partida começando, depois de os dois
+  // responderem ao juiz). Sem isso, o juiz pergunta de novo a cada iA antes de valer.
+  function novaPartida(manter) {
     const recomeco = rodadas > 0;                // uma partida que já andava foi zerada: as iAs ficam sabendo
     rodadas = 0; fim = 0; hudVelho = true;
     abrirRodada();
@@ -1263,6 +1285,8 @@
       J.corpo.escrever('');
       Object.assign(J.vis, { x: J.x, z: J.z, yaw: J.rumo * GIRO, braco: 0, queda: 0, pulo: 0, guarda: 0, lance: 0, atraso: 0, estouro: 1, brilho: 0, tombo: { x: 1, z: 0 } });
       J.feito = null;
+      J.passou = false;
+      if (manter !== true) J.pronto = J.controle !== 'ia' || !PERGUNTAR_PRONTO;
       diagnosticos[J.n] = { comando: 'início', ok: true, mensagem: 'ok' };
     }
     objetos.forEach((o, i) => {
@@ -1277,8 +1301,7 @@
     for (const J of [jog[1], jog[2]]) anotarVez(J);          // quem já está na partida fica sabendo que pode jogar
     acabarReplay();
     clipes.length = 0;
-    narrar({ tipo: 'narraPartida' });
-    if (valendo()) apitar('inicio');             // o juiz apita o começo
+    if (valendo()) { narrar({ tipo: 'narraPartida' }); apitar('inicio'); }       // o juiz apita o começo
     desenharPlacar();
     desenharRegistro();
     soltarPausa();                               // se a partida foi zerada no meio da pausa de um ponto
@@ -1304,7 +1327,7 @@
     for (const J of [jog[1], jog[2]]) {
       const frente = J.n === 1 ? 0 : 4;
       // (o rumo volta para a frente pelo lado mais curto, para o robô não sair rodopiando)
-      Object.assign(J, { x: 0, z: INICIO * J.lado, rumo: frente + 8 * Math.round((J.rumo - frente) / 8), segurando: null, escudo: null, guarda: false, caido: 0, pow: 0, folego: FOLEGO_DO_ESCUDO });
+      Object.assign(J, { x: 0, z: INICIO * J.lado, rumo: frente + 8 * Math.round((J.rumo - frente) / 8), segurando: null, escudo: null, guarda: false, caido: 0, pow: 0, folego: FOLEGO_DO_ESCUDO, passou: false });
       J.vis.atraso = 0;
       anotar(J, { tipo: 'quadraArrumada' });
     }
@@ -1513,6 +1536,7 @@
       else if (fim) diagnosticos[J.n] = { comando: j.botao, ok: false, mensagem: 'o jogo acabou' };
       else if (J.caido) diagnosticos[J.n] = { comando: j.botao, ok: false, mensagem: 'caído: perdeu a jogada' };
       else diagnosticos[J.n] = Object.assign({ comando: j.botao }, agir(J, j.botao, j.texto, arremessos));
+      if (j) J.passou = j.botao === 'PASSAR';   // quem passou a vez nesta rodada não pode passar na seguinte (ver pedir)
     }
     for (const J of arremessos) {                // os arremessos saem depois de todo mundo ter se mexido
       const o = J.segurando;
@@ -1546,6 +1570,7 @@
         vitima.grito.escrever('TÓIM!');
         diagnosticos[autor.n].mensagem += ` — o jogador ${vitima.n} defendeu`;
         diagnosticos[vitima.n].mensagem += ` — defendeu ${o.nome} com ${s.nome}`;
+        anotar(vitima, { tipo: 'defendeu' });     // quem defendeu fica sabendo (é com ele: o escudo dele caiu longe)
         lances.push({ tipo: 'defesa', n: vitima.n, o });
         soltar(s);                               // o escudo sai voando e cai longe: é preciso ir buscar
         s.grupo.rotation.set(0, Math.atan2(-dir.z, dir.x), 0);
@@ -1599,7 +1624,14 @@
     // o registro das jogadas, para quem assiste: o que cada um fez nesta rodada e quantas vezes pediu a imagem antes
     // a vez: a rodada fechou e a seguinte já está aberta. Quem não jogou fica sabendo que perdeu a rodada.
     if (!fim) for (const J of [jog[1], jog[2]])
-      anotar(J, { tipo: jogadas[J.n] ? 'rodada' : 'rodadaPerdida', n: rodadas, rodada: rodadas + 1 }, 'vez');
+    {
+      // Junto vai o que a jogada DELE fez, ou por que não valeu ("bloqueado: linha da quadra",
+      // "nada ao alcance"...): sem isso a iA só descobriria olhando a imagem. É só a parte que
+      // é com ele (o que vem antes do travessão): o que aconteceu com o adversário não vai.
+      const j = jogadas[J.n], d = diagnosticos[J.n];
+      if (!j) anotar(J, { tipo: 'rodadaPerdida', n: rodadas, rodada: rodadas + 1 }, 'vez');
+      else anotar(J, { tipo: d.ok ? 'rodada' : 'rodadaFalhou', n: rodadas, rodada: rodadas + 1, botao: j.botao, fez: d.mensagem.split(' — ')[0] }, 'vez');
+    }
     historico.push({ rodada: rodadas, 1: Object.assign({ olhou: jog[1].olhadas }, diagnosticos[1]), 2: Object.assign({ olhou: jog[2].olhadas }, diagnosticos[2]) });
     // o comentarista fica sabendo de tudo o que os dois fizeram
     narrar({ tipo: 'narraRodada', n: rodadas, a: nomeDe(jog[1]), fezA: diagnosticos[1].mensagem, b: nomeDe(jog[2]), fezB: diagnosticos[2].mensagem });
@@ -1665,32 +1697,54 @@
     J.ausente = false; J.faltas = 0;
     if (antes === tipo) return false;
     J.controle = tipo;
+    J.pronto = tipo !== 'ia' || !PERGUNTAR_PRONTO;                // a iA ainda vai responder ao juiz (ver ficarPronto)
     if (tipo === 'humano') { J.avisado = true; J.dono = null; }   // quem está no teclado vê a tela: não precisa de aviso
     hudVelho = true;
     desenharPlacar();
     desenharRegistro();
-    if (antes === 'ninguem') { if (valendo()) iniciar(); }
+    if (antes === 'ninguem') { if (presentes()) apresentar(); }
     else if (antes === 'bot' && rodadas > 0) novaPartida();
     return true;
   }
-  // Desafio M: os dois entraram. A partida começa do zero, e quem estava pendurado
-  // aguardando é liberado com o aviso de que começou.
-  function iniciar() {
-    novaPartida();
+  // Desafio M: os dois entraram. Quem estava pendurado aguardando o outro recebe as regras — e,
+  // com elas, a pergunta do juiz: está pronto? A partida só começa quando os dois respondem.
+  function apresentar() {
     for (const J of [jog[1], jog[2]]) {
       if (J.esperas.length) J.avisado = true;
       for (const e of J.esperas.splice(0)) { clearTimeout(e.relogio); e.pronto({ aviso: 'inicio' }); }
     }
-  }
-  // Desafio M, com um jogador só: a chamada dele fica pendurada até o outro entrar (aviso
-  // 'inicio') ou até passarem `segundos` (aviso 'espera': ainda não entrou ninguém).
-  function aguardar(J, segundos) {
     hudVelho = true;
-    if (!segundos) return Promise.resolve({ aviso: 'espera' });
+    if (valendo()) iniciar();                    // (no teclado, ou sem a pergunta do juiz, já começa)
+  }
+  // Os dois estão prontos: a partida começa do zero, o juiz apita e o tempo passa a contar.
+  // Quem já tinha respondido e estava esperando o outro recebe o aviso 'valendo'.
+  function iniciar() {
+    novaPartida(true);
+    for (const J of [jog[1], jog[2]]) for (const e of J.esperas.splice(0)) { clearTimeout(e.relogio); e.pronto({ aviso: 'valendo' }); }
+  }
+  // A chamada de um jogador fica pendurada até a partida andar (o outro entrar, ou ficar
+  // pronto) ou até passarem `segundos`; aí volta com `aviso` ('espera': o outro ainda não
+  // entrou; 'esperaPronto': o outro ainda não respondeu ao juiz).
+  function aguardar(J, segundos, aviso = 'espera') {
+    hudVelho = true;
+    if (!segundos) return Promise.resolve({ aviso });
     return new Promise(pronto => {
-      const e = { pronto, relogio: setTimeout(() => { J.esperas.splice(J.esperas.indexOf(e), 1); pronto({ aviso: 'espera' }); }, segundos * 1000) };
+      const e = { pronto, relogio: setTimeout(() => { J.esperas.splice(J.esperas.indexOf(e), 1); pronto({ aviso }); }, segundos * 1000) };
       J.esperas.push(e);
     });
+  }
+  // O botão PRONTO: a resposta à pergunta do juiz. Com os dois prontos a partida começa; até
+  // lá, a chamada de quem já respondeu fica pendurada esperando o outro.
+  function ficarPronto(J, tipo) {
+    if (valendo()) return Promise.resolve();     // a partida já está valendo: não muda nada
+    if (!J.pronto) {
+      J.pronto = true;
+      rotular(J, 'PRONTO!', '#1f9d55');
+      tocar('pega');
+      hudVelho = true;
+    }
+    if (valendo()) { iniciar(); return Promise.resolve({ aviso: 'valendo' }); }
+    return aguardar(J, tipo === 'ia' ? ESPERA.ia : 0, 'esperaPronto');
   }
   // O botão T: escreve um texto curto na telinha da barriga do robô. É só um recado para o
   // adversário e para quem assiste: não é uma jogada e, como a imagem (F), não gasta rodada.
@@ -1714,8 +1768,18 @@
     entrar(n, tipo);
     const J = jog[n];
     if (botao === 'T') { escreverNaBarriga(J, texto); return Promise.resolve(); }      // o texto não é jogada: vale na hora
-    if (!valendo()) return aguardar(J, tipo === 'ia' ? ESPERA.ia : 0);
+    if (!presentes()) return aguardar(J, tipo === 'ia' ? ESPERA.ia : 0);                // o outro jogador ainda não entrou
     if (!J.avisado) { J.avisado = true; return Promise.resolve({ aviso: 'inicio' }); }
+    if (botao === 'PRONTO') return ficarPronto(J, tipo);
+    if (!J.pronto) return Promise.resolve({ aviso: 'pronto' });                         // o juiz ainda espera a resposta dele: o botão não vale
+    if (!valendo()) return aguardar(J, tipo === 'ia' ? ESPERA.ia : 0, 'esperaPronto');  // ele está pronto; o outro, ainda não
+    if (botao === 'PASSAR' && J.passou) {        // não se passa a vez duas rodadas seguidas: esta não vale, ele tem de jogar outra coisa
+      diagnosticos[n] = { comando: 'PASSAR', ok: false, mensagem: 'já passou a vez na rodada anterior: tem de jogar' };
+      rotular(J, '✖ JÁ PASSOU: TEM DE JOGAR', '#b3261e');
+      tocar('erro');
+      atualizarPainel();
+      return Promise.resolve({ aviso: 'semPassar' });
+    }
     if (J.pendente) J.pendente.pronto();         // trocou de ideia antes de a rodada fechar (só no teclado)
     return new Promise(pronto => {
       J.pendente = { botao, texto, pronto };
@@ -2039,9 +2103,10 @@
     const fora = [1, 2].filter(n => jog[n].controle === 'ninguem'), sumido = [jog[1], jog[2]].find(J => J.controle === 'ia' && J.ausente);
     if (fora.length) faixa(g, l, a, COR_DE_ESPERA, [fora.length === 2 ? 'AGUARDANDO OS JOGADORES' : `AGUARDANDO O JOGADOR ${fora[0]}`], a * 0.12, a * 0.17);
     else if (fim) faixa(g, l, a, COR_CSS[fim], [`${nomeDe(jog[fim]).toUpperCase()} VENCEU!`], a * 0.12, a * 0.17);   // estreita e no alto, para não tapar a quadra
+    else if (!valendo()) faixa(g, l, a, COR_DE_ESPERA, ['O JUIZ PERGUNTA: PRONTOS?', 'falta responder: ' + [jog[1], jog[2]].filter(J => !J.pronto).map(nomeDe).join(' e ')], a * 0.16, a * 0.17);
     else if (sumido) faixa(g, l, a, COR_DE_ESPERA, [`JOGO PARADO: AGUARDANDO ${nomeDe(sumido).toUpperCase()}`], a * 0.1, a * 0.17);
     // o comentarista: uma etiqueta com o nome dele e, enquanto fala, a legenda (só na transmissão)
-    if (narrador.dono) {
+    if (naCabine()) {
       if (narrador.fala && performance.now() > narrador.fala.ate) narrador.fala = null;
       g.textAlign = 'left'; g.textBaseline = 'middle';
       if (narrador.fala) {
@@ -2062,8 +2127,9 @@
       } else {
         g.font = 'bold 14px Arial, sans-serif';
         const texto = `🎙 Comentarista: ${narrador.nome}` + (narrador.modelo ? ` · ${narrador.modelo}` : ''), larg = g.measureText(texto).width + 22;
-        g.fillStyle = 'rgba(22, 14, 38, 0.8)'; cantos(g, l / 2 - larg / 2, Y + ALT + 22, larg, 26, 8); g.fill();
-        g.fillStyle = '#c9b3e6'; g.fillText(texto, l / 2 - larg / 2 + 11, Y + ALT + 36);
+        const x = l / 2 - VAO / 2 - CAIXA - 10 - INFO;       // no canto, embaixo do quadro do jogador 1: ali não tapa as etiquetas dos robôs
+        g.fillStyle = 'rgba(22, 14, 38, 0.8)'; cantos(g, x, Y + ALT + 8, larg, 26, 8); g.fill();
+        g.fillStyle = '#c9b3e6'; g.fillText(texto, x + 11, Y + ALT + 22);
       }
     }
     hud.tv.textura.needsUpdate = true;
@@ -2120,7 +2186,8 @@
         }
         g.textAlign = 'center';
       }
-      if (!valendo()) faixa(g, l, a, COR_DE_ESPERA, ['AGUARDANDO O OUTRO JOGADOR'], a * 0.16);
+      if (!presentes()) faixa(g, l, a, COR_DE_ESPERA, ['AGUARDANDO O OUTRO JOGADOR'], a * 0.16);
+      else if (!valendo()) faixa(g, l, a, COR_DE_ESPERA, J.pronto ? ['VOCÊ ESTÁ PRONTO', 'aguardando o outro jogador'] : ['O JUIZ PERGUNTA: PRONTO?', 'aperte PRONTO para começar'], a * 0.22);
       else if (fim === n) faixa(g, l, a, 'rgba(20, 120, 62, 0.93)', ['PARABÉNS!', 'VOCÊ CONSEGUIU!']);
       else if (fim) faixa(g, l, a, 'rgba(170, 40, 34, 0.93)', ['VOCÊ PERDEU!']);
       hud[n].textura.needsUpdate = true;
@@ -2211,7 +2278,7 @@
       c.olhar(v.cara);
       // em cima do robô, o cronômetro de quem está pensando (ou o ✓ de quem já jogou e espera o outro)
       J.sinal3d.visible = valendo() && !fim && !pausa.ativa && J.controle !== 'bot' && !J.caido && !J.pow;
-      if (J.sinal3d.visible) { cronometrar(J); J.sinal3d.position.set(v.x, 1.9, v.z); }
+      if (J.sinal3d.visible) { cronometrar(J); J.sinal3d.position.set(v.x, 1.74, v.z); }
       const estouro = parado ? 1 : 0.3 + 0.7 * v.estouro + 0.35 * Math.sin(Math.PI * v.estouro);    // o balão do grito aparece estourando
       J.grito.sprite.visible = J.pow > 0 && !antes;
       J.grito.sprite.position.set(J.x, 1.75, J.z);
@@ -2222,7 +2289,7 @@
       etiqueta.visible = mostra && !J.grito.sprite.visible;
       if (etiqueta.visible) {
         const salto = 1 + Math.max(0, 0.18 - idade) * 2;                 // aparece com um pulinho; depois de uns segundos, esmaece
-        etiqueta.position.set(v.x, 2.62, v.z);
+        etiqueta.position.set(v.x, 2.3, v.z);
         etiqueta.scale.set(2.3 * salto, 0.503 * salto, 1);
         etiqueta.material.opacity = idade < 3.5 ? 1 : 0.55;
       }
@@ -2453,7 +2520,70 @@
     const J = jog[n], v = J.vis, c = camJ[n];
     // de pé, olha para a frente e um pouco para baixo; caído, está de costas no chão, olhando o céu
     c.position.set(v.x, ALTURA_OLHOS - 0.7 * v.queda, v.z);
-    c.rotation.set(INCLINACAO + 1.25 * v.queda, v.yaw, 0);
+    c.rotation.set((olhos ? 0 : INCLINACAO) + 1.25 * v.queda, v.yaw, 0);
+  }
+  // ---------- os olhos do jogador ----------
+  // A imagem de cada jogador é panorâmica, para lembrar o campo de visão de uma pessoa: meia
+  // volta na horizontal (90° para cada lado) e, na vertical, de 35° para cima até 70° para
+  // baixo. Dá para ver quem está ao lado e o chão quase até os próprios pés. Uma câmera comum
+  // não abre tanto, então o mundo é desenhado nas seis faces de um cubo em volta dos olhos do
+  // robô, e a imagem sai desse cubo: cada coluna é uma direção, da esquerda para a direita;
+  // cada linha, uma altura do olhar. (?visao=0 volta à câmera comum, de uns 107° de largura.)
+  const VISAO = ENDERECO.get('visao') === '0' ? null : { lados: 90, cima: 35, baixo: 70 };
+  const olhos = VISAO && (() => {
+    const grau = Math.PI / 180;
+    const cubo = lado => new T.WebGLCubeRenderTarget(lado, { type: T.HalfFloatType, generateMipmaps: true, minFilter: T.LinearMipmapLinearFilter });
+    const material = new T.ShaderMaterial({
+      uniforms: { mapa: { value: null }, giro: { value: new T.Matrix3() }, angulos: { value: new T.Vector3(VISAO.lados * grau, VISAO.cima * grau, VISAO.baixo * grau) } },
+      vertexShader: 'varying vec2 vUv;\nvoid main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: [
+        'uniform samplerCube mapa;', 'uniform mat3 giro;', 'uniform vec3 angulos;', 'varying vec2 vUv;',
+        // (o que o three.js põe antes de todo sombreador já traz as funções de tom e de cor usadas no fim)
+        'void main() {',
+        '  float lado = (vUv.x - 0.5) * 2.0 * angulos.x;',                 // para que lado esta coluna olha
+        '  float alto = mix(-angulos.z, angulos.y, vUv.y);',               // e a que altura esta linha olha
+        '  vec3 d = giro * vec3(sin(lado) * cos(alto), sin(alto), -cos(lado) * cos(alto));',
+        '  gl_FragColor = vec4(textureCube(mapa, d).rgb, 1.0);',
+        '  #include <tonemapping_fragment>', '  #include <colorspace_fragment>',
+        '}'].join('\n'),
+      depthTest: false, depthWrite: false });
+    const cenaDoOlho = new T.Scene(), folha = new T.Mesh(new T.PlaneGeometry(2, 2), material);
+    folha.frustumCulled = false;
+    cenaDoOlho.add(folha);
+    const grande = cubo(1024), pequeno = [null, cubo(256), cubo(256)];   // o cubo da imagem inteira e o da vista pequena de cada jogador, na transmissão
+    const cams = [null, 1, 2].map(n => {
+      if (!n) return null;
+      const c = new T.CubeCamera(0.05, 300, grande);
+      c.layers.enable(CAMADA[3 - n]);            // vê o corpo do outro, não o seu
+      return c;
+    });
+    return { grande, pequeno, material, cena: cenaDoOlho, cams };
+  })();
+  // Desenha o que o jogador n vê, com o que vai por cima (`folha`), no retângulo dado.
+  function vistaDoJogador(n, folha, x, y, l, a) {
+    if (!olhos) return vista(camJ[n], folha, [n], x, y, l, a);
+    const inteira = Math.max(l, a) * renderer.getPixelRatio() > 520, c = olhos.cams[n], alvo = inteira ? olhos.grande : olhos.pequeno[n], olho = camJ[n];
+    olho.updateMatrixWorld();
+    // Desenhar as seis faces do cubo é o que mais custa. Por isso as vistas pequenas da
+    // transmissão são refeitas uma de cada vez, quadro sim, quadro não.
+    if (inteira || !alvo.feito || (quadros + n) % 2 === 0) {
+      destacar([n]);
+      c.position.copy(olho.position);
+      c.renderTarget = alvo;
+      renderer.autoClear = true;                 // as faces do cubo são limpas a cada desenho
+      c.update(renderer, cena);
+      renderer.autoClear = false;
+      alvo.feito = true;
+    }
+    renderer.setViewport(x, y, l, a);
+    renderer.setScissor(x, y, l, a);
+    renderer.clear(true, true, false);
+    olhos.material.uniforms.mapa.value = alvo.texture;
+    olhos.material.uniforms.giro.value.setFromMatrix4(olho.matrixWorld);
+    renderer.render(olhos.cena, camHud);
+    folhaHud.material.map = folha.textura;
+    renderer.clearDepth();
+    renderer.render(cenaHud, camHud);
   }
   // A borda de destaque é de quem olha, e mostra em que o ESPACO dele agiria agora: o objeto
   // que ele pegaria ou, se for arremessar, o adversário, quando o arremesso acertaria. (Em
@@ -2510,7 +2640,7 @@
     if (cam.olhos) {                             // a vista grande são os olhos de um jogador (com o que ele vê por cima da imagem)
       const c = camJ[cam.olhos];
       c.aspect = largura / altura; c.updateProjectionMatrix();
-      vista(c, hud[cam.olhos], [cam.olhos], 0, 0, largura, altura);
+      vistaDoJogador(cam.olhos, hud[cam.olhos], 0, 0, largura, altura);
       c.aspect = FRAME.l / FRAME.a; c.updateProjectionMatrix();
     } else {
       camTV.aspect = largura / altura;
@@ -2524,7 +2654,7 @@
       renderer.setScissor(x - b, y - b, l + 2 * b, a + 2 * b);
       renderer.setClearColor(COR[n]);
       renderer.clear(true, false, false);        // a moldura na cor do robô
-      vista(camJ[n], hud[n], [n], x, y, l, a);
+      vistaDoJogador(n, hud[n], x, y, l, a);
     }
     renderer.setClearColor(0x000000);
     renderer.setScissorTest(false);
@@ -2542,7 +2672,7 @@
       apontarCamera(n);
       sombras();
       renderer.setScissorTest(true);
-      vista(camJ[n], hud[n], [n], 0, 0, FRAME.l, FRAME.a);
+      vistaDoJogador(n, hud[n], 0, 0, largura, altura);
       renderer.setScissorTest(false);
     });
   }
@@ -2552,37 +2682,50 @@
     posar(1, 0); moverTorcida(0); moverJuiz(0);
     particulas.malha.visible = false;
     desenharHud();                               // sempre: os tempos do placar têm de ser os de agora
-    const densidade = renderer.getPixelRatio();
-    renderer.setPixelRatio(1);
-    definirTamanho(FRAME.l, FRAME.a);
-    desenho();
-    const imagem = canvas.toDataURL('image/png');
+    const imagem = capturar(desenho);
     parado = false;
     particulas.malha.visible = true;
     repor(antes);
     posar(0, 0); moverTorcida(0); moverJuiz(0);
-    renderer.setPixelRatio(densidade);
-    definirTamanho(window.innerWidth, window.innerHeight);
     desenhar();
+    return imagem;
+  }
+  // Tira uma imagem de FRAME.l x FRAME.a sem mexer no tamanho da tela. (Redimensionar a tela a
+  // cada imagem pedida, e de volta, travava a página por dezenas de milissegundos: dava para
+  // ouvir na música.) O desenho é feito num canto da própria tela, em pixels de verdade, e só
+  // esse canto é copiado e codificado; quem chama redesenha a tela inteira em seguida. Numa
+  // janela menor que a imagem não há canto que chegue, e a tela é redimensionada como antes.
+  const telaDaFoto = document.createElement('canvas');
+  telaDaFoto.width = FRAME.l; telaDaFoto.height = FRAME.a;
+  function capturar(desenho) {
+    const densidade = renderer.getPixelRatio(), cabe = canvas.width >= FRAME.l && canvas.height >= FRAME.a, tamanho = [largura, altura];
+    if (cabe) { largura = (FRAME.l + 0.01) / densidade; altura = (FRAME.a + 0.01) / densidade; }
+    else { renderer.setPixelRatio(1); definirTamanho(FRAME.l, FRAME.a); }
+    desenho();
+    let imagem;
+    if (cabe) {
+      telaDaFoto.getContext('2d').drawImage(canvas, 0, canvas.height - FRAME.a, FRAME.l, FRAME.a, 0, 0, FRAME.l, FRAME.a);
+      imagem = telaDaFoto.toDataURL('image/png');
+      [largura, altura] = tamanho;
+    } else {
+      imagem = canvas.toDataURL('image/png');
+      renderer.setPixelRatio(densidade);
+      definirTamanho(window.innerWidth, window.innerHeight);
+    }
     return imagem;
   }
   // A imagem do comentarista: a transmissão, como está no ar (sem as vistas dos jogadores).
   function frameDaTransmissao() {
     desenharHud();
-    const densidade = renderer.getPixelRatio();
-    renderer.setPixelRatio(1);
-    definirTamanho(FRAME.l, FRAME.a);
-    desenhar(true);
-    const imagem = canvas.toDataURL('image/png');
-    renderer.setPixelRatio(densidade);
-    definirTamanho(window.innerWidth, window.innerHeight);
+    const imagem = capturar(() => desenhar(true));
     desenhar();
     return imagem;
   }
   window.addEventListener('resize', () => definirTamanho(window.innerWidth, window.innerHeight));
 
-  let anterior = performance.now();
+  let anterior = performance.now(), quadros = 0;
   function quadro(agora) {
+    quadros++;
     const dt = Math.min(0.1, (agora - anterior) / 1000), k = 1 - Math.exp(-dt * 12);
     anterior = agora;
     tempo += dt;
@@ -2600,7 +2743,7 @@
   }
 
   // ---------- interface (a mesma de jogo.js) ----------
-  const BOTOES = new Set(['W', 'A', 'S', 'D', 'Q', 'E', 'ESPACO', 'L', 'PASSAR', 'T']);
+  const BOTOES = new Set(['W', 'A', 'S', 'D', 'Q', 'E', 'ESPACO', 'L', 'PASSAR', 'PRONTO', 'T']);
   // Em qual robô joga a iA da conexão `quem`, que diz se chamar `nome`? Devolve 1 ou 2, ou 0
   // se não há lugar para ela. Pela ordem:
   //   1. quem já tem um robô continua nele;
@@ -2638,6 +2781,12 @@
   // devolvem uma promessa, cumprida quando a rodada fecha (ver pedir). Sem lugar na partida,
   // a promessa traz o aviso 'lotado'.
   function apertar(botao, texto, quem, nome, modelo) {
+    // SAIR é do comentarista: ele deixa a cadeira, e outra iA pode sentar. Para os outros não faz nada (nem os põe na partida).
+    if (botao === 'SAIR') {
+      if (!conexao(quem) || narrador.dono !== quem) return undefined;
+      largarCadeira();
+      return { aviso: 'saiu' };
+    }
     // o comentarista (a conexão que está na cadeira, ou ele voltando com o mesmo nome por outra ligação)
     // Quem tem um robô é jogador, e nunca comentarista — mesmo que o número da conexão seja o de
     // um comentarista de antes (os números recomeçam quando o servidor é religado).
@@ -2668,7 +2817,10 @@
   function comecar(desafio, quem, cmd, nome, modelo) {
     desafio = String(desafio);
     const deIA = conexao(quem);
-    if (desafio === 'C') return !deIA ? false : comentar(quem, nome, modelo) ? false : { aviso: 'lotado' };   // a cadeira do comentarista: não mexe na partida
+    if (desafio === 'C') {                       // a cadeira do comentarista: não mexe na partida
+      const sentou = deIA ? comentar(quem, nome, modelo) : true;
+      return sentou === true ? false : { aviso: sentou };
+    }
     if (desafio !== MODO) {
       const arena = desafio === 'M' || desafio === 'T';
       if (!arena && !/^[0-9]+$/.test(desafio)) return false;
@@ -2691,7 +2843,7 @@
     const disseOModelo = !!limparModelo(modelo) && limparModelo(modelo) !== J.modelo && (!limparNome(nome) || limparNome(nome) === J.nome);
     batizar(J, nome, modelo);
     const mudou = entrar(n, 'ia');
-    if (!valendo()) return aguardar(J, ESPERA.entrada);
+    if (!presentes()) return aguardar(J, ESPERA.entrada);
     if (!mudou && !herdou && !disseOModelo) novaPartida();   // quem já estava jogando pede de novo: partida nova (a menos que só tenha vindo dizer o modelo)
     J.avisado = true;                            // a resposta deste comecar é o aviso de que a partida começou
     anotarVez(J);
@@ -2719,7 +2871,7 @@
   const elAjuda = document.getElementById('ajuda'), elMensagem = document.getElementById('mensagem');
   const elLog = document.getElementById('log'), elStatus = document.getElementById('status');
   const elCaixa = document.getElementById('caixa'), elEntrada = document.getElementById('entrada');
-  elAjuda.textContent = 'J1:  W A S D  Q E  Espaço  L X T\nJ2:  ↑ ← ↓ →  , .  Enter   O / P\n1 2 3 M Shift+T   R H J C V B';
+  elAjuda.textContent = 'J1:  W A S D  Q E  Espaço  L X T\nJ2:  ↑ ← ↓ →  , .  Enter   O / P\n1 2 3 M Shift+T   R H J C V B N';
   elMensagem.textContent = MENSAGEM;
 
   // Registro das jogadas: uma linha por rodada, com o que cada jogador fez. É só para quem
@@ -2831,6 +2983,7 @@
       case 'KeyC': escolherVista((cam.vista + 1) % VISTAS.length); break;
       case 'KeyV': alternarSom('musica'); break;
       case 'KeyB': alternarSom('efeitos'); break;
+      case 'KeyN': alternarSom('narracao'); break;
       case 'KeyR': novaPartida(); break;
       case 'KeyM': comecar('M'); break;
       case 'Digit1': case 'Numpad1': comecar(1); break;
@@ -2860,7 +3013,7 @@
     [[0, 78, 2], [2, 83, 2], [4, 87, 2], [6, 90, 2], [8, 87, 2], [10, 83, 2], [12, 78, 4]],
   ];
   const BUMBO = [0, 3, 8, 10];
-  const VOLUME = 0.65, VOLUME_DOS_EFEITOS = 0.8;   // os volumes de fábrica da música e dos efeitos
+  const VOLUME = 0.65, VOLUME_DOS_EFEITOS = 0.8, VOLUME_DA_NARRACAO = 1;   // os volumes de fábrica da música, dos efeitos e da voz do comentarista
   const passoDaMusica = nivel => 60 / (nivel === 2 ? 152 : 138) / 4;       // segundos de uma semicolcheia
   // 0 = esperando (ou o jogo acabou), 1 = partida valendo, 2 = alguém a um ponto de vencer
   const nivelDaMusica = () => !valendo() || fim ? 0 : Math.max(jog[1].pontos, jog[2].pontos) >= PONTOS_PARA_VENCER - 1 ? 2 : 1;
@@ -2964,13 +3117,16 @@
     for (const nota of [64, 71, 76, 79, 88]) tom(kit, 'sawtooth', hz(nota), t + 0.46, 1.1, 0.07, kit.agudo);
   }
 
-  // A música e os efeitos (os barulhos do jogo, o apito, a voz do comentarista) têm cada um o
-  // seu volume e o seu mudo: os controles ficam no painel das câmeras, e as teclas V e B
-  // calam e soltam a música e os efeitos. O que foi escolhido fica guardado no navegador.
-  const som = { kit: null, passo: 0, proximo: 0, acabou: false, musica: { volume: VOLUME, mudo: false }, efeitos: { volume: VOLUME_DOS_EFEITOS, mudo: false } };
+  // A música, os efeitos (os barulhos do jogo, o apito, a torcida) e a narração (a voz do
+  // comentarista, que o navegador lê em voz alta) têm cada um o seu volume e o seu mudo: os
+  // controles ficam no painel das câmeras, e as teclas V, B e N
+  // calam e soltam cada um. O que foi escolhido fica guardado no navegador.
+  const som = { kit: null, passo: 0, proximo: 0, acabou: false, musica: { volume: VOLUME, mudo: false }, efeitos: { volume: VOLUME_DOS_EFEITOS, mudo: false },
+    narracao: { volume: VOLUME_DA_NARRACAO, mudo: false } };
+  const CANAIS = ['musica', 'efeitos', 'narracao'];
   try {
     const guardado = JSON.parse(localStorage.getItem('galinhaPong.som')) || {};
-    for (const qual of ['musica', 'efeitos']) {
+    for (const qual of CANAIS) {
       const g = guardado[qual] || {};
       if (Number.isFinite(g.volume)) som[qual].volume = Math.max(0, Math.min(1, g.volume));
       som[qual].mudo = !!g.mudo;
@@ -2984,7 +3140,8 @@
     if (som.proximo < c.currentTime) som.proximo = c.currentTime + 0.05;      // a aba ficou parada: recomeça daqui
     if (fim && !som.acabou) fanfarra(som.kit, c.currentTime + 0.05);
     som.acabou = !!fim;
-    while (som.proximo < c.currentTime + 0.14) {
+    // (meio segundo de folga: uma travada da página menor que isso não chega à música)
+    while (som.proximo < c.currentTime + 0.5) {
       const nivel = nivelDaMusica();
       tocarPasso(som.kit, som.passo, som.proximo, nivel);
       som.proximo += passoDaMusica(nivel);
@@ -3011,9 +3168,9 @@
   // Muda o volume ou o mudo de um canal ('musica' ou 'efeitos'), aplica e guarda.
   function ajustarSom(qual, mudanca) {
     Object.assign(som[qual], mudanca);
-    try { localStorage.setItem('galinhaPong.som', JSON.stringify({ musica: som.musica, efeitos: som.efeitos })); } catch (e) { }
-    if (som.kit) (qual === 'musica' ? som.kit : som.kit.fx).saida.gain.setTargetAtTime(nivelDoSom(qual), som.kit.ctx.currentTime, 0.04);
-    if (qual === 'efeitos' && !nivelDoSom('efeitos') && window.speechSynthesis) window.speechSynthesis.cancel();
+    try { localStorage.setItem('galinhaPong.som', JSON.stringify({ musica: som.musica, efeitos: som.efeitos, narracao: som.narracao })); } catch (e) { }
+    if (som.kit && qual !== 'narracao') (qual === 'musica' ? som.kit : som.kit.fx).saida.gain.setTargetAtTime(nivelDoSom(qual), som.kit.ctx.currentTime, 0.04);
+    if (qual === 'narracao' && !nivelDoSom('narracao') && window.speechSynthesis) window.speechSynthesis.cancel();     // cala a fala que estiver no ar
     marcarSom();
   }
   const alternarSom = qual => ajustarSom(qual, { mudo: !som[qual].mudo });
@@ -3022,7 +3179,7 @@
   Object.assign(elSom.style, { padding: '4px 6px 0', marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.15)' });
   elCameras.appendChild(elSom);
   const controlesDoSom = {};
-  for (const [qual, nome, tecla] of [['musica', '♪ música', 'V'], ['efeitos', '♫ efeitos', 'B']]) {
+  for (const [qual, nome, tecla] of [['musica', '♪ música', 'V'], ['efeitos', '♫ efeitos', 'B'], ['narracao', '🎙 narração', 'N']]) {
     const linha = document.createElement('div'), rotulo = document.createElement('span'), regua = document.createElement('input');
     Object.assign(linha.style, { display: 'flex', alignItems: 'center', gap: '6px' });
     Object.assign(rotulo.style, { cursor: 'pointer', flex: '1', whiteSpace: 'nowrap' });
@@ -3036,12 +3193,23 @@
     elSom.appendChild(linha);
     controlesDoSom[qual] = { nome, tecla, rotulo, regua };
   }
+  // Quem está na cadeira do comentarista, para quem assiste — e um clique para liberá-la (para
+  // trocar de comentarista sem esperar: o que estava deixa de ser, e outra iA pode sentar).
+  const elCadeira = document.createElement('div');
+  Object.assign(elCadeira.style, { cursor: 'pointer', color: '#c9b3e6', padding: '4px 6px 0', marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.15)', whiteSpace: 'normal', lineHeight: '1.3' });
+  elCadeira.title = 'clique para tirar este comentarista da cadeira';
+  elCadeira.addEventListener('click', () => { if (narrador.dono) largarCadeira(); });
+  elCameras.appendChild(elCadeira);
+  function marcarCadeira() {
+    elCadeira.hidden = !narrador.dono;
+    elCadeira.textContent = narrador.dono ? `🎙 ${narrador.nome} · clique para liberar a cadeira` : '';     // sempre como texto: o nome vem da iA
+  }
   const elAvisoDoSom = document.createElement('div');
   Object.assign(elAvisoDoSom.style, { color: '#9fb0ba', fontSize: '11px', lineHeight: '1.3' });
   elSom.appendChild(elAvisoDoSom);
   function marcarSom() {
     const tocando = som.kit && som.kit.ctx.state === 'running';
-    for (const qual of ['musica', 'efeitos']) {
+    for (const qual of CANAIS) {
       const c = controlesDoSom[qual], calado = !nivelDoSom(qual);
       c.rotulo.textContent = `${c.nome} ${calado ? '(mudo)' : Math.round(som[qual].volume * 100) + '%'} · ${c.tecla}`;
       c.rotulo.style.color = calado ? '#9fb0ba' : tocando ? '#7dffb0' : '#e8eef2';

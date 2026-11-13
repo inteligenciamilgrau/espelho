@@ -52,6 +52,8 @@
       if (saida && saida.aviso === 'espera') extra += '&espera=1';
       if (saida && saida.aviso === 'lotado') extra += '&lotado=1';
       if (saida && saida.aviso === 'aguarde') extra += '&aguarde=1';
+      // os outros avisos da quadra (o juiz perguntando se está pronto, a partida valendo, a passada que não valeu): o texto de cada um está em ferramentas.json
+      if (saida && ['pronto', 'esperaPronto', 'valendo', 'semPassar', 'saiu', 'cadeiraOcupada', 'jogadorNaoComenta'].includes(saida.aviso)) extra += '&aviso=' + saida.aviso;
       if (saida && saida.aviso === 'inicio') extra += '&inicio=' + encodeURIComponent(jogo.desafio);
       // notas da quadra para essa iA ler junto com a resposta (o placar que mudou, por exemplo)
       const notas = jogo.novidades ? jogo.novidades(quem) : [];
