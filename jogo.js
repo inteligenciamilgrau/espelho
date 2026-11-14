@@ -588,8 +588,9 @@
   // um tem nome, lugar (x, z: a frente dele), aberta, vis (quanto as portas já abriram, de 0 a
   // 1), folhas (as portas), contorno e dentro (os objetos que só dá para pegar com ele aberto).
   const abrem = [];
-  const noMovel = (x, z, raio) => blocos.find(b =>
-    x > b.x1 - raio + 1e-9 && x < b.x2 + raio - 1e-9 && z > b.z1 - raio + 1e-9 && z < b.z2 + raio - 1e-9);
+  // (um bloco com `r` é redondo, em volta de cx, cz: o ponto de encontro e os bancos da praça, por onde se passa rente)
+  const noMovel = (x, z, raio) => blocos.find(b => b.r ? Math.hypot(x - b.cx, z - b.cz) < b.r + raio - 1e-9
+    : x > b.x1 - raio + 1e-9 && x < b.x2 + raio - 1e-9 && z > b.z1 - raio + 1e-9 && z < b.z2 + raio - 1e-9);
 
   // Põe um objeto parado no mundo (x, z absolutos), como parte da sala `s`.
   function assentar(s, o, x, z, y) {
@@ -975,7 +976,7 @@
   // são raios a partir do meio da praça; meiaPista e meiaRua, a metade da largura do asfalto e a
   // da rua inteira (com as calçadas); oeste, leste, sul e norte, até onde vai cada rua; alto, a
   // altura da calçada (e da praça) acima do asfalto. A rua do oeste é a da casa e do mercadinho.
-  const CIDADE = { x: 14, z: 6.25, praca: 2.4, pista: 4.8, calcada: 5.7, meiaPista: 1.15, meiaRua: 2.25, oeste: -5, leste: 24.5, sul: -5.5, norte: 18, alto: 0.035 };
+  const CIDADE = { x: 14, z: 6.25, praca: 3.1, pista: 4.8, calcada: 5.7, meiaPista: 1.15, meiaRua: 2.25, oeste: -5, leste: 24.5, sul: -5.5, norte: 18, alto: 0.035 };
   // Os lugares, pelo número: { n, nome, partes, x1, x2, z1, z2, luz }. Cada cômodo é um retângulo;
   // a rua é a soma de vários pedaços (`partes`): dois retângulos, que são as ruas em cruz, e o
   // disco da rotatória ({ cx, cz, r }). x1..z2 é o retângulo que contém o lugar inteiro. `luz`:
@@ -1206,6 +1207,7 @@
     const caixa = (l, a, p, material, x, y, z, pai) => malha(pai || g, new T.BoxGeometry(l, a, p), material, x, y, z);
     const liso = (hex, aspereza = 0.8) => mat(hex, { roughness: aspereza });
     const bloco = (nome, x1, x2, z1, z2) => blocos.push({ nome, x1, x2, z1, z2 });
+    const redondo = (nome, cx, cz, r) => blocos.push({ nome, cx, cz, r, x1: cx - r, x2: cx + r, z1: cz - r, z2: cz + r });   // um bloco redondo: deixa passar rente, em volta
     const escalarUV = (geo, fu, fv) => { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * fu, uv.getY(i) * fv); return geo; };
     const letras = (c, texto, x, y, tamanho, cor, largura) => {
       c.fillStyle = cor; c.font = `bold ${tamanho}px Bahnschrift, Arial, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -1601,7 +1603,7 @@
         c.fillRect(sorte() * l, sorte() * l, 5 + sorte() * 6, 5 + sorte() * 6);
       }
       const anel = (r, largura) => { c.strokeStyle = escuro; c.lineWidth = largura * e; c.beginPath(); c.arc(m, m, r * e, 0, 7); c.stroke(); };
-      anel(2.2, 0.12); anel(1.02, 0.1);
+      anel(R_PRACA - GUIA - 0.14, 0.12); anel(2.2, 0.08); anel(1.02, 0.1);
       c.strokeStyle = escuro; c.lineWidth = 0.17 * e; c.lineJoin = 'round';                 // a onda, como a de um calçadão
       c.beginPath();
       for (let i = 0; i <= 720; i++) { const a = i / 720 * 2 * Math.PI, r = (1.86 + 0.13 * Math.sin(a * 12)) * e; if (i) c.lineTo(m + r * Math.cos(a), m + r * Math.sin(a)); else c.moveTo(m + r * Math.cos(a), m + r * Math.sin(a)); }
@@ -1649,14 +1651,14 @@
       malha(g, new T.BoxGeometry(0.92, 0.92, 0.92), [placa, placa, verdeFerro, verdeFerro, placa, placa], PX, CG + 1.5, PZ).castShadow = true;
       malha(g, new T.ConeGeometry(0.8, 0.34, 4), verdeFerro, PX, CG + 2.13, PZ).rotation.y = Math.PI / 4;
       malha(g, new T.SphereGeometry(0.07, 16, 12), M.latao, PX, CG + 2.34, PZ);
-      malha(g, new T.TorusGeometry(0.84, 0.13, 8, 40), sebeMat, PX, CG + 0.08, PZ).rotation.x = Math.PI / 2;
-      for (let i = 0; i < 30; i++) flor(PX + Math.cos(i / 30 * 6.283) * 0.84, CG + 0.22, PZ + Math.sin(i / 30 * 6.283) * 0.84, 0.075, CORES_DAS_FLORES[i % 3]);
-      bloco('ponto de encontro', PX - 0.8, PX + 0.8, PZ - 0.8, PZ + 0.8);
+      malha(g, new T.TorusGeometry(0.56, 0.07, 8, 40), sebeMat, PX, CG + 0.2, PZ).rotation.x = Math.PI / 2;
+      for (let i = 0; i < 30; i++) flor(PX + Math.cos(i / 30 * 6.283) * 0.56, CG + 0.26, PZ + Math.sin(i / 30 * 6.283) * 0.56, 0.06, CORES_DAS_FLORES[i % 3]);
+      redondo('ponto de encontro', PX, PZ, 0.68);
     }
     // um banco de praça; sem giro, o encosto fica do lado +z (quem senta olha para -z)
-    const banco = (x, z, giro, y) => {
+    const banco = (x, z, giro, y, escala) => {
       const b = new T.Group();
-      b.position.set(x, y || 0, z); b.rotation.y = giro || 0;
+      b.position.set(x, y || 0, z); b.rotation.y = giro || 0; b.scale.setScalar(escala || 1);
       g.add(b);
       for (const dz of [-0.15, -0.02, 0.11]) caixa(1.3, 0.035, 0.115, madeira, 0, 0.45, dz, b);       // o assento, de três ripas
       for (const dy of [0.62, 0.78]) caixa(1.3, 0.11, 0.035, madeira, 0, dy, 0.2, b);                  // o encosto, de duas
@@ -1669,7 +1671,7 @@
       malha(g, new T.CylinderGeometry(0.13, 0.06, 0.1, 12), ferro, x, 2.84, z);
       malha(g, new T.SphereGeometry(0.17, 16, 12), globoDaRua, x, 3.02, z);
       malha(g, new T.ConeGeometry(0.2, 0.12, 12), ferro, x, 3.22, z);
-      bloco('poste', x - 0.08, x + 0.08, z - 0.08, z + 0.08);
+      // (os postes ficam rente às paredes e às cercas, onde o robô não chega: não precisam barrar ninguém)
       const luz = new T.PointLight(0xffd9a0, 0, 10, 1.4);
       luz.position.set(x, 2.95, z);
       g.add(luz);
@@ -1677,9 +1679,9 @@
     };
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
       // na praça, um banco em cada canto, de frente para o meio; e, na calçada da volta, um poste
-      const a = Math.atan2(sz, sx), x = PX + Math.cos(a) * 1.95, z = PZ + Math.sin(a) * 1.95;
-      banco(x, z, Math.PI / 2 - a, CG);
-      bloco('banco', x - 0.48, x + 0.48, z - 0.48, z + 0.48);
+      const a = Math.atan2(sz, sx), x = PX + Math.cos(a) * (R_PRACA - 0.42), z = PZ + Math.sin(a) * (R_PRACA - 0.42);   // na beirada da praça: no meio fica o caminho em volta do ponto de encontro
+      banco(x, z, Math.PI / 2 - a, CG, 0.8);    // (um pouco menores que os da rua, para sobrar passagem)
+      redondo('banco', x, z, 0.4);
       poste(PX + sx * 3.96, PZ + sz * 3.96);
     }
 
@@ -1725,7 +1727,7 @@
     sebeCurva(-1, -1, QUINA, Math.PI / 2 - QUINA); sebeCurva(-1, 1, 0.5, Math.PI / 2 - QUINA);   // (do lado do mercadinho, começa depois da quina dele)
     sebeCurva(1, 1, 0.46, Math.PI / 2 - QUINA); sebeCurva(1, -1, 0.46, Math.PI / 2 - QUINA);
     sebe(8.12, 3.86, 8.5, 3.86);                  // da quina da nossa casa até a volta
-    cerca(FIM.o, 3.9, -2.75, 3.9);                // o jardim ao lado da nossa casa
+    // (ao lado da nossa casa não há cerca: é a entrada de carro)
     cerca(FIM.o, 8.6, -4.35, 8.6);                // antes da padaria
     cerca(2.05, 8.6, 3.35, 8.6);                  // entre a padaria e o mercadinho
     cerca(23.65, 8.6, FIM.l, 8.6);                // depois da farmácia
@@ -1751,8 +1753,8 @@
       }
     }
     // as árvores da cidade: na calçada da nossa rua, nos jardins e nos cantos da praça...
-    arvore(-1.6, 4.92, { barra: true });
-    arvore(-4.1, 1.9, { flor: 'rosa' }); arvore(2.7, 10.4, { escala: 0.8 }); arvore(9.9, -3.3); arvore(10.3, -0.5, { flor: 'amarelo', escala: 0.9 });
+    arvore(-1.6, -2.4);                           // (na calçada não há árvores: ela é estreita, e o robô não passaria)
+    arvore(-4.3, -1.7, { flor: 'rosa' }); arvore(2.7, 10.4, { escala: 0.8 }); arvore(9.9, -3.3); arvore(10.3, -0.5, { flor: 'amarelo', escala: 0.9 });
     arvore(10.1, 12.0, { escala: 0.95 }); arvore(17.9, 12.1); arvore(17.9, 0.4, { escala: 0.95 });
     arvore(18.8, 15.0, { flor: 'amarelo', escala: 1.1 }); arvore(20.6, 17.1); arvore(17.7, 17.5, { escala: 0.85 });
     arvore(-3.2, 13.6, { escala: 1.15 }); arvore(5.8, 14.4, { escala: 1.1 }); arvore(22.4, 14.2); arvore(27.9, -2.6, { flor: 'rosa' }); arvore(4.5, -2.2, { escala: 1.1 }); arvore(-0.5, -2.6);
@@ -1765,14 +1767,14 @@
         arvore(x, z, { simples: true, escala: 0.9 + sorte() * 0.7, flor: sorte() < 0.12 ? 'amarelo' : sorte() < 0.1 ? 'rosa' : undefined });
       }
     }
-    moita(-3.3, 3.2, 0.42, 7); moita(-4.6, 3.3, 0.3, 4); moita(-4.7, 0.8, 0.45);                // o jardim ao lado da casa
+    moita(-2.95, 0.5, 0.3, 4);                    // ao lado da entrada de carro
     moita(2.3, 9.2, 0.36, 6); moita(3.1, 9.4, 0.3, 5);                                          // entre a padaria e o mercadinho
     moita(9.3, 1.5, 0.4, 6); moita(9.6, -0.9, 0.34); moita(8.9, -2.2, 0.45, 8);                 // o quintal
     moita(17.4, 14.0, 0.45, 8); moita(19.6, 13.4, 0.4, 7); moita(21.2, 15.2, 0.5, 9); moita(17.2, 16.2, 0.36, 5);   // o parquinho
     moita(18.7, 10.9, 0.38, 6); moita(9.3, 10.9, 0.38, 6); moita(18.7, 1.6, 0.36, 5);          // os cantos da praça
     banco(20.3, 14.9, Math.PI / 2);               // o banco do parquinho, virado para a rua
     banco(-2.0, 8.14, 0, AC); bloco('banco', -2.7, -1.3, 7.9, 8.35);                            // o banco da frente da padaria, debaixo do toldo
-    poste(1.5, 4.25); poste(-4.3, 8.3); poste(23.8, 8.3); poste(11.95, 13.0); poste(11.95, -3.0);   // (na beirada da calçada, do lado das casas: no meio dela atrapalhariam o caminho)
+    poste(1.5, 4.13); poste(-4.3, 8.37); poste(23.8, 8.37); poste(11.88, 13.0); poste(11.88, -3.0);   // rente às paredes e às cercas: no meio da calçada atrapalhariam o caminho
     caixa(0.07, 0.95, 0.07, ferro, 7.15, 0.475, 4.28); malha(g, caixaSuave(0.3, 0.2, 0.2, 0.04), liso(0xc8372d, 0.5), 7.15, 1.02, 4.28);   // a caixa de correio
 
     // --- um carro, estacionado na nossa rua ---
@@ -1827,8 +1829,8 @@
       const mancha = malha(c, new T.PlaneGeometry(3.9, 2.0), new T.MeshBasicMaterial({ map: texSombra, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }), 0, 0.012, 0);
       mancha.rotation.x = -Math.PI / 2;
     }
-    carro(1.9, 5.98, 0, 0x2f6fb5);
-    bloco('carro', 0.2, 3.6, 5.2, 6.75);
+    carro(-4.0, 1.95, -Math.PI / 2, 0x2f6fb5);                                              // na entrada ao lado da nossa casa, de frente para a rua: fora do caminho do robô
+    laje(ret(-4.95, -3.05, 0.1, 4.06), calcada, 0.02);                                      // a entrada de carro, calçada
 
     // --- as fachadas (não dá para entrar) ---
     // Cada prédio de enfeite é uma caixa com a fachada pintada na face da frente. No desenho, as
@@ -2490,8 +2492,23 @@
       caixa(0.3, 0.08, 0.16, preto, 24.0, 0.46, zs + 0.14);
       bloco('rack', 23.2, 24.8, Z1, zs + 0.42);
       const xe = X2 - 0.06;                                                                                  // a estante de livros
-      caixa(0.3, 1.8, 1.3, madeiraClara, xe - 0.15, 0.9, 1.75);
-      { const sorte = aleatorio(6161); for (let k = 0; k < 4; k++) for (let i = 0; i < 9; i++) caixa(0.2, 0.26 + sorte() * 0.08, 0.1 + sorte() * 0.03, liso(CORES_DAS_CAIXAS[Math.floor(sorte() * CORES_DAS_CAIXAS.length)], 0.7), xe - 0.2, 0.2 + k * 0.42 + 0.14, 1.2 + i * 0.135); }
+      {
+        // Uma estante de verdade: o fundo, os dois lados e cinco tábuas, com os livros em pé em cima de
+        // quatro delas, um pouco para dentro da beirada. (Antes era um bloco maciço com os livros
+        // encostados na face da frente: as duas superfícies disputavam os mesmos pixels e a imagem piscava.)
+        const Z1 = 1.1, Z2 = 2.4, FUNDO = 0.3, TABUAS = [0.06, 0.48, 0.9, 1.32, 1.785], sorte = aleatorio(6161), livros = {};
+        caixa(0.02, 1.8, Z2 - Z1, madeiraClara, xe - 0.01, 0.9, (Z1 + Z2) / 2);
+        for (const z of [Z1 + 0.015, Z2 - 0.015]) caixa(FUNDO, 1.8, 0.03, madeira, xe - FUNDO / 2, 0.9, z);
+        for (const y of TABUAS) caixa(FUNDO - 0.01, 0.03, Z2 - Z1 - 0.06, madeira, xe - FUNDO / 2 - 0.005, y, (Z1 + Z2) / 2);
+        for (const y of TABUAS.slice(0, 4)) {
+          for (let z = Z1 + 0.05; z < Z2 - 0.12;) {             // uma fileira de livros de grossuras e alturas diferentes, com um vão de vez em quando
+            const grossura = 0.035 + sorte() * 0.04, alt = 0.24 + sorte() * 0.1, fundo = 0.17 + sorte() * 0.04, cor = CORES_DAS_CAIXAS[Math.floor(sorte() * CORES_DAS_CAIXAS.length)];
+            (livros[cor] = livros[cor] || []).push(new T.BoxGeometry(fundo, alt, grossura).translate(xe - 0.03 - fundo / 2, y + 0.015 + alt / 2, z + grossura / 2));
+            z += grossura + (sorte() < 0.12 ? 0.09 : 0.004);
+          }
+        }
+        for (const [cor, pecas] of Object.entries(livros)) malha(g, juntar(pecas), liso(Number(cor), 0.7), 0, 0, 0);   // os livros de cada cor, numa malha só
+      }
       bloco('estante', xe - 0.32, X2, 1.08, 2.42);
       malha(g, new T.PlaneGeometry(1.9, 1.3), M.tapete, 23.8, 0.012, 1.9).rotation.x = -Math.PI / 2;         // o tapete
       caixa(1.06, 1.26, 0.03, branco, 23.0, 1.5, Z2 - 0.075);                                                // a janela, por dentro

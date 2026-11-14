@@ -468,7 +468,7 @@ Os três desafios se passam na mesma cidade pequena, toda perto, para o robô n�
 - **Três casas em que se entra**, cada uma a de um desafio: a nossa casa (amarela, na rua do oeste: quarto, banheiro e cozinha), o flat da casa cor-de-rosa (na rua do sul: sala com cozinha, quarto e banheiro, todo de mármore, veludo e dourado) e a casa azul (na rua do leste: cozinha e sala). Só a porta da casa do desafio abre; as das outras duas ficam trancadas, e nelas não há ninguém.
 - **Três lojas, de portas abertas** nos três desafios: o mercadinho e a padaria (rua do oeste) e a farmácia (rua do leste). A escola é só fachada.
 - **Entre uma construção e a vizinha há sempre um jardim.** O robô anda no calçamento (a praça, a pista, as calçadas e o asfalto) e não na grama: cercas brancas e cercas vivas fecham os jardins.
-- Na rua do oeste há um **carro** estacionado, em frente à nossa casa. Ele só ocupa lugar.
+- Há um **carro** estacionado na entrada ao lado da nossa casa, fora do caminho do robô.
 - A calçada e a praça ficam um degrau acima do asfalto; o robô sobe e desce sozinho.
 - **A hora do dia e a chuva.** A cidade pode estar de dia, no fim da tarde ou de noite (com os postes e as janelas acesos), e de vez em quando chove: sozinha, uns 100 segundos a cada 7 minutos. Na página, a tecla `N` troca a hora e a `P` liga ou desliga a chuva; no endereço, `?hora=dia`, `?hora=tarde` ou `?hora=noite`, e `?chuva=1` (chove sempre) ou `?chuva=0` (nunca). Nada disso muda o jogo, mas muda a imagem que a iA recebe: de noite e com chuva enxerga-se pior. A hora e a chuva não vão para a gravação: o replay usa as da página em que é assistido.
 
