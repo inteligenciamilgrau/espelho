@@ -130,7 +130,7 @@ Ao vivo o jogo é lento: cada iA leva vários segundos para decidir um botão. P
 
 O relógio de cada jogador, no replay da quadra, mostra o tempo que ele levou ao vivo; a lista mostra quanto a partida durou de verdade.
 
-As gravações dos desafios guardam a versão das regras com que foram jogadas (`versao`). Uma gravação anterior à ordem dos alvos pelo centro da imagem é assistida com a ordem antiga (o objeto mais próximo primeiro), para o replay continuar igual à partida.
+As gravações dos desafios guardam a versão das regras com que foram jogadas (`versao`). Uma gravação anterior à ordem dos alvos pelo centro da imagem é assistida com a ordem antiga (o objeto mais próximo primeiro), e uma anterior às portas que fecham (versão 3) é assistida com as portas que ficavam abertas para sempre, para o replay continuar igual à partida.
 
 ## Galinha Pong: duas iAs
 
@@ -391,9 +391,9 @@ A sala tem uma parede inteira de espelho. Em primeira pessoa o robô não enxerg
 | `W` | Anda um passo para a frente |
 | `A` / `D` | Vira 45° para a esquerda / direita, sem sair do lugar |
 | `S` | Dá meia-volta e anda um passo |
-| `ESPACO` | Age no alvo: algo que está à frente, a até 1,5 m, e que aparece com a borda azul-clara. Segurando algo, de frente para o outro robô ou para a pessoa: entrega. De mão vazia, de frente para a pessoa: fala com ela. De frente para a porta, a geladeira ou o armário fechados (Desafios 3 a 6): abre. Com a mão embaixo: pega o objeto à frente; segurando algo, coloca na cesta (se ela estiver à frente; no Desafio 4, o ingrediente vai para a tigela e a massa, para o forno; no 5, o copo vazio enche no filtro; no 6, a água e o pó de café vão para a cafeteira) ou solta no chão. Com a mão no alto: tira o que está na cabeça ou, segurando algo, põe na cabeça |
+| `ESPACO` | Age no alvo: algo que está à frente, a até 1,5 m, e que aparece com a borda azul-clara. Segurando algo, de frente para o outro robô ou para a pessoa: entrega. De mão vazia, de frente para a pessoa: fala com ela. De frente para a porta, a geladeira ou o armário fechados (Desafios 3 a 6): abre; abertos, e sem mais nada ao alcance, fecha (com outras coisas ao alcance, escolhe-se pelo `TAB`). Com a mão embaixo: pega o objeto à frente; segurando algo, coloca na cesta (se ela estiver à frente; no Desafio 4, o ingrediente vai para a tigela e a massa, para o forno; no 5, o copo vazio enche no filtro; no 6, a água e o pó de café vão para a cafeteira) ou solta no chão. Com a mão no alto: tira o que está na cabeça ou, segurando algo, põe na cabeça |
 | `Q` / `E` | Só nos Desafios 4 a 6 (e na quadra): dão um passo de lado, para a esquerda / direita, sem virar; o robô continua olhando para o mesmo lugar. Nos Desafios 1 a 3 não fazem nada: lá o robô só anda para onde está olhando |
-| `TAB` | Troca o alvo do `ESPACO`, quando há mais de uma coisa ao alcance: o objeto seguinte, a geladeira ou o armário aberto (para fechar) e, com algo na mão, "nada" (para soltar no chão). Com um número no `texto`, vai direto para o alvo com esse número (ver "Os alvos à vista", abaixo). Sem escolha, o alvo é o de sempre: o primeiro da ordem acima e, entre objetos, o que está mais no centro da imagem. Andar, virar ou apertar o `ESPACO` desfaz a escolha |
+| `TAB` | Troca o alvo do `ESPACO`, quando há mais de uma coisa ao alcance: o objeto seguinte, a geladeira, o armário ou a porta abertos (para fechar) e, com algo na mão, "nada" (para soltar no chão). Com um número no `texto`, vai direto para o alvo com esse número (ver "Os alvos à vista", abaixo). Sem escolha, o alvo é o de sempre: o primeiro da ordem acima e, entre objetos, o que está mais no centro da imagem. Andar, virar ou apertar o `ESPACO` desfaz a escolha |
 | `L` | Levanta ou abaixa a mão, com ou sem objeto nela (na quadra, é a mão do escudo). Nos Desafios 4 a 6, troca o item que está na mão pelo seguinte do inventário |
 | `T` | Escreve o `texto` (até 10 letras) no peito do robô |
 | `F` | Devolve a imagem do que o robô está vendo |
@@ -436,7 +436,7 @@ O robô começa como no Desafio 1: a 1 metro do espelho, de costas para ele. A p
 O caminho até a vitória:
 
 1. Chegar perto da pessoa e apertar `ESPACO`. Aparece um balão ao lado do rosto dela: "Estou com sede". Ela não pede nada; a iA tem de concluir sozinha o que fazer.
-2. Ir até a porta e apertar `ESPACO` para abri-la. Ela fica aberta.
+2. Ir até a porta e apertar `ESPACO` para abri-la. Ela fica aberta até alguém fechá-la: de frente para a porta aberta, o `ESPACO` fecha (dos dois lados, e nunca com o robô no vão dela).
 3. Do outro lado há uma cozinha. Ir até a geladeira e apertar `ESPACO` para abri-la.
 4. Apertar `ESPACO` de novo para pegar a garrafa de água que está lá dentro.
 5. Voltar ao quarto e apertar `ESPACO` de frente para a pessoa. Ela fica com a garrafa, o balão passa a dizer "Obrigado!" e o jogo é vencido.
@@ -465,7 +465,7 @@ Os três desafios se passam na mesma cidade pequena, toda perto, para o robô n�
 
 - **No meio**, uma praça redonda com o **ponto de encontro**: uma coluna com um cubo de quatro placas verdes (uma virada para cada rua), bancos em volta e o nome escrito no chão. Em volta da praça, a pista da rotatória; em volta da pista, a calçada.
 - **Quatro ruas** saem da rotatória, uma para cada lado. Cada uma acaba num cavalete listrado: dali em diante a estrada segue pelo campo, mas o robô não passa.
-- **Três casas em que se entra**, cada uma a de um desafio: a nossa casa (amarela, na rua do oeste: quarto, banheiro e cozinha), o flat da casa cor-de-rosa (na rua do sul: sala com cozinha, quarto e banheiro, todo de mármore, veludo e dourado) e a casa azul (na rua do leste: cozinha e sala). Só a porta da casa do desafio abre; as das outras duas ficam trancadas, e nelas não há ninguém.
+- **Três casas em que se entra**, cada uma a de um desafio: a nossa casa (amarela, na rua do oeste: quarto, banheiro e cozinha), o flat da casa cor-de-rosa (na rua do sul: sala com cozinha, quarto e banheiro, todo de mármore, veludo e dourado) e a casa azul (na rua do leste: cozinha e sala). Só a porta da casa do desafio abre (e fecha de novo: de frente para ela aberta, por dentro ou por fora, o `ESPACO` fecha; fechada, ninguém passa); as das outras duas ficam trancadas, e nelas não há ninguém.
 - **Três lojas, de portas abertas** nos três desafios: o mercadinho e a padaria (rua do oeste) e a farmácia (rua do leste). A escola é só fachada.
 - **Entre uma construção e a vizinha há sempre um jardim.** O robô anda no calçamento (a praça, a pista, as calçadas e o asfalto) e não na grama: cercas brancas e cercas vivas fecham os jardins.
 - Há um **carro** estacionado na entrada ao lado da nossa casa, fora do caminho do robô.

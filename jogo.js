@@ -107,7 +107,7 @@
       espelhoDisfarcado: false,
       salas: 2,                                 // o quarto e a cozinha, que existem as duas desde o começo
       // A porta entre as salas não depende de completar nada: é o jogador que a abre
-      // (ESPACO de frente para ela), e ela fica aberta, com passagem livre nos dois sentidos.
+      // (ESPACO de frente para ela), com passagem livre nos dois sentidos; e é ele que a fecha, do mesmo jeito.
       portaManual: true,
       contador: false,                          // sem contador: nada na tela sugere que exista algo a cumprir
       falas: { pedido: 'Estou com sede', agradecimento: 'Obrigado!' },
@@ -122,7 +122,7 @@
       salas: 5,
       vila: true,                               // o mundo é a vila (ver "a vila"), e não uma fileira de salas
       semEspelho: true,                         // na vila não há parede-espelho
-      portaManual: true,                        // as portas são abertas pelo jogador e ficam abertas
+      portaManual: true,                        // as portas são abertas e fechadas pelo jogador
       contador: false,
       inventario: 4,                            // quantos itens o robô carrega (ver "o inventário")
       passoDeLado: true,                        // os botões Q e E andam de lado, sem virar (como no Galinha Pong)
@@ -1053,9 +1053,9 @@
       tirarDoInventario(o);
       return resposta('pegar', true, `entregou: ${o.nome} à pessoa — venceu`);
     }
-    if (alvo && portasDaVila.includes(alvo)) {
-      alvo.aberta = true;
-      return resposta('pegar', true, 'abriu a porta');
+    if (alvo && portasDaVila.includes(alvo)) {  // a porta da rua: abre e fecha (fechada, ninguém passa)
+      alvo.aberta = !alvo.aberta;
+      return resposta('pegar', true, alvo.aberta ? 'abriu a porta' : 'fechou a porta');
     }
     if (alvo && abrem.includes(alvo)) return resposta('pegar', true, `${abrirOuFechar(alvo) ? 'abriu' : 'fechou'}: ${alvo.nome}`);
     if (alvo && alvo === v.tigela) {            // o ingrediente da mão vai para a tigela
@@ -3330,7 +3330,7 @@
   //   mão no alto:          vazia, o objeto que está na cabeça; cheia, "em nada"
   //   mão embaixo, cheia:   a cesta (na vila: a tigela, para um ingrediente; o forno, para a massa); depois, "em nada"
   //   mão embaixo, vazia:   os objetos ao alcance (do chão ou de um móvel aberto), do mais central na imagem para o mais de lado
-  //   por último:           um móvel aberto ao alcance, para fechar
+  //   por último:           um móvel ou uma porta abertos, ao alcance, para fechar
   // A lista tem no máximo 9 alvos, e todos aparecem na imagem com o seu número (ver "os alvos à vista").
   // Na vila o robô carrega mais de um item: mesmo com a mão cheia os objetos ao alcance entram
   // na lista (antes do "em nada"), e só vale o que está no mesmo lugar que ele (ver "a vila").
@@ -3342,7 +3342,10 @@
     const maisPertoPrimeiro = coisas => coisas.filter(perto).sort(ordemAntiga ? (a, b) => alcance(a) - alcance(b) : (a, b) => centralidade(b) - centralidade(a));
     const soltosNaLista = [];
     const gente = REGRAS.vila ? vila.pessoa : s.pessoa;
-    const portas = REGRAS.vila ? portasDaVila.filter(p => p.folha && !p.trancada) : REGRAS.portaManual && s.porta ? [s.porta] : [];   // (a porta trancada não é alvo: é a da casa de outro desafio)
+    // As portas que o jogador abre e fecha: na vila, as das casas (a trancada não é alvo: é a da casa
+    // de outro desafio); nas salas, a desta sala e a da sala anterior, que é a mesma porta vista do outro lado.
+    const portas = REGRAS.vila ? portasDaVila.filter(p => p.folha && !p.trancada)
+      : REGRAS.portaManual ? [s.porta, salas[aqui - 1] && salas[aqui - 1].porta].filter(Boolean) : [];
     if (!REGRAS.vila && o && s.outroRobo && !s.outroRobo.recebeu && perto(s.outroRobo)) lista.push(s.outroRobo);
     if (gente && !gente.recebeu && (o || !estado.maoLevantada) && perto(gente)) lista.push(gente);
     lista.push(...maisPertoPrimeiro([...portas, ...abrem].filter(a => !a.aberta)));
@@ -3369,7 +3372,8 @@
       if (REGRAS.vila && vila.forno.dentro && perto(vila.forno)) lista.push(vila.forno);
       lista.push(...soltos());
     }
-    lista.push(...maisPertoPrimeiro(abrem.filter(a => a.aberta)));
+    // Por último, o que está aberto e dá para fechar: os móveis e as portas (menos a porta em cujo vão o robô está).
+    lista.push(...maisPertoPrimeiro([...abrem, ...(portasNaoFecham ? [] : portas.filter(p => !noVaoDaPorta(p)))].filter(a => a.aberta)));
     // São no máximo MAXIMO_DE_ALVOS (um algarismo para cada um: ver marcarAlvos). Num lugar
     // cheio de objetos, ficam os que estão mais no centro da vista: saem os soltos de mais fora.
     while (lista.length > MAXIMO_DE_ALVOS && soltosNaLista.length) lista.splice(lista.indexOf(soltosNaLista.pop()), 1);
@@ -3380,6 +3384,12 @@
   // Nas gravações feitas antes de existir a ordem pelo centro da imagem, entre coisas do mesmo
   // tipo valia a mais próxima do robô. Assistindo a uma delas, vale a ordem antiga (ver o fim do arquivo).
   let ordemAntiga = false;
+  // As portas que o jogador abre também fecham: aberta e ao alcance, a porta é um alvo (o último da
+  // lista), e o ESPACO a fecha. Só não fecha com o robô no vão dela. Nas gravações feitas antes
+  // disso a porta ficava aberta para sempre; assistindo a uma delas, vale a regra antiga.
+  let portasNaoFecham = false;
+  const noVaoDaPorta = p => REGRAS.vila ? noVaoDe(p, estado.x, estado.z)
+    : Math.abs(estado.x - p.x) <= MARGEM_PAREDE + 1e-9 && noVao(estado.z);
   // A altura do ponto para onde se olha em quem não é um objeto de pegar (móvel, porta, gente):
   // é onde fica o número dele na imagem. Escolhida para não tapar o que importa ver (o que há
   // dentro do móvel, o vidro do forno, o texto no peito do outro robô).
@@ -3459,7 +3469,7 @@
     const o = estado.segurando;
     if (!a) return 'soltar no chão';
     if (a === vila.pessoa) return o ? `dar ${o.nome} à pessoa` : 'falar com a pessoa';
-    if (portasDaVila.includes(a)) return 'abrir a porta';
+    if (portasDaVila.includes(a)) return a.aberta ? 'fechar a porta' : 'abrir a porta';
     if (abrem.includes(a)) return `${a.aberta ? 'fechar' : 'abrir'}: ${a.nome}`;
     if (a === vila.tigela) return `pôr ${o.nome} na tigela`;
     if (a === vila.forno) return vila.forno.dentro ? 'tirar do forno' : 'pôr a massa no forno';
@@ -3593,9 +3603,13 @@
       entregar(o, alvo);
       return resposta('pegar', true, `entregou: ${o.nome} à pessoa — venceu`);
     }
-    if (alvo && alvo === s.porta) {
-      abrirPorta(s);
-      return resposta('pegar', true, 'abriu a porta');
+    // A porta que o jogador abre (desafio 3): abre e fecha, de um lado e do outro (do outro lado, ela é a porta da sala anterior).
+    const daPorta = REGRAS.portaManual && alvo ? [s, salas[estado.sala - 1]].find(q => q && q.porta === alvo) : null;
+    if (daPorta) {
+      if (!alvo.aberta) { abrirPorta(daPorta); return resposta('pegar', true, 'abriu a porta'); }
+      alvo.aberta = false;
+      portaAberta = 0;                          // fechada, o robô fica na sala em que está (ver livre)
+      return resposta('pegar', true, 'fechou a porta');
     }
     if (alvo && alvo === s.geladeira) return resposta('pegar', true, abrirOuFechar(alvo) ? 'abriu a geladeira' : 'fechou a geladeira');
     if (estado.maoLevantada) return usarACabeca(alvo);   // mão no alto: tira da cabeça ou põe na cabeça
@@ -3927,7 +3941,7 @@
   const quemJoga = { quem: 0, nome: '', modelo: '' }, contagem = { botoes: 0, imagens: 0 };
   // A versão das regras que mudam o que um botão faz, para a gravação antiga continuar igual
   // quando é assistida. 2: entre alvos do mesmo tipo, vale o mais central na imagem (ver ordemAntiga).
-  const VERSAO_DAS_REGRAS = 2;
+  const VERSAO_DAS_REGRAS = 3;                  // (3: as portas que o jogador abre também fecham: ver portasNaoFecham)
   const gravando = !ASSISTINDO && GRAVACAO
     ? GRAVACAO.gravar(DESAFIO, () => ({ versao: VERSAO_DAS_REGRAS, nome: quemJoga.nome, modelo: quemJoga.modelo, botoes: contagem.botoes, imagens: contagem.imagens, ganhou: estado.ganhou,
       perdeu: estado.perdeu || undefined, assar: REGRAS.vila ? [ASSAR.pronto, ASSAR.queima] : undefined }))
@@ -4275,6 +4289,7 @@
       const nome = semControle(gravada.resumo.nome, 12), modelo = semControle(gravada.resumo.modelo, 24);
       const assar = Array.isArray(gravada.resumo.assar) ? gravada.resumo.assar.map(Number) : [];
       if (assar[0] > 0 && assar[1] > assar[0]) { ASSAR.pronto = assar[0]; ASSAR.queima = assar[1]; }       // o tempo de forno que valia naquela partida
+      if (!(Number(gravada.resumo.versao) >= 3)) portasNaoFecham = true;                                                // ...as portas, que não fechavam...
       if (!(Number(gravada.resumo.versao) >= 2)) { ordemAntiga = true; resposta('gravação', true, 'regras antigas'); }   // ...e a ordem dos alvos
       toca = GRAVACAO.tocador(gravada, {
         titulo: `Desafio ${DESAFIO}` + (nome ? ` · ${nome}` : '') + (modelo ? ` (${modelo})` : ''),
