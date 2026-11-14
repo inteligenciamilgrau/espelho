@@ -82,7 +82,7 @@ $ESPERA_RESPOSTA = 45     # segundos que a pagina tem para terminar um comando (
 $ESPERA_SONDAGEM = 20     # segundos que a pagina fica pendurada esperando um comando
 # As gravacoes das partidas (ver gravacao.js e TratarPartidas): ficam fora da pasta do projeto.
 $PASTA_PARTIDAS = if ($Gravacoes) { $Gravacoes } else { Join-Path $env:LOCALAPPDATA 'espelho-jogo\partidas' }
-$FORMA_DO_ID = '^[0-9]{8}-[0-9]{6}-[a-z0-9]{6}$'     # o nome de uma gravacao: data, hora e seis letras ao acaso
+$FORMA_DO_ID = '^[0-9]{8}-[0-9]{6}-[a-z0-9]{6}\z'    # o nome de uma gravacao: data, hora e seis letras ao acaso (\z e nao $: o $ aceitaria uma quebra de linha no fim)
 $LIMITE_PARTIDA = 1MB     # maior gravacao aceita
 $LIMITE_PARTIDAS = 300    # quantas gravacoes ficam guardadas: passando disso, as mais antigas saem
 
