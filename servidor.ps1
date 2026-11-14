@@ -43,6 +43,12 @@ $pasta = $PSScriptRoot
 $config = [IO.File]::ReadAllText((Join-Path $pasta 'ferramentas.json'), $utf8) | ConvertFrom-Json
 $ferramentasJson = ConvertTo-Json -InputObject @($config.ferramentas) -Depth 20 -Compress
 
+# A marca da lista de ferramentas: o comeco do SHA-256 dela. Vai no fim do numero de cada sessao
+# MCP, e e por ela que se reconhece a sessao aberta com outra lista: o programa da iA guarda a
+# lista que recebeu ao se ligar e, se o servidor reinicia com outro ferramentas.json, continuaria
+# mostrando a antiga (um botao novo nao apareceria para a iA). Ver TratarMcp.
+$MARCA = -join ([Security.Cryptography.SHA256]::Create().ComputeHash($utf8.GetBytes($ferramentasJson))[0..3] | ForEach-Object { $_.ToString('x2') })
+
 $VERSOES = '2025-06-18', '2025-03-26', '2024-11-05'      # versoes do protocolo MCP aceitas
 $BOTOES = @(($config.ferramentas | Where-Object { $_.name -eq 'apertar_botao' }).inputSchema.properties.botao.enum)   # os botoes que existem
 $DESAFIOS = @($config.desafios.PSObject.Properties.Name)       # os desafios que existem: '1', '2'...
@@ -402,11 +408,23 @@ function TratarMcp($ctx, [string]$sufixo) {
   if (-not $temId -or -not $msg.method) { [void](Enviar $ctx 202 $null $null); return }      # notificacao ou resposta: nada a devolver
   $id = $msg.id
 
+  # Uma sessao que este servidor abriu com outra lista de ferramentas (ou antes de as sessoes
+  # terem marca): o programa da iA ainda esta com a lista antiga. A resposta e 404, que pelo
+  # protocolo manda o programa se ligar de novo (initialize) e, com isso, ler a lista atual.
+  $antiga = $false
+  if ($sessao -cmatch '^[0-9a-f]{32}$') { $antiga = $true }
+  elseif ($sessao -cmatch '^[0-9a-f]{32}-([0-9a-f]{8})$') { $antiga = $Matches[1] -cne $MARCA }
+  if ($antiga -and [string]$msg.method -cne 'initialize') {
+    Registrar 'sessao antiga recusada: a lista de ferramentas mudou, e o programa da iA tem de se ligar de novo'
+    [void](EnviarJson $ctx 404 (Erro $id -32001 ([string]$config.respostaSessaoAntiga)))
+    return
+  }
+
   switch -CaseSensitive ([string]$msg.method) {
     'initialize' {
       $v = [string]$msg.params.protocolVersion
       if ($VERSOES -cnotcontains $v) { $v = $VERSOES[0] }
-      if (-not $sessao) { $sessao = [guid]::NewGuid().ToString('N') }      # a sessao que identifica essa iA daqui em diante
+      if (-not $sessao -or $antiga) { $sessao = [guid]::NewGuid().ToString('N') + '-' + $MARCA }      # a sessao que identifica essa iA daqui em diante (com a marca da lista de ferramentas)
       $ctx.Response.Headers['Mcp-Session-Id'] = $sessao
       Registrar "iA conectou (MCP $v)"
       [void](EnviarJson $ctx 200 (Resultado $id ('{"protocolVersion":"' + $v + '","capabilities":{"tools":{}},"serverInfo":{"name":"jogo","version":"1.0.0"}}')))

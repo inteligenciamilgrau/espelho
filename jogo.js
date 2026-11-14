@@ -10,8 +10,8 @@
  * para quem pesquisa e para os testes — nunca para quem joga. O painel não tem tecla: só
  * aparece se a página for aberta com ?depurar no endereço.
  *
- * São vários desafios (ver DESAFIOS). Os três primeiros começam no mesmo quarto; o quarto é
- * uma vila pequena, com casa, rua e mercadinho (ver "a vila"). No desafio 1 o jogo tem
+ * São vários desafios (ver DESAFIOS). Os três primeiros começam no mesmo quarto; o 4, o 5 e o 6
+ * se passam numa cidade pequena, com casas, ruas, praça e lojas (ver "a vila"). No desafio 1 o jogo tem
  * TOTAL_SALAS salas (hoje, uma só): pôr todos os objetos de uma sala na cesta abre a porta
  * para a seguinte, e completar a última é a vitória. No desafio 3 a sala ao lado é uma
  * cozinha, e a porta é o próprio jogador que abre.
@@ -36,7 +36,7 @@
   // números desta lista: assim ?desafio=constructor (ou outro nome que todo objeto herda) não
   // passa por desafio.
   const ENDERECO = new URLSearchParams(location.search);
-  const NUMEROS = ['1', '2', '3', '4'];
+  const NUMEROS = ['1', '2', '3', '4', '5', '6'];
   const existeDesafio = n => NUMEROS.includes(String(n));
   const DESAFIO = existeDesafio(ENDERECO.get('desafio')) ? Number(ENDERECO.get('desafio')) : 1;
   const TOTAL_SALAS = 1;                       // quantas salas tem o desafio 1; completar a última é a vitória
@@ -44,7 +44,7 @@
   // O tamanho de uma sala: largura (x), profundidade (z), altura (y), em metros. Nos desafios 3
   // e 4 as salas são pequenas, para o robô não gastar o jogo atravessando salões: no 3, o
   // quarto e a cozinha têm 5 m x 5 m; no 4 (a vila), cada cômodo da casa tem 4 m x 4 m.
-  const SALA = DESAFIO === 3 ? { L: 5, P: 5, A: 3 } : DESAFIO === 4 ? { L: 4, P: 4, A: 2.6 } : { L: 8, P: 7, A: 3 };
+  const SALA = DESAFIO === 3 ? { L: 5, P: 5, A: 3 } : DESAFIO >= 4 ? { L: 4, P: 4, A: 2.6 } : { L: 8, P: 7, A: 3 };
   const PEQUENA = SALA.L < 8;
   const Z_ESPELHO = -SALA.P / 2;                // a parede-espelho inteira fica nesse z (-3.5 na sala grande)
   const Z_PORTA = PEQUENA ? 1.0 : 1.7, LARGURA_PORTA = 1.4, ALTURA_PORTA = 2.1;
@@ -61,7 +61,8 @@
   const VERMELHO = 0xff3b30, VERDE = 0x34e36a;  // luz em cima da porta: trancada / aberta
 
   // ---------- desafios ----------
-  // Cada desafio é um jogo diferente. Os três primeiros começam na mesma sala; o quarto, numa vila.
+  // Cada desafio é um jogo diferente. Os três primeiros começam na mesma sala; o 4, o 5 e o 6, numa
+  // cidade pequena (a mesma nos três), cada um numa casa.
   //   1: guardar na cesta os objetos do chão e mais o que aparece na cabeça do próprio robô.
   //   2: entregar um presente a outro robô. O jogador começa de frente para o espelho e vê
   //      dois robôs: o mais próximo é o próprio reflexo; o outro está atrás dele, no fundo.
@@ -72,6 +73,13 @@
   //      outro na geladeira e o terceiro tem de ser buscado no mercadinho, do outro lado da
   //      rua. Com os três na tigela a massa fica pronta; a massa vai ao forno e vira bolo;
   //      levar o bolo à pessoa é a vitória.
+  //   5: a mesma cidade, vista de outra casa. O robô começa no flat da casa cor-de-rosa, onde
+  //      mora uma mulher, e ela diz "Estou com dor de cabeça". O remédio está na farmácia, entre
+  //      outros dois, e ela precisa também de um copo de água, que se enche no filtro da cozinha:
+  //      levar a ela o remédio certo e a água é a vitória.
+  //   6: a mesma cidade, da casa azul. O morador diz "Quero pão de queijo com café": o pão de
+  //      queijo está na padaria, e o café se faz em casa, na cafeteira, com a água da geladeira e
+  //      o pó de café do mercadinho. Levar a ele os dois é a vitória.
   // `mensagem` é o que o jogador humano lê na tela; o que a iA recebe está em ferramentas.json.
   const DESAFIOS = {
     1: {
@@ -119,6 +127,43 @@
       inventario: 4,                            // quantos itens o robô carrega (ver "o inventário")
       passoDeLado: true,                        // os botões Q e E andam de lado, sem virar (como no Galinha Pong)
       falas: { pedido: 'Estou com fome', agradecimento: 'Obrigado!', recusa: 'Quero bolo!', queimado: 'Queimou!' },
+    },
+    5: {
+      // A mesma cidade do desafio 4, vista de outra casa: o robô começa no flat da casa cor-de-rosa,
+      // na rua do sul, onde mora uma mulher. Ela diz "Estou com dor de cabeça": o remédio está na
+      // farmácia, na rua do leste, no meio de outros dois, e a água se pega em casa: um copo, cheio
+      // no filtro da cozinha. Levar a ela o remédio certo e o copo de água é a vitória.
+      // Como no 4, a iA recebe a explicação dos botões, e não o que fazer.
+      mensagem: 'Explore a vila e decida o que fazer.',
+      inicio: { x: 21.5, z: -4, rumo: 4, sala: 7 },   // no quarto do flat, de frente para a mulher
+      bracoCaido: false,
+      espelhoDisfarcado: false,
+      salas: 9,
+      vila: true,
+      semEspelho: true,
+      portaManual: true,
+      contador: false,
+      inventario: 4,
+      passoDeLado: true,
+      // (falta: o que ela diz quando já recebeu uma das duas coisas e falta a outra — o remédio ou a água)
+      falas: { pedido: 'Estou com dor de cabeça', agradecimento: 'Obrigada!', recusa: 'Esse não serve!', queimado: 'Esse não serve!', falta: ['Falta o remédio', 'Falta a água para tomar'] },
+    },
+    6: {
+      // A mesma cidade, da casa azul, na rua do leste. O morador diz "Quero pão de queijo com
+      // café". O pão de queijo está na padaria; o café é feito em casa, na cafeteira, com a água
+      // da geladeira e o pó de café do mercadinho. Levar a ele o pão de queijo e o café é a vitória.
+      mensagem: 'Explore a vila e decida o que fazer.',
+      inicio: { x: 24, z: 1, rumo: 4, sala: 11 },   // na sala da casa azul, de frente para o morador
+      bracoCaido: false,
+      espelhoDisfarcado: false,
+      salas: 12,
+      vila: true,
+      semEspelho: true,
+      portaManual: true,
+      contador: false,
+      inventario: 4,
+      passoDeLado: true,
+      falas: { pedido: 'Quero pão de queijo com café', agradecimento: 'Obrigado!', recusa: 'Não é isso!', queimado: 'Não é isso!', falta: ['Falta o pão de queijo', 'Falta o café'] },
     },
   };
   const REGRAS = Object.assign({ portaManual: false, contador: true, falas: { pedido: '', agradecimento: '' } }, DESAFIOS[DESAFIO]);
@@ -880,50 +925,100 @@
     fazSombra(m);
   }
 
-  // ---------- a vila (desafio 4) ----------
-  // Uma vila pequena, para o robô não gastar o jogo andando: a casa (quarto, banheiro e
-  // cozinha), a rua na frente dela e, do outro lado da rua, o mercadinho. As outras
-  // construções (padaria, farmácia, a casa vizinha) são só fachada.
+  // ---------- a vila (desafios 4, 5 e 6) ----------
+  // Uma cidade pequena, para o robô não gastar o jogo andando. No meio, uma praça redonda com
+  // o ponto de encontro e, em volta dela, a rotatória; da rotatória saem quatro ruas. Há três
+  // casas em que se entra — a nossa (quarto, banheiro e cozinha), o flat da casa cor-de-rosa
+  // (sala com cozinha, quarto e banheiro) e a casa azul (cozinha e sala) — e três lojas, de
+  // portas abertas: o mercadinho, a farmácia e a padaria. A escola é só fachada.
   //
-  //     z          PADARIA        MERCADINHO        FARMÁCIA
-  //   12,5      ............. +---------------+ .............
-  //                           |       5       |
-  //    8,5   -----------------+-----     -----+--------------
-  //             a rua (4), com a faixa de pedestres em x = 6
-  //    4     --+--------+----------+-----===-----+-----------
-  //            |   2    |    1     |      3      |  casa vizinha
-  //    0       +--------+----------+-------------+ ..........
-  //          -2,6       0          4             8           x
-  //   1 quarto (onde o robô e a pessoa começam), 2 banheiro, 3 cozinha, 4 rua, 5 mercadinho.
-  //   Os vãos entre os cômodos e o do mercadinho não têm porta; a porta da rua (===) é o
-  //   jogador que abre.
+  //    z                               rua do norte
+  //   18                           ESCOLA |  | parquinho
+  //   12,5   +----------+---------+       |  |      +---------+
+  //          |12 padaria|5 mercad.|       |  |      |9 farmác.|
+  //    8,5   +--     ---+--     --+--  .-'    '-.  -+--     --+----
+  //            rua do oeste (4)      (  a praça  )   rua do leste (4)
+  //    4     -+-----+------+--===--+  '-.    .-'  -+---===---+--------+
+  //           |  2  |  1   |   3   |     |  |      |10 cozinha|11 sala |   (a casa azul)
+  //    0      +-----+------+-------+     |  |      +----------+--------+
+  //   -1                         quintal |  = 6 sala | 7 quarto | 8 banh. |   (o flat)
+  //   -5                                 |  +--------+----------+---------+
+  //                                    rua do sul
+  //          -2,6   0      4       8     14  16,25  19,6  22,4   25,2  26,65   x
+  //   1 quarto, 2 banheiro e 3 cozinha da nossa casa; 4 a rua (as quatro ruas, a rotatória e a
+  //   praça: ver CIDADE); 5 mercadinho; 6, 7 e 8 o flat; 9 farmácia; 10 e 11 a casa azul; 12
+  //   padaria. Os vãos entre os cômodos e os das lojas não têm porta; a porta da rua de cada
+  //   casa (= e ===) é o jogador que abre — só a da casa do desafio; as das outras ficam trancadas.
   //
-  // Aqui o mundo não é uma fileira de salas iguais. Cada lugar é um retângulo (areas); o robô
-  // pode estar em qualquer ponto a mais de MARGEM_DA_VILA das paredes, ou dentro de um vão
-  // aberto (livreNaVila); e o ESPACO só age no que está ao alcance DENTRO do lugar em que o
-  // robô está (ver candidatos): sem isso ele pegaria coisas através das paredes.
+  // Aqui o mundo não é uma fileira de salas iguais. Cada lugar é um retângulo (a rua, a soma de
+  // vários pedaços: ver areas); o robô pode estar em qualquer ponto a mais de MARGEM_DA_VILA da
+  // beirada, ou dentro de um vão aberto (livreNaVila); e o ESPACO só age no que está ao alcance
+  // DENTRO do lugar em que o robô está (ver candidatos): sem isso ele pegaria coisas através
+  // das paredes.
   //
-  // O que há para fazer: a pessoa diz "Estou com fome"; a receita, na porta da geladeira,
-  // mostra os três ingredientes (farinha, ovos, chocolate) e o caminho (tigela, forno, bolo).
-  // A farinha está no armário, os ovos na geladeira e o chocolate, no mercadinho. Com os três
-  // na tigela a massa fica pronta; a massa, levada ao forno, vira o bolo; o bolo vai para a pessoa.
+  // O que há para fazer no desafio 4: o robô começa no quarto da nossa casa, e a pessoa diz
+  // "Estou com fome"; a receita, na porta da geladeira, mostra os três ingredientes (farinha,
+  // ovos, chocolate) e o caminho (tigela, forno, bolo). A farinha está no armário, os ovos na
+  // geladeira e o chocolate, no mercadinho. Com os três na tigela a massa fica pronta; a massa,
+  // levada ao forno, vira o bolo; o bolo vai para a pessoa.
+  // No desafio 5: o robô começa no quarto do flat, e a mulher diz "Estou com dor de cabeça". Na
+  // estante da farmácia há três remédios (xarope, analgésico, antiácido), cada um com o nome e
+  // para que serve: ela quer o analgésico — e um copo de água para tomar, que se enche no
+  // filtro da cozinha do flat. A vitória é quando ela recebe os dois, em qualquer ordem.
+  // No desafio 6: o robô começa na sala da casa azul, e o morador diz "Quero pão de queijo com
+  // café". O pão de queijo está na padaria, entre outros dois pães; o café se faz na cafeteira
+  // da cozinha, com a água da geladeira e o pó de café do mercadinho. A vitória é quando ele
+  // recebe o pão de queijo e o café.
   const MARGEM_DA_VILA = 0.5;
-  const areas = {};                             // os lugares, pelo número: { n, nome, x1, x2, z1, z2, luz: onde fica a lâmpada quando o robô está ali }
+  // A cidade, do lado de fora: a praça redonda (o meio dela é x, z), a pista da rotatória em volta,
+  // a calçada em volta da pista e as quatro ruas que saem dali, uma para cada lado. As medidas
+  // são raios a partir do meio da praça; meiaPista e meiaRua, a metade da largura do asfalto e a
+  // da rua inteira (com as calçadas); oeste, leste, sul e norte, até onde vai cada rua; alto, a
+  // altura da calçada (e da praça) acima do asfalto. A rua do oeste é a da casa e do mercadinho.
+  const CIDADE = { x: 14, z: 6.25, praca: 2.4, pista: 4.8, calcada: 5.7, meiaPista: 1.15, meiaRua: 2.25, oeste: -5, leste: 24.5, sul: -5.5, norte: 18, alto: 0.035 };
+  // Os lugares, pelo número: { n, nome, partes, x1, x2, z1, z2, luz }. Cada cômodo é um retângulo;
+  // a rua é a soma de vários pedaços (`partes`): dois retângulos, que são as ruas em cruz, e o
+  // disco da rotatória ({ cx, cz, r }). x1..z2 é o retângulo que contém o lugar inteiro. `luz`:
+  // onde fica a lâmpada quando o robô está ali (ou uma função que o diz: ver luzDaqui).
+  const areas = {};
   // Os vãos: { nome, x, z (o meio do vão), eixo ('x': a parede fica em x = p.x; 'z': em z = p.z),
   // salas (os dois lugares que ele liga), aberta, vis, folha (a porta, se houver) e contorno }.
   const portasDaVila = [];
-  const vila = { pessoa: null, tigela: null, forno: null, massa: null, bolo: null };
+  // (pedidos: o que a pessoa quer — entregar tudo a ela é a vitória; filtro, copo e copoCheio: a água do desafio 5; cafeteira e cafe: o café do 6)
+  const vila = { clima: null, pessoa: null, tigela: null, forno: null, massa: null, bolo: null, encontro: null, pedidos: [], filtro: null, copo: null, copoCheio: null, cafeteira: null, cafe: null };
+  // O ponto cabe nesse pedaço, a pelo menos `m` da beirada dele?
+  const cabeNaParte = (p, x, z, m) => p.r ? Math.hypot(x - p.cx, z - p.cz) <= p.r - m : x >= p.x1 + m && x <= p.x2 - m && z >= p.z1 + m && z <= p.z2 - m;
+  const cabeNoLugar = (a, x, z, m) => a.partes.some(p => cabeNaParte(p, x, z, m));
   const areaEm = (x, z) => {
-    for (const a of Object.values(areas)) if (x >= a.x1 && x <= a.x2 && z >= a.z1 && z <= a.z2) return a.n;
+    for (const a of Object.values(areas)) if (cabeNoLugar(a, x, z, 0)) return a.n;
     return estado.sala;
   };
+  // O ponto do lugar mais perto de (x, z) que fica a pelo menos `folga` da beirada (o próprio ponto, se já estiver dentro).
+  function pontoNoLugar(a, x, z, folga) {
+    let melhor = null;
+    for (const p of a.partes) {
+      let px, pz;
+      if (p.r) { const d = Math.hypot(x - p.cx, z - p.cz), k = Math.min(1, (p.r - folga) / (d || 1)); px = p.cx + (x - p.cx) * k; pz = p.cz + (z - p.cz) * k; }
+      else { px = Math.max(p.x1 + folga, Math.min(p.x2 - folga, x)); pz = Math.max(p.z1 + folga, Math.min(p.z2 - folga, z)); }
+      const d = Math.hypot(px - x, pz - z);
+      if (!melhor || d < melhor.d - 1e-9) melhor = { x: px, z: pz, d };
+    }
+    return melhor;
+  }
+  // A altura do chão nesse ponto: a calçada e a praça ficam um degrau acima do asfalto (e do chão das casas).
+  function alturaDoChao(x, z) {
+    if (!REGRAS.vila || !areas[4] || areaEm(x, z) !== 4) return 0;
+    const dx = Math.abs(x - CIDADE.x), dz = Math.abs(z - CIDADE.z), r = Math.hypot(dx, dz);
+    if (r < CIDADE.praca) return CIDADE.alto;
+    return r < CIDADE.pista || dx < CIDADE.meiaPista || dz < CIDADE.meiaPista ? 0 : CIDADE.alto;
+  }
   // O ponto está na faixa em que o robô atravessa a parede por esse vão?
   const noVaoDe = (p, x, z) => p.eixo === 'x'
     ? Math.abs(x - p.x) <= MARGEM_DA_VILA + 1e-9 && Math.abs(z - p.z) <= 0.5 + 1e-9
     : Math.abs(z - p.z) <= MARGEM_DA_VILA + 1e-9 && Math.abs(x - p.x) <= 0.5 + 1e-9;
   function livreNaVila(x, z) {
     const m = MARGEM_DA_VILA - 1e-9;
-    for (const a of Object.values(areas)) if (x >= a.x1 + m && x <= a.x2 - m && z >= a.z1 + m && z <= a.z2 - m) return true;
+    for (const a of Object.values(areas)) if (cabeNoLugar(a, x, z, m)) return true;
     return portasDaVila.some(p => p.aberta && noVaoDe(p, x, z));
   }
   // O ESPACO, na vila: age no alvo (ver candidatos). O robô carrega até quatro itens (ver "o
@@ -932,13 +1027,26 @@
     const v = vila, alvo = alvoAtual(), o = estado.segurando;
     escolhido = undefined;
     if (alvo && alvo === v.pessoa) {
-      if (!o) {                                 // de mão vazia: fala com ela, e ela diz o que quer
-        alvo.fala = FALAS.pedido;
+      // A pessoa quer uma coisa (o bolo, no desafio 4) ou duas (o remédio e a água, no 5; o pão de
+      // queijo e o café, no 6): v.pedidos. Ela aceita uma de cada vez e, enquanto falta alguma,
+      // diz qual. A vitória é quando recebe a última.
+      const falta = v.pedidos.filter(p => !alvo.recebidos.includes(p));
+      if (!o) {                                 // de mão vazia: fala com ela, e ela diz o que quer (ou o que ainda falta)
+        alvo.fala = alvo.recebidos.length ? FALAS.falta[v.pedidos.indexOf(falta[0])] : FALAS.pedido;
         return resposta('pegar', true, `a pessoa disse: "${alvo.fala}"`);
       }
-      if (o !== v.bolo) {                       // ela só aceita o bolo (e não o queimado)
+      if (!falta.includes(o)) {                 // ela só aceita o que pediu (e não o bolo queimado, nem o remédio errado)
         alvo.fala = o === v.queimado ? FALAS.queimado : FALAS.recusa;
         return resposta('pegar', false, `a pessoa não quis: ${o.nome} — disse: "${alvo.fala}"`);
+      }
+      if (falta.length > 1) {                   // ainda falta outra coisa: ela fica com esta e diz o que falta
+        estado.segurando = null;
+        o.entregue = true;
+        o.malha.rotation.set(0, 0, 0);
+        alvo.receber(o);
+        tirarDoInventario(o);
+        alvo.fala = FALAS.falta[v.pedidos.indexOf(falta.find(p => p !== o))];
+        return resposta('pegar', true, `entregou: ${o.nome} à pessoa — ela disse: "${alvo.fala}"`);
       }
       entregar(o, alvo);
       tirarDoInventario(o);
@@ -964,6 +1072,32 @@
         v.massa.fechado = false;
         v.massa.malha.visible = true;
         msg += ' — a massa ficou pronta';
+      }
+      return resposta('pegar', true, msg);
+    }
+    if (alvo && alvo === v.filtro) {            // o copo vazio da mão sai do filtro cheio de água (é outro objeto, que fica no lugar dele)
+      const cheio = v.copoCheio;
+      robo.remove(o.malha);
+      o.entregue = true;
+      itens[itens.indexOf(o)] = cheio;
+      estado.segurando = null;
+      cheio.fechado = false;
+      segurar(cheio);
+      return resposta('pegar', true, 'encheu o copo de água');
+    }
+    if (alvo && alvo === v.cafeteira) {         // a água ou o pó de café da mão vai para a cafeteira; com os dois, o café fica pronto
+      const c = v.cafeteira;
+      tirarDoInventario(o);
+      robo.remove(o.malha);
+      o.naCesta = true;                         // dentro da cafeteira: não se pega mais
+      c.itens.push(o);
+      let msg = `pôs: ${o.nome} na cafeteira (${c.itens.length}/2)`;
+      if (c.itens.length === 2) {
+        c.pronta = true;
+        c.jarra.visible = true;
+        v.cafe.fechado = false;
+        v.cafe.malha.visible = true;
+        msg += ' — o café ficou pronto';
       }
       return resposta('pegar', true, msg);
     }
@@ -999,12 +1133,11 @@
     }
     if (o) {                                    // sem alvo: solta no chão, à frente, o que está na mão
       const f = vetores(), a = areas[estado.sala], folga = o.raio + 0.1;
-      const x = Math.max(a.x1 + folga, Math.min(a.x2 - folga, estado.x + f.fx * 0.75));
-      const z = Math.max(a.z1 + folga, Math.min(a.z2 - folga, estado.z + f.fz * 0.75));
+      const { x, z } = pontoNoLugar(a, estado.x + f.fx * 0.75, estado.z + f.fz * 0.75, folga);   // à frente, mas dentro do lugar em que o robô está
       if (noMovel(x, z, o.raio) || Object.values(salas).some(q => noCaminho(q).some(p => Math.hypot(p.x - x, p.z - z) < p.raio + o.raio)))
         return resposta('pegar', false, 'sem espaço para soltar aqui');
       tirarDoInventario(o);
-      assentar(salas[a.n], o, x, z, o.alt / 2);
+      assentar(salas[a.n], o, x, z, alturaDoChao(x, z) + o.alt / 2);
       o.sala = a.n;
       o.sombra.visible = true;
       return resposta('pegar', true, `soltou: ${o.nome}`);
@@ -1069,7 +1202,7 @@
   function criarVila() {
     const A = SALA.A, g = new T.Group();
     raiz.add(g);
-    luzGeral.intensity = 0.85; luzGeral.color.set(0xffffff); luzGeral.groundColor.set(0xd9d3c6);   // luz de dia
+    luzGeral.intensity = 0.8; luzGeral.color.set(0xeef5ff); luzGeral.groundColor.set(0xd9d3c6);   // a claridade do céu (o sol é uma luz à parte: ver "a cidade")
     const caixa = (l, a, p, material, x, y, z, pai) => malha(pai || g, new T.BoxGeometry(l, a, p), material, x, y, z);
     const liso = (hex, aspereza = 0.8) => mat(hex, { roughness: aspereza });
     const bloco = (nome, x1, x2, z1, z2) => blocos.push({ nome, x1, x2, z1, z2 });
@@ -1081,23 +1214,129 @@
     const madeira = liso(0x8f6a45, 0.55), madeiraClara = liso(0xc49a6c, 0.55), branco = liso(0xf4f2ec, 0.5), preto = liso(0x1d1f22, 0.3);
     const armario = liso(0x4f6a72, 0.55), portinha = liso(0x5d7c85, 0.5), tampo = liso(0xe6dfd2, 0.25);
 
+    // --- as texturas da rua e das fachadas (desenhadas aqui, como as das salas) ---
+    const repetida = t => { t.wrapS = t.wrapT = T.RepeatWrapping; return t; };
+    // pontinhos claros e escuros espalhados: o grão do asfalto, da pedra, do reboco
+    const salpicar = (c, l, n, sorte, claro, escuro, tamanho, forca) => {
+      for (let i = 0; i < n; i++) {
+        c.fillStyle = `rgba(${sorte() < 0.5 ? escuro : claro},${((0.3 + sorte() * 0.7) * forca).toFixed(3)})`;
+        c.fillRect(sorte() * l, sorte() * l, 1 + sorte() * tamanho, 1 + sorte() * tamanho);
+      }
+    };
+    const texAsfalto = repetida(texturaCanvas(512, 512, (c, l) => {            // cobre 4 m x 4 m
+      const sorte = aleatorio(71);
+      c.fillStyle = '#4d5156'; c.fillRect(0, 0, l, l);
+      salpicar(c, l, 30000, sorte, '210,213,216', '16,18,20', 1.4, 0.2);
+      salpicar(c, l, 700, sorte, '160,160,160', '24,24,24', 10, 0.07);
+    }));
+    const texCalcada = repetida(texturaCanvas(512, 512, (c, l) => {            // lajotas de 40 cm; cobre 2 m x 2 m
+      const sorte = aleatorio(72), n = 5, p = l / n;
+      for (let i = 0; i < n; i++) for (let k = 0; k < n; k++) {
+        const t = 196 + Math.floor(sorte() * 22);
+        c.fillStyle = `rgb(${t},${t - 5},${t - 17})`;
+        c.fillRect(i * p, k * p, p, p);
+      }
+      salpicar(c, l, 9000, sorte, '255,255,255', '70,62,50', 2, 0.14);
+      c.fillStyle = 'rgba(98,92,82,0.6)';
+      for (let i = 0; i <= n; i++) { c.fillRect(i * p - 1.5, 0, 3, l); c.fillRect(0, i * p - 1.5, l, 3); }
+    }));
+    const texGrama = repetida(texturaCanvas(512, 512, (c, l) => {              // cobre 5 m x 5 m
+      const sorte = aleatorio(73);
+      c.fillStyle = '#6ea851'; c.fillRect(0, 0, l, l);
+      for (let i = 0; i < 60; i++) {                                           // manchas mais claras e mais escuras
+        const x = sorte() * l, y = sorte() * l, r = 30 + sorte() * 60, cor = sorte() < 0.5 ? '70,128,52' : '150,196,96';
+        for (const dx of [-l, 0, l]) for (const dy of [-l, 0, l]) {
+          const d = c.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
+          d.addColorStop(0, `rgba(${cor},0.2)`); d.addColorStop(1, `rgba(${cor},0)`);
+          c.fillStyle = d; c.fillRect(x + dx - r, y + dy - r, 2 * r, 2 * r);
+        }
+      }
+      for (let i = 0; i < 14000; i++) {                                        // as folhinhas
+        const x = sorte() * l, y = sorte() * l, t = sorte();
+        c.strokeStyle = t < 0.4 ? `rgba(48,104,38,${0.25 + sorte() * 0.3})` : t < 0.8 ? `rgba(146,200,100,${0.2 + sorte() * 0.3})` : `rgba(200,208,112,${0.15 + sorte() * 0.25})`;
+        c.lineWidth = 1 + sorte();
+        c.beginPath(); c.moveTo(x, y); c.lineTo(x + (sorte() - 0.5) * 4, y - 3 - sorte() * 6); c.stroke();
+      }
+    }));
+    const texReboco = repetida(texturaCanvas(256, 256, (c, l) => {             // o grão do reboco, quase branco: a cor vem do material
+      const sorte = aleatorio(74);
+      c.fillStyle = '#f6f6f6'; c.fillRect(0, 0, l, l);
+      salpicar(c, l, 5200, sorte, '255,255,255', '0,0,0', 3, 0.032);
+    }));
+    const texFolhagem = repetida(texturaCanvas(256, 256, (c, l) => {           // folhas miúdas, para as cercas vivas
+      const sorte = aleatorio(76);
+      c.fillStyle = '#3f8440'; c.fillRect(0, 0, l, l);
+      for (let i = 0; i < 2800; i++) {
+        c.fillStyle = ['rgba(30,88,36,0.5)', 'rgba(98,162,76,0.5)', 'rgba(134,190,98,0.4)'][Math.floor(sorte() * 3)];
+        c.beginPath(); c.ellipse(sorte() * l, sorte() * l, 3 + sorte() * 5, 2 + sorte() * 3, sorte() * 3.14, 0, 7); c.fill();
+      }
+    }));
+    const texTelha = repetida(texturaCanvas(256, 256, (c, l) => {              // telhas de barro, em tons de cinza (a cor vem do material); cobre 1 m x 1 m
+      const sorte = aleatorio(75), colunas = 5, w = l / colunas, fiadas = 3, h = l / fiadas;
+      for (let i = 0; i < colunas; i++) {                                      // cada coluna é uma fileira de capas, abauladas: clara no meio, escura nas beiradas
+        const d = c.createLinearGradient(i * w, 0, (i + 1) * w, 0);
+        d.addColorStop(0, '#858585'); d.addColorStop(0.2, '#dadada'); d.addColorStop(0.5, '#ffffff'); d.addColorStop(0.8, '#d0d0d0'); d.addColorStop(1, '#787878');
+        c.fillStyle = d; c.fillRect(i * w, 0, w, l);
+      }
+      for (let k = 0; k < fiadas; k++) for (let i = 0; i < colunas; i++) {      // cada telha tem o seu tom, e a de cima faz sombra na de baixo
+        c.fillStyle = `rgba(${sorte() < 0.5 ? '0,0,0' : '255,255,255'},${(sorte() * 0.13).toFixed(3)})`; c.fillRect(i * w, k * h, w, h);
+        c.fillStyle = 'rgba(0,0,0,0.4)'; c.fillRect(i * w, k * h, w, 4);
+        c.fillStyle = 'rgba(0,0,0,0.15)'; c.fillRect(i * w, k * h + 4, w, 7);
+      }
+    }));
+    const guardados = {};                        // os materiais que se repetem, pela cor
+    const rebocado = hex => guardados['r' + hex] || (guardados['r' + hex] = mat(hex, { map: texReboco, roughness: 0.9 }));
+    const telhado = hex => guardados['t' + hex] || (guardados['t' + hex] = mat(hex, { map: texTelha, roughness: 0.8 }));
+    const beiral = liso(0xefe8da, 0.8);
+    // Junta várias geometrias numa só, cada uma já no seu lugar: uma malha para a cerca inteira (ou para todas as copas das árvores), em vez de uma por peça.
+    const juntar = pecas => {
+      const pos = [], nor = [], uv = [];
+      for (const peca of pecas) {
+        const solta = peca.index ? peca.toNonIndexed() : peca;
+        for (const v of solta.attributes.position.array) pos.push(v);
+        for (const v of solta.attributes.normal.array) nor.push(v);
+        for (const v of solta.attributes.uv.array) uv.push(v);
+      }
+      const geo = new T.BufferGeometry();
+      geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new T.Float32BufferAttribute(nor, 3));
+      geo.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+      return geo;
+    };
+
     // --- os lugares ---
-    const lugar = (n, nome, x1, x2, z1, z2, luz) => {
-      areas[n] = { n, nome, x1, x2, z1, z2, luz: luz || { x: (x1 + x2) / 2, y: A - 0.35, z: (z1 + z2) / 2, forca: 1.9 } };
+    // (x1..z2: o retângulo do lugar; `outras`: os outros pedaços dele, quando não é um retângulo só: ver areas)
+    const lugar = (n, nome, x1, x2, z1, z2, luz, outras) => {
+      const partes = [{ x1, x2, z1, z2 }, ...(outras || [])], cantos = partes.map(p => p.r ? { x1: p.cx - p.r, x2: p.cx + p.r, z1: p.cz - p.r, z2: p.cz + p.r } : p);
+      areas[n] = { n, nome, partes, x1: Math.min(...cantos.map(p => p.x1)), x2: Math.max(...cantos.map(p => p.x2)), z1: Math.min(...cantos.map(p => p.z1)), z2: Math.max(...cantos.map(p => p.z2)),
+        luz: luz || { x: (x1 + x2) / 2, y: A - 0.35, z: (z1 + z2) / 2, forca: 1.9 } };
       salas[n] = { n, cx: 0, grupo: g, objetos: [], porta: null, cesta: null, chapeu: null, outroRobo: null, presente: null, pessoa: null, geladeira: null, agua: null };
     };
     lugar(1, 'quarto', 0, 4, 0, 4);
     lugar(2, 'banheiro', -2.6, 0, 0, 4);
     lugar(3, 'cozinha', 4, 8, 0, 4);
-    lugar(4, 'rua', -3, 11, 4, 8.5, { x: 4.5, y: 9, z: 6.3, forca: 7 });       // na rua a lâmpada faz as vezes do sol: alta e forte
+    // A rua: as duas ruas em cruz e o disco da rotatória (com a praça no meio). Quem ilumina a rua é
+    // o sol; a lâmpada fica acesa dentro da casa ou da loja cuja entrada está mais perto do robô.
+    const ENTRADAS = [[6, 4, 3], [6, 8.5, 5], [16.25, -2.5, 6], [21.5, 8.5, 9], [21, 4, 10], [0.5, 8.5, 12]];   // cada entrada (x, z) e o lugar a que ela dá
+    const maisPerto = () => ENTRADAS.reduce((a, b) => Math.hypot(estado.x - b[0], estado.z - b[1]) < Math.hypot(estado.x - a[0], estado.z - a[1]) ? b : a);
+    lugar(4, 'rua', CIDADE.oeste, CIDADE.leste, CIDADE.z - CIDADE.meiaRua, CIDADE.z + CIDADE.meiaRua, () => areas[maisPerto()[2]].luz,
+      [{ x1: CIDADE.x - CIDADE.meiaRua, x2: CIDADE.x + CIDADE.meiaRua, z1: CIDADE.sul, z2: CIDADE.norte }, { cx: CIDADE.x, cz: CIDADE.z, r: CIDADE.calcada }]);
     lugar(5, 'mercadinho', 3.5, 8.5, 8.5, 12.5);
+    // o flat da casa cor-de-rosa, na rua do sul (a sala com cozinha, o quarto e o banheiro), e a farmácia, na rua do leste
+    lugar(6, 'sala do flat', 16.25, 20.25, -5, -1);
+    lugar(7, 'quarto do flat', 20.25, 24.25, -5, -1);
+    lugar(8, 'banheiro do flat', 24.25, 26.65, -5, -1);
+    lugar(9, 'farmácia', 19.6, 23.5, 8.5, 12.5);
+    // a casa azul, na rua do leste (a cozinha, por onde se entra, e a sala), e a padaria, na rua do oeste
+    lugar(10, 'cozinha da casa azul', 19.6, 22.4, 0, 4);
+    lugar(11, 'sala da casa azul', 22.4, 25.2, 0, 4);
+    lugar(12, 'padaria', -4.2, 1.9, 8.5, 12.5);
 
     // --- chão, teto, paredes e telhado ---
     const piso = (x1, x2, z1, z2, material, fu = 1, fv = 1) => {
       const p = malha(g, escalarUV(cantosEscuros(new T.PlaneGeometry(x2 - x1, z2 - z1, 12, 12), 'x', 'y', 0.22, 0.9), fu, fv), material, (x1 + x2) / 2, 0.006, (z1 + z2) / 2);
       p.rotation.x = -Math.PI / 2;
     };
-    const chao = (x1, x2, z1, z2, material, y) => { malha(g, new T.PlaneGeometry(x2 - x1, z2 - z1), material, (x1 + x2) / 2, y, (z1 + z2) / 2).rotation.x = -Math.PI / 2; };
     const teto = (x1, x2, z1, z2) => {
       malha(g, cantosEscuros(new T.PlaneGeometry(x2 - x1, z2 - z1, 10, 10), 'x', 'y', 0.2, 0.9), M.teto, (x1 + x2) / 2, A, (z1 + z2) / 2).rotation.x = Math.PI / 2;
       caixa(0.84, 0.03, 0.84, M.rodape, (x1 + x2) / 2, A - 0.015, (z1 + z2) / 2);          // luminária embutida
@@ -1105,8 +1344,10 @@
     };
     // Uma parede reta de (x1, z1) a (x2, z2), ao longo de x ou de z, com os vãos de porta dados
     // (o meio de cada um, ao longo da parede). `fora`: de que lado fica a rua (+1 ou -1, no
-    // sentido em que o outro eixo cresce; 0 = parede entre dois cômodos); `reboco`: a cor desse lado.
-    function parede(x1, z1, x2, z2, vaos, fora, reboco) {
+    // sentido em que o outro eixo cresce; 0 = parede entre dois cômodos); `reboco`: a cor desse lado;
+    // `barrado`: a da faixa pintada ao pé da parede; `dentro`: os materiais do lado de dentro
+    // ({ parede, lisa }: o da parede e o do pedaço liso em cima de um vão), quando não são os de sempre.
+    function parede(x1, z1, x2, z2, vaos, fora, reboco, barrado, dentro) {
       const emX = z1 === z2, a = emX ? x1 : z1, b = emX ? x2 : z2, fixo = emX ? z1 : x1, trechos = [];
       let de = a;
       for (const c of (vaos || []).slice().sort((p, q) => p - q)) {
@@ -1120,49 +1361,73 @@
         const geo = y1 > 0 ? new T.BoxGeometry(emX ? comp : ESPESSURA, alt, emX ? ESPESSURA : comp)        // o pedaço em cima do vão
           : emX ? cantosEscuros(porMetro(new T.BoxGeometry(comp, alt, ESPESSURA, Math.ceil(comp * 3), 9, 1), comp), 'x', 'y', 0.2, 0.7)
             : cantosEscuros(porMetro(new T.BoxGeometry(ESPESSURA, alt, comp, 1, 9, Math.ceil(comp * 3)), comp), 'z', 'y', 0.2, 0.7);
-        malha(g, geo, y1 > 0 ? M.paredeLisa : M.parede, emX ? meio : fixo, y, emX ? fixo : meio);
+        malha(g, geo, y1 > 0 ? (dentro || M_DE_DENTRO).lisa : (dentro || M_DE_DENTRO).parede, emX ? meio : fixo, y, emX ? fixo : meio);
         if (!fora) continue;
         // por fora, uma capa de reboco (um pouco mais comprida nas pontas, para fechar as quinas)
         const d = fora * (ESPESSURA / 2 + 0.015), e1 = t1 === a ? 0.09 : 0, e2 = t2 === b ? 0.09 : 0, c2 = comp + e1 + e2, m2 = meio + (e2 - e1) / 2;
-        caixa(emX ? c2 : 0.03, alt, emX ? 0.03 : c2, reboco, emX ? m2 : fixo + d, y, emX ? fixo + d : m2);
+        malha(g, escalarUV(new T.BoxGeometry(emX ? c2 : 0.03, alt, emX ? 0.03 : c2), c2 / 2, alt / 2), reboco, emX ? m2 : fixo + d, y, emX ? fixo + d : m2);
+        if (barrado && y1 === 0) caixa(emX ? c2 : 0.02, 0.38, emX ? 0.02 : c2, barrado, emX ? m2 : fixo + d + fora * 0.012, 0.19, emX ? fixo + d + fora * 0.012 : m2);
       }
     }
-    // Cobre um retângulo com uma laje (com beiral) e um telhado de quatro águas.
-    function cobrir(x1, x2, z1, z2, y, h, material) {
-      const be = 0.28, u1 = x1 - be, u2 = x2 + be, v1 = z1 - be, v2 = z2 + be;
-      caixa(u2 - u1, 0.08, v2 - v1, material, (u1 + u2) / 2, y + 0.07, (v1 + v2) / 2);       // (um pouco acima do teto de dentro, para os dois não disputarem os mesmos pixels)
-      const emX = u2 - u1 >= v2 - v1, L = emX ? u2 - u1 : v2 - v1, d = (emX ? v2 - v1 : u2 - u1) / 2, Y = y + 0.11;
+    const M_DE_DENTRO = { parede: M.parede, lisa: M.paredeLisa };
+    // Uma porta de correr na parede de fora de uma casa, que o jogador abre (e que fica aberta).
+    // (x, z): o meio do vão; eixo: 'z' se a parede fica em z (a porta corre ao longo de x), 'x' se
+    // fica em x (corre ao longo de z); salas: os dois lugares que ela liga. Trancada, não abre nem
+    // é alvo: é a porta da casa que não é a deste desafio.
+    function portaDaRua(x, z, eixo, salas, material, trancada, sentido) {     // (sentido: +1 se ela corre para o lado em que a medida cresce; sem isso, para o outro)
+      const emZ = eixo === 'z', folha = caixa(emZ ? LARGURA_PORTA : 0.05, ALTURA_PORTA, emZ ? 0.05 : LARGURA_PORTA, material, x, ALTURA_PORTA / 2, z);
+      for (const lado of [-1, 1]) caixa(emZ ? 0.05 : 0.02, 0.3, emZ ? 0.02 : 0.05, M.latao, emZ ? 0.5 : lado * 0.035, 0, emZ ? lado * 0.035 : 0.5, folha);   // os puxadores
+      const borda = new T.Group(), e = ESPESSURA + 0.14, b = 0.05;
+      g.add(borda);
+      for (const lado of [-1, 1]) caixa(emZ ? b : e, ALTURA_PORTA, emZ ? e : b, M.destaque, emZ ? x + lado * (LARGURA_PORTA / 2 + b / 2) : x, ALTURA_PORTA / 2, emZ ? z : z + lado * (LARGURA_PORTA / 2 + b / 2), borda);
+      caixa(emZ ? LARGURA_PORTA + 2 * b : e, b, emZ ? e : LARGURA_PORTA + 2 * b, M.destaque, x, ALTURA_PORTA + b / 2, z, borda);
+      borda.visible = false;
+      portasDaVila.push({ nome: 'porta', x, z, eixo, salas, aberta: false, trancada: !!trancada, sentido: sentido || -1, vis: 0, folha, contorno: borda });
+    }
+    const vao = (x, z, eixo, a, b) => portasDaVila.push({ nome: 'vão', x, z, eixo, salas: [a, b], aberta: true, vis: 1, folha: null, contorno: null });   // um vão sem porta, entre os lugares a e b
+    // Cobre um retângulo com uma laje (com beiral) e um telhado de quatro águas, de telhas da cor
+    // dada. `pai`: o grupo em que ele fica (as medidas são as desse grupo).
+    function cobrir(x1, x2, z1, z2, y, h, cor, pai) {
+      const be = 0.28, u1 = x1 - be, u2 = x2 + be, v1 = z1 - be, v2 = z2 + be, onde = pai || g;
+      caixa(u2 - u1, 0.08, v2 - v1, beiral, (u1 + u2) / 2, y + 0.07, (v1 + v2) / 2, onde);   // (um pouco acima do teto de dentro, para os dois não disputarem os mesmos pixels)
+      const emX = u2 - u1 >= v2 - v1, L = emX ? u2 - u1 : v2 - v1, d = (emX ? v2 - v1 : u2 - u1) / 2, Y = y + 0.11, agua = Math.hypot(d, h);
       // (a = ao longo da cumeeira, b = atravessado): os quatro cantos e as duas pontas da cumeeira
       const P = (a, b, alto) => emX ? [u1 + a, Y + alto, v1 + b] : [u1 + b, Y + alto, v1 + a];
-      const A0 = P(0, 0, 0), B0 = P(L, 0, 0), C0 = P(L, 2 * d, 0), D0 = P(0, 2 * d, 0), c1 = P(d, d, h), c2 = P(L - d, d, h);
-      let faces = [[A0, c2, B0], [A0, c1, c2], [C0, c1, D0], [C0, c2, c1], [B0, c2, C0], [D0, c1, A0]];
-      if (!emX) faces = faces.map(([p, q, r]) => [p, r, q]);       // trocar x por z vira cada face do avesso: desvira
+      const A0 = [0, 0, 0], B0 = [L, 0, 0], C0 = [L, 2 * d, 0], D0 = [0, 2 * d, 0], c1 = [d, d, h], c2 = [L - d, d, h];
+      // As telhas: em cada água, u corre ao longo do beiral e v sobe da beirada para a cumeeira, em metros.
+      const telhas = [(a, b) => [a, b * agua / d], (a, b) => [a, (2 * d - b) * agua / d], (a, b) => [b, (L - a) * agua / d], (a, b) => [b, a * agua / d]];
+      const pos = [], uv = [];
+      for (const [p, q, r, qual] of [[A0, c2, B0, 0], [A0, c1, c2, 0], [C0, c1, D0, 1], [C0, c2, c1, 1], [B0, c2, C0, 2], [D0, c1, A0, 3]])
+        for (const [a, b, alto] of emX ? [p, q, r] : [p, r, q]) {      // (trocar x por z vira cada face do avesso: desvira)
+          pos.push(...P(a, b, alto)); uv.push(...telhas[qual](a, b));
+        }
       const geo = new T.BufferGeometry();
-      geo.setAttribute('position', new T.Float32BufferAttribute(faces.flat(2), 3));
+      geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
       geo.computeVertexNormals();
-      malha(g, geo, material, 0, 0, 0);
+      malha(onde, geo, telhado(cor), 0, 0, 0);
     }
-    const rebocoCasa = liso(0xf0cf7a, 0.9), rebocoMercado = liso(0xf4efe4, 0.9), telha = liso(0xb5533c, 0.8);
+    const rebocoCasa = rebocado(0xf0cf7a), rebocoMercado = rebocado(0xf4efe4), barradoCasa = liso(0xc98f4e, 0.9), barradoMercado = liso(0x4f7563, 0.9);
     // a casa: paredes de fora e as duas de dentro (com os vãos para o banheiro e para a cozinha)
-    parede(-2.6, 0, 8, 0, [], -1, rebocoCasa);
-    parede(-2.6, 4, 8, 4, [6], 1, rebocoCasa);
-    parede(-2.6, 0, -2.6, 4, [], -1, rebocoCasa);
-    parede(8, 0, 8, 4, [], 1, rebocoCasa);
+    parede(-2.6, 0, 8, 0, [], -1, rebocoCasa, barradoCasa);
+    parede(-2.6, 4, 8, 4, [6], 1, rebocoCasa, barradoCasa);
+    parede(-2.6, 0, -2.6, 4, [], -1, rebocoCasa, barradoCasa);
+    parede(8, 0, 8, 4, [], 1, rebocoCasa, barradoCasa);
     parede(0, 0, 0, 4, [3]);
     parede(4, 0, 4, 4, [2]);
     piso(0, 4, 0, 4, M.piso);
     piso(-2.6, 0, 0, 4, M.ladrilho, 2.6 / 4, 1);
     piso(4, 8, 0, 4, M.ladrilho);
     teto(0, 4, 0, 4); teto(-2.6, 0, 0, 4); teto(4, 8, 0, 4);
-    cobrir(-2.6, 8, 0, 4, A, 1.25, telha);
+    cobrir(-2.6, 8, 0, 4, A, 1.25, 0xb5533c);
     // o mercadinho
-    parede(3.5, 8.5, 8.5, 8.5, [6], -1, rebocoMercado);
-    parede(3.5, 12.5, 8.5, 12.5, [], 1, rebocoMercado);
-    parede(3.5, 8.5, 3.5, 12.5, [], -1, rebocoMercado);
-    parede(8.5, 8.5, 8.5, 12.5, [], 1, rebocoMercado);
+    parede(3.5, 8.5, 8.5, 8.5, [6], -1, rebocoMercado, barradoMercado);
+    parede(3.5, 12.5, 8.5, 12.5, [], 1, rebocoMercado, barradoMercado);
+    parede(3.5, 8.5, 3.5, 12.5, [], -1, rebocoMercado, barradoMercado);
+    parede(8.5, 8.5, 8.5, 12.5, [], 1, rebocoMercado, barradoMercado);
     piso(3.5, 8.5, 8.5, 12.5, M.ladrilho, 5 / 4, 1);
     teto(3.5, 8.5, 8.5, 12.5);
-    cobrir(3.5, 8.5, 8.5, 12.5, A + 0.7, 0.9, liso(0x3f6b55, 0.8));
+    cobrir(3.5, 8.5, 8.5, 12.5, A + 0.7, 0.9, 0x3f6b55);
     caixa(5.12, 0.7, 0.14, rebocoMercado, 6, A + 0.35, 8.5);                              // a platibanda, com o letreiro
     caixa(0.14, 0.7, 4, rebocoMercado, 3.5, A + 0.35, 10.5); caixa(0.14, 0.7, 4, rebocoMercado, 8.5, A + 0.35, 10.5); caixa(5.12, 0.7, 0.14, rebocoMercado, 6, A + 0.35, 12.5);
     const letreiro = texturaCanvas(1024, 160, (c, l, a) => {
@@ -1181,84 +1446,473 @@
       for (let i = 0; i < 5; i++) malha(g, new T.SphereGeometry(0.1, 10, 8), liso([0xe4572e, 0xf2c230, 0xf06aa8][i % 3], 0.7), x - 0.5 + i * 0.25, 0.36, 8.2);
     }
 
-    // --- o céu, o gramado e a rua ---
-    malha(g, new T.SphereGeometry(46, 32, 16), luminoso({ side: T.BackSide, map: texturaCanvas(8, 256, (c, l, a) => {
-      const d = c.createLinearGradient(0, 0, 0, a);
-      d.addColorStop(0, '#3f8fd8'); d.addColorStop(0.42, '#9fd2f3'); d.addColorStop(0.5, '#e4f3fa'); d.addColorStop(1, '#e4f3fa');
-      c.fillStyle = d; c.fillRect(0, 0, l, a);
-    }) }), 4, 0, 6).receiveShadow = false;
-    chao(-41, 49, -39, 51, liso(0x74b35a, 1), -0.02);                                     // gramado
-    chao(-3.6, 11.6, 5.1, 7.4, liso(0x4a4f55, 0.95), 0);                                  // asfalto
-    for (const [z1, z2] of [[4.06, 5.1], [7.4, 8.44]]) chao(-3.6, 11.6, z1, z2, liso(0xc9c3b6, 0.9), 0.003);   // calçadas
-    for (const z of [5.1, 7.4]) caixa(15.2, 0.03, 0.08, liso(0x9d978b, 0.8), 4, 0.015, z);                    // meio-fio
-    const tinta = liso(0xf2f2ee, 0.7);
-    for (let x = -2.9; x < 11; x += 1.6) if (x < 4.6 || x > 7.2) chao(x, x + 0.8, 6.2, 6.3, tinta, 0.004);     // a faixa do meio da rua
-    for (const x of [5.36, 5.68, 6.0, 6.32, 6.64]) chao(x - 0.11, x + 0.11, 5.14, 7.36, tinta, 0.004);         // a faixa de pedestres, da porta de casa à do mercadinho
-    caixa(1.7, 0.03, 0.42, liso(0xb9b4a8, 0.9), 6, 0.015, 4.3);                           // o degrau da porta de casa
-    const verde = mat(0x4d9a45, { roughness: 0.9, flatShading: true }), tronco = liso(0x6b4a2f, 0.9), ferro = liso(0x2f3a40, 0.5);
-    const arvore = (x, z, barra) => {
-      malha(g, new T.CylinderGeometry(0.1, 0.14, 1.7, 8), tronco, x, 0.85, z);
-      for (const [dx, dy, dz, r] of [[0, 2.2, 0, 0.68], [0.4, 2.0, 0.12, 0.46], [-0.38, 2.02, 0.1, 0.5], [0.03, 2.72, 0.02, 0.46]]) malha(g, new T.IcosahedronGeometry(r, 1), verde, x + dx, dy, z + dz);
-      if (barra) bloco('árvore', x - 0.14, x + 0.14, z - 0.14, z + 0.14);
+    // --- a cidade: o céu, o sol, o chão, a praça com a rotatória e as quatro ruas ---
+    // No meio fica a praça, redonda, com o ponto de encontro; em volta dela, a pista da rotatória;
+    // e da rotatória saem quatro ruas, uma para cada lado. A rua do oeste é a da nossa casa e do
+    // mercadinho (e da padaria); o flat da casa cor-de-rosa fica na do sul; a farmácia e a casa azul, na do leste.
+    // Entre uma construção e a vizinha há sempre um jardim. A escola é só fachada: nela não dá para entrar.
+    //
+    //    z                           rua do norte
+    //   18     . . . . . . . . . . ESCOLA |  | parquinho . . . . .
+    //   12,5    PADARIA   MERCADINHO      |  |        FARMÁCIA
+    //    8,5   --------- ------------  .-'    '-.  -------------
+    //           rua do oeste          (  a praça  )  rua do leste
+    //    4     -+---------------+----  '-.    .-'  -------------
+    //           | a nossa casa  |         |  |      a casa azul
+    //    0      +---------------+ quintal |  | o flat
+    //   -5,5                         rua do sul
+    //          -5               8        14       19,6    24,5   x
+    //
+    // O robô anda no calçamento — a praça, a pista e as calçadas (ver o lugar 4) — e não na grama.
+    const { x: PX, z: PZ, praca: R_PRACA, pista: R_PISTA, calcada: R_CALCADA, meiaPista: MP, meiaRua: MR, alto: AC } = CIDADE;
+    const GUIA = 0.1, CG = AC + 0.012, MEIO = new T.Vector3(10, 0, PZ);   // a largura da guia (o meio-fio) e a altura dela; o meio da cidade
+    const FIM = { o: CIDADE.oeste - 0.3, l: CIDADE.leste + 0.3, s: CIDADE.sul - 0.3, n: CIDADE.norte + 0.3 };   // onde as calçadas acabam (um pouco depois de onde o robô chega)
+    const semSombra = [];                        // o chão e o que está longe não precisam fazer sombra em nada
+    vila.encontro = { x: PX, z: PZ };
+
+    // O sol: uma luz de longe, que faz as sombras da rua. Dentro das casas ele não entra (o
+    // telhado faz sombra): lá quem ilumina é a lâmpada, que acompanha o robô.
+    const SOL = new T.Vector3(0.5, 1, -0.45).normalize();
+    const sol = new T.DirectionalLight(0xfff0d6, 2.8);
+    sol.position.copy(MEIO).addScaledVector(SOL, 70);
+    sol.target.position.copy(MEIO);
+    sol.castShadow = true;
+    sol.shadow.mapSize.set(4096, 4096);
+    Object.assign(sol.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 20, far: 130 });
+    sol.shadow.camera.updateProjectionMatrix();
+    sol.shadow.bias = -0.0003; sol.shadow.normalBias = 0.03;
+    g.add(sol, sol.target);
+    const rebatida = new T.DirectionalLight(0xdfeaff, 0.4);   // a claridade que chega do lado da sombra
+    rebatida.position.set(-0.5, 0.55, 0.8);
+    g.add(rebatida);
+    // Ao longe tudo vai sumindo numa névoa da cor do horizonte. O céu e a névoa passam pelo mesmo
+    // ajuste de tons que o resto do desenho; por isso entram um pouco mais claros (CLARO).
+    const CLARO = 1.25, horizonte = new T.Color('#dcedf8');
+    cena.fog = new T.Fog(horizonte.clone().multiplyScalar(CLARO), 50, 240);
+    camera.far = 330; voador.far = 520;          // (as câmeras são acertadas no início: ver definirTamanho)
+
+    // o céu: um degradê com nuvens e o clarão do sol, por dentro de uma esfera bem grande
+    const ceu = texturaCanvas(2048, 1024, (c, l, a) => {
+      const d = c.createLinearGradient(0, 0, 0, a / 2), sorte = aleatorio(77);
+      d.addColorStop(0, '#1c66c0'); d.addColorStop(0.5, '#4f9ee4'); d.addColorStop(0.86, '#9dcbf0'); d.addColorStop(1, '#dcedf8');
+      c.fillStyle = d; c.fillRect(0, 0, l, a / 2);
+      c.fillStyle = '#dcedf8'; c.fillRect(0, a / 2, l, a / 2);
+      const mancha = (x, y, r, cores) => {       // uma mancha redonda e difusa (repetida na emenda da esfera)
+        for (const dx of [-l, 0, l]) {
+          const m = c.createRadialGradient(x + dx, y, 0, x + dx, y, r);
+          cores.forEach(([onde, cor]) => m.addColorStop(onde, cor));
+          c.fillStyle = m; c.fillRect(x + dx - r, y - r, 2 * r, 2 * r);
+        }
+      };
+      const fi = (Math.atan2(SOL.z, -SOL.x) + 2 * Math.PI) % (2 * Math.PI);   // onde o sol fica no desenho (ver SphereGeometry)
+      mancha(fi / (2 * Math.PI) * l, Math.acos(SOL.y) / Math.PI * a, 170, [[0, 'rgba(255,253,240,1)'], [0.09, 'rgba(255,251,230,0.96)'], [0.22, 'rgba(255,246,214,0.4)'], [1, 'rgba(255,246,214,0)']]);
+      for (let n = 0; n < 22; n++) {             // as nuvens: cada uma, um punhado de manchas brancas, de base reta
+        const x0 = sorte() * l, y0 = a * (0.24 + sorte() * 0.2), larg = 70 + sorte() * 130;
+        for (let i = 0; i < 14; i++) {
+          const dx = (sorte() - 0.5) * larg, r = 12 + sorte() * larg * 0.16 * (1 - Math.abs(dx) / larg);
+          mancha(x0 + dx, y0 - r * 0.55, r, [[0, 'rgba(255,255,255,0.95)'], [0.55, 'rgba(255,255,255,0.7)'], [1, 'rgba(255,255,255,0)']]);
+        }
+      }
+    });
+    const materialDoCeu = new T.MeshBasicMaterial({ side: T.BackSide, map: ceu, fog: false, color: new T.Color(CLARO, CLARO, CLARO) });   // (a cor dele muda com a hora do dia e com a chuva: ver "a hora do dia e a chuva")
+    malha(g, new T.SphereGeometry(270, 48, 24), materialDoCeu, MEIO.x, 0, MEIO.z).receiveShadow = false;
+    // o que a lataria do carro e os vidros da rua refletem: o céu por cima e o chão por baixo
+    const reflexoDaRua = (() => {
+      const amb = new T.Scene(), chaoDoReflexo = new T.Mesh(new T.CircleGeometry(40, 24), new T.MeshBasicMaterial({ color: 0x8f9a80 }));
+      amb.add(new T.Mesh(new T.SphereGeometry(40, 32, 16), new T.MeshBasicMaterial({ side: T.BackSide, map: ceu })));
+      chaoDoReflexo.rotation.x = -Math.PI / 2; chaoDoReflexo.position.y = -1.2;
+      amb.add(chaoDoReflexo);
+      const gerador = new T.PMREMGenerator(renderer), textura = gerador.fromScene(amb, 0.02).texture;
+      gerador.dispose();
+      return textura;
+    })();
+    {
+      // os morros ao longe, nos quatro cantos: as ruas seguem pelos vales entre eles
+      const sorte = aleatorio(88), morro = mat(0x6e9e58, { roughness: 1 });
+      for (let i = 0; i < 12; i++) {
+        const a = Math.PI / 4 + Math.floor(i / 3) * Math.PI / 2 + (i % 3 - 1) * 0.33 + (sorte() - 0.5) * 0.1, longe = 130 + sorte() * 55, r = 26 + sorte() * 16;
+        const m = malha(g, new T.SphereGeometry(1, 20, 10), morro, MEIO.x + Math.cos(a) * longe, -2, MEIO.z + Math.sin(a) * longe);
+        m.scale.set(r, 7 + sorte() * 13, r);
+        semSombra.push(m);
+      }
+    }
+
+    // --- o chão ---
+    // O chão é feito de pedaços planos. Cada um usa as coordenadas do mundo como coordenadas da
+    // textura (u = x / lado, v = z / lado): assim os pedaços vizinhos emendam sem costura.
+    const noMundo = (geo, lado) => {
+      if (lado) { const p = geo.attributes.position, uv = geo.attributes.uv; for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / lado, p.getZ(i) / lado); }
+      return geo;
     };
+    // Deita no chão, na altura y, uma geometria desenhada de cima (x para a direita, -z para cima).
+    const deitar = (geo, material, y) => {
+      const m = malha(g, noMundo(geo.rotateX(-Math.PI / 2).translate(0, y, 0), material.userData.lado), material, 0, 0, 0);
+      semSombra.push(m);
+      return m;
+    };
+    const plano = (x1, x2, z1, z2, material, y) => deitar(new T.PlaneGeometry(x2 - x1, z2 - z1).translate((x1 + x2) / 2, -(z1 + z2) / 2, 0), material, y);
+    const forma = pontos => { const s = new T.Shape(); pontos.forEach(([x, z], i) => { if (i) s.lineTo(x, -z); else s.moveTo(x, -z); }); return s; };
+    const laje = (pontos, material, alt) => deitar(new T.ExtrudeGeometry(forma(pontos), { depth: alt, bevelEnabled: false }), material, 0);   // um pedaço com espessura: a calçada, a guia
+    const ret = (x1, x2, z1, z2) => [[Math.min(x1, x2), Math.min(z1, z2)], [Math.max(x1, x2), Math.min(z1, z2)], [Math.max(x1, x2), Math.max(z1, z2)], [Math.min(x1, x2), Math.max(z1, z2)]];
+    // os pontos de um arco de raio r em volta do meio da praça, do ângulo a1 ao a2, no quadrante (sx, sz)
+    const arco = (r, a1, a2, sx, sz, n = 18) => Array.from({ length: n + 1 }, (_, i) => { const a = a1 + (a2 - a1) * i / n; return [PX + sx * r * Math.cos(a), PZ + sz * r * Math.sin(a)]; });
+    // o pedaço do anel de r1 a r2 que fica nesse quadrante, até `corte` metros do eixo de cada rua
+    const setor = (r1, r2, sx, sz, corte) => { const a1 = Math.asin(corte / r1), a2 = Math.asin(corte / r2); return [...arco(r1, a1, Math.PI / 2 - a1, sx, sz), ...arco(r2, Math.PI / 2 - a2, a2, sx, sz)]; };
+    const doChao = (textura, lado, aspereza) => { const m = mat(0xffffff, { map: textura, roughness: aspereza }); m.userData.lado = lado; return m; };
+    const asfalto = doChao(texAsfalto, 4, 0.95), calcada = doChao(texCalcada, 2, 0.85), grama = doChao(texGrama, 5, 1), granito = liso(0xcfccc3, 0.7);
+    const tinta = mat(0xf2f2ee, { roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+
+    plano(MEIO.x - 300, MEIO.x + 300, MEIO.z - 300, MEIO.z + 300, grama, -0.02);
+    // o asfalto: as quatro ruas (que seguem para fora da cidade) e a pista da rotatória
+    plano(PX - 300, PX - 3.6, PZ - MP, PZ + MP, asfalto, 0); plano(PX + 3.6, PX + 300, PZ - MP, PZ + MP, asfalto, 0);
+    plano(PX - MP, PX + MP, PZ - 300, PZ - 3.6, asfalto, 0); plano(PX - MP, PX + MP, PZ + 3.6, PZ + 300, asfalto, 0);
+    deitar(new T.RingGeometry(R_PRACA - 0.1, R_PISTA + 0.02, 96).translate(PX, -PZ, 0), asfalto, 0.002);
+    // As calçadas, um degrau acima do asfalto, com a guia de pedra na beirada. As das ruas vão do
+    // asfalto até a face das paredes; a da rotatória dá a volta inteira, cortada só pelas pistas.
+    const PAREDE = MR - 0.06, BOCA = Math.sqrt(R_PISTA * R_PISTA - MP * MP) + 0.02;   // (BOCA: onde a guia de cada rua encontra a da rotatória)
+    for (const lado of [-1, 1]) {
+      for (const [de, ate] of [[FIM.o, PX - 5], [PX + 5, FIM.l]]) laje(ret(de, ate, PZ + lado * (MP + GUIA / 2), PZ + lado * PAREDE), calcada, AC);   // ruas do oeste e do leste
+      for (const [de, ate] of [[FIM.o, PX - BOCA], [PX + BOCA, FIM.l]]) laje(ret(de, ate, PZ + lado * MP, PZ + lado * (MP + GUIA)), granito, CG);
+      for (const [de, ate] of [[FIM.s, PZ - 5], [PZ + 5, FIM.n]]) laje(ret(PX + lado * (MP + GUIA / 2), PX + lado * PAREDE, de, ate), calcada, AC);   // ruas do sul e do norte
+      for (const [de, ate] of [[FIM.s, PZ - BOCA], [PZ + BOCA, FIM.n]]) laje(ret(PX + lado * MP, PX + lado * (MP + GUIA), de, ate), granito, CG);
+    }
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      laje(setor(R_PISTA + GUIA / 2, R_CALCADA, sx, sz, MP + GUIA / 2), calcada, AC);
+      laje(setor(R_PISTA, R_PISTA + GUIA, sx, sz, MP), granito, CG);
+    }
+    // as faixas de pedestres: a que vai da porta de casa à do mercadinho e uma em cada boca de rua, na volta da rotatória
+    const zebra = (x, z, aoLongoDeX, comprimento) => {       // aoLongoDeX: a rua corre ao longo de x (e as listras também)
+      for (const d of [-0.9, -0.45, 0, 0.45, 0.9]) {
+        if (aoLongoDeX) plano(x - comprimento / 2, x + comprimento / 2, z + d - 0.12, z + d + 0.12, tinta, 0.005);
+        else plano(x + d - 0.12, x + d + 0.12, z - comprimento / 2, z + comprimento / 2, tinta, 0.005);
+      }
+    };
+    zebra(6, PZ, true, 1.5);
+    for (const s of [-1, 1]) { zebra(PX + s * 5.3, PZ, true, 0.9); zebra(PX, PZ + s * 5.3, false, 0.9); }
+    caixa(0.9, 0.012, 0.5, liso(0x7a5a3a, 1), 6, AC + 0.006, 4.36);                        // o capacho da porta de casa
+
+    // --- a praça: o calçamento de pedrinhas, o ponto de encontro no meio e os bancos em volta ---
+    const texPraca = texturaCanvas(1024, 1024, (c, l) => {
+      const sorte = aleatorio(81), m = l / 2, e = m / (R_PRACA - GUIA), escuro = '#3d4248';   // e: pontos do desenho por metro
+      c.fillStyle = '#e9e2d0'; c.fillRect(0, 0, l, l);
+      for (let i = 0; i < 26000; i++) {          // as pedrinhas claras
+        const t = 204 + Math.floor(sorte() * 42);
+        c.fillStyle = `rgba(${t},${t - 6},${t - 24},0.55)`;
+        c.fillRect(sorte() * l, sorte() * l, 5 + sorte() * 6, 5 + sorte() * 6);
+      }
+      const anel = (r, largura) => { c.strokeStyle = escuro; c.lineWidth = largura * e; c.beginPath(); c.arc(m, m, r * e, 0, 7); c.stroke(); };
+      anel(2.2, 0.12); anel(1.02, 0.1);
+      c.strokeStyle = escuro; c.lineWidth = 0.17 * e; c.lineJoin = 'round';                 // a onda, como a de um calçadão
+      c.beginPath();
+      for (let i = 0; i <= 720; i++) { const a = i / 720 * 2 * Math.PI, r = (1.86 + 0.13 * Math.sin(a * 12)) * e; if (i) c.lineTo(m + r * Math.cos(a), m + r * Math.sin(a)); else c.moveTo(m + r * Math.cos(a), m + r * Math.sin(a)); }
+      c.closePath(); c.stroke();
+      // o nome, em volta do meio, duas vezes: lê-se de pé para quem chega de um lado e do outro
+      c.fillStyle = escuro; c.font = `bold ${Math.round(0.26 * e)}px Bahnschrift, Arial, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      const nome = 'PONTO DE ENCONTRO', passo = 0.125;
+      for (const meio of [Math.PI / 2, -Math.PI / 2]) [...nome].forEach((letra, i) => {
+        const fi = meio + ((nome.length - 1) / 2 - i) * passo;
+        c.save(); c.translate(m + 1.4 * e * Math.cos(fi), m + 1.4 * e * Math.sin(fi)); c.rotate(fi - Math.PI / 2); c.fillText(letra, 0, 0); c.restore();
+      });
+      salpicar(c, l, 9000, sorte, '255,255,255', '40,40,40', 3, 0.1);
+    });
+    malha(g, new T.CylinderGeometry(R_PRACA, R_PRACA, CG, 96), granito, PX, CG / 2, PZ);
+    const mosaico = malha(g, new T.CircleGeometry(R_PRACA - GUIA, 96), mat(0xffffff, { map: texPraca, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), PX, CG + 0.002, PZ);
+    mosaico.rotation.x = -Math.PI / 2;
+    semSombra.push(mosaico);
+    const ferro = liso(0x2f3a40, 0.5), tronco = liso(0x6b4a2f, 0.9), sebeMat = mat(0xffffff, { map: texFolhagem, roughness: 1 }), ripa = liso(0xf7f5ee, 0.6);
+    const CORES_DAS_FLORES = [0xe4572e, 0xf2c230, 0xf06aa8, 0xffffff, 0x9b6fe0], petalas = {};
+    const flor = (x, y, z, r, cor) => (petalas[cor] = petalas[cor] || []).push(new T.SphereGeometry(r, 8, 6).translate(x, y, z));
+    {
+      // O ponto de encontro: sobre dois degraus de pedra, uma coluna com um cubo de quatro placas
+      // verdes, uma virada para cada rua, e um canteiro de flores em volta.
+      const pedra = rebocado(0xd9d4c7), verdeFerro = mat(0x1f5a43, { roughness: 0.45, metalness: 0.3 });
+      malha(g, new T.CylinderGeometry(0.62, 0.68, 0.16, 40), pedra, PX, CG + 0.08, PZ);
+      malha(g, new T.CylinderGeometry(0.44, 0.48, 0.16, 40), pedra, PX, CG + 0.24, PZ);
+      malha(g, new T.CylinderGeometry(0.07, 0.1, 0.72, 16), verdeFerro, PX, CG + 0.68, PZ);
+      const placa = mat(0xffffff, { roughness: 0.55, map: texturaCanvas(512, 512, (c, l) => {
+        const cx = l / 2, cy = 190;
+        c.fillStyle = '#0a8f5b'; c.fillRect(0, 0, l, l);
+        c.strokeStyle = '#ffffff'; c.lineWidth = 12; c.strokeRect(18, 18, l - 36, l - 36);
+        c.fillStyle = '#ffffff';
+        for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {       // quatro setas, dos cantos para o meio
+          c.save(); c.translate(cx + sx * 128, cy + sy * 98); c.rotate(Math.atan2(-sy * 98, -sx * 128));
+          c.fillRect(-40, -10, 44, 20);
+          c.beginPath(); c.moveTo(2, -28); c.lineTo(40, 0); c.lineTo(2, 28); c.closePath(); c.fill();
+          c.restore();
+        }
+        for (const [dx, s] of [[-36, 0.82], [36, 0.82], [0, 1]]) {           // no meio, três pessoas juntas
+          c.beginPath(); c.arc(cx + dx, cy - 22 * s, 13 * s, 0, 7); c.fill();
+          c.fillRect(cx + dx - 15 * s, cy - 6 * s, 30 * s, 42 * s);
+        }
+        letras(c, 'PONTO DE', cx, 378, 68, '#ffffff', l - 70); letras(c, 'ENCONTRO', cx, 448, 68, '#ffffff', l - 70);
+      }) });
+      malha(g, new T.BoxGeometry(0.92, 0.92, 0.92), [placa, placa, verdeFerro, verdeFerro, placa, placa], PX, CG + 1.5, PZ).castShadow = true;
+      malha(g, new T.ConeGeometry(0.8, 0.34, 4), verdeFerro, PX, CG + 2.13, PZ).rotation.y = Math.PI / 4;
+      malha(g, new T.SphereGeometry(0.07, 16, 12), M.latao, PX, CG + 2.34, PZ);
+      malha(g, new T.TorusGeometry(0.84, 0.13, 8, 40), sebeMat, PX, CG + 0.08, PZ).rotation.x = Math.PI / 2;
+      for (let i = 0; i < 30; i++) flor(PX + Math.cos(i / 30 * 6.283) * 0.84, CG + 0.22, PZ + Math.sin(i / 30 * 6.283) * 0.84, 0.075, CORES_DAS_FLORES[i % 3]);
+      bloco('ponto de encontro', PX - 0.8, PX + 0.8, PZ - 0.8, PZ + 0.8);
+    }
+    // um banco de praça; sem giro, o encosto fica do lado +z (quem senta olha para -z)
+    const banco = (x, z, giro, y) => {
+      const b = new T.Group();
+      b.position.set(x, y || 0, z); b.rotation.y = giro || 0;
+      g.add(b);
+      for (const dz of [-0.15, -0.02, 0.11]) caixa(1.3, 0.035, 0.115, madeira, 0, 0.45, dz, b);       // o assento, de três ripas
+      for (const dy of [0.62, 0.78]) caixa(1.3, 0.11, 0.035, madeira, 0, dy, 0.2, b);                  // o encosto, de duas
+      for (const dx of [-0.55, 0.55]) { caixa(0.05, 0.44, 0.4, ferro, dx, 0.22, -0.01, b); caixa(0.05, 0.44, 0.05, ferro, dx, 0.64, 0.2, b); }
+    };
+    const globoDaRua = luminoso({ color: 0xfff4d6 }), luzesDosPostes = [];   // (as luzes dos postes só acendem no fim da tarde e de noite)
     const poste = (x, z) => {
-      malha(g, new T.CylinderGeometry(0.045, 0.06, 2.9, 10), ferro, x, 1.45, z);
-      malha(g, new T.SphereGeometry(0.16, 16, 12), luminoso({ color: 0xfff1c9 }), x, 3.0, z);
-      malha(g, new T.CylinderGeometry(0.2, 0.2, 0.03, 16), ferro, x, 3.17, z);
+      malha(g, new T.CylinderGeometry(0.1, 0.14, 0.3, 12), ferro, x, 0.15, z);
+      malha(g, new T.CylinderGeometry(0.04, 0.06, 2.8, 10), ferro, x, 1.4, z);
+      malha(g, new T.CylinderGeometry(0.13, 0.06, 0.1, 12), ferro, x, 2.84, z);
+      malha(g, new T.SphereGeometry(0.17, 16, 12), globoDaRua, x, 3.02, z);
+      malha(g, new T.ConeGeometry(0.2, 0.12, 12), ferro, x, 3.22, z);
       bloco('poste', x - 0.08, x + 0.08, z - 0.08, z + 0.08);
+      const luz = new T.PointLight(0xffd9a0, 0, 10, 1.4);
+      luz.position.set(x, 2.95, z);
+      g.add(luz);
+      luzesDosPostes.push(luz);
     };
-    arvore(-1.6, 4.92, true); arvore(9.9, 4.92, true);       // na beira da calçada: a copa não entra nas casas
-    arvore(-4.7, 5.0); arvore(-5.2, 7.7); arvore(-7, 6.2); arvore(13.4, 5.9); arvore(14.6, 7.4);
-    poste(1.5, 4.72); poste(9.6, 7.78);
-    for (const x of [-3.35, 11.35]) malha(g, caixaSuave(0.5, 1.1, 4.3, 0.14), liso(0x3f7f3c, 0.95), x, 0.55, 6.25);   // as cercas vivas que fecham as pontas da rua
-    caixa(1.4, 0.06, 0.4, madeira, 1.3, 0.44, 8.12); caixa(1.4, 0.36, 0.05, madeira, 1.3, 0.72, 8.3);            // um banco de praça
-    for (const x of [0.7, 1.9]) caixa(0.06, 0.44, 0.36, ferro, x, 0.22, 8.12);
-    bloco('banco', 0.6, 2.0, 7.9, 8.35);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      // na praça, um banco em cada canto, de frente para o meio; e, na calçada da volta, um poste
+      const a = Math.atan2(sz, sx), x = PX + Math.cos(a) * 1.95, z = PZ + Math.sin(a) * 1.95;
+      banco(x, z, Math.PI / 2 - a, CG);
+      bloco('banco', x - 0.48, x + 0.48, z - 0.48, z + 0.48);
+      poste(PX + sx * 3.96, PZ + sz * 3.96);
+    }
+
+    // --- cercas, cercas vivas e árvores ---
+    // uma cerca viva reta, de (x1, z1) a (x2, z2), ao longo de x ou de z
+    const sebe = (x1, z1, x2, z2, alt = 0.55, larg = 0.36) => {
+      const emX = Math.abs(x2 - x1) >= Math.abs(z2 - z1), comprimento = Math.abs(emX ? x2 - x1 : z2 - z1);
+      malha(g, caixaSuave(emX ? comprimento : larg, alt, emX ? larg : comprimento, 0.1), sebeMat, (x1 + x2) / 2, alt / 2, (z1 + z2) / 2);
+    };
+    // ...e a que acompanha a volta da rotatória, por fora da calçada, entre uma rua e a outra (os ângulos são medidos a partir da rua do leste ou do oeste)
+    const sebeCurva = (sx, sz, a1, a2) => {
+      const pontos = [...arco(R_CALCADA + 0.1, a1, a2, sx, sz), ...arco(R_CALCADA + 0.4, a2, a1, sx, sz)];
+      malha(g, new T.ExtrudeGeometry(forma(pontos), { depth: 0.44, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.07, bevelSegments: 2 }).rotateX(-Math.PI / 2), sebeMat, 0, 0.03, 0);
+    };
+    // uma cerca de ripas brancas, de (x1, z1) a (x2, z2), ao longo de x ou de z (do menor para o maior)
+    const cerca = (x1, z1, x2, z2) => {
+      const emX = z1 === z2, comprimento = emX ? x2 - x1 : z2 - z1, pecas = [], ripas = Math.max(2, Math.round(comprimento / 0.14)), vaos = Math.max(1, Math.round(comprimento / 1.5));
+      const peca = (l, a, p, t, y) => pecas.push(new T.BoxGeometry(emX ? l : p, a, emX ? p : l).translate(emX ? x1 + t : x1, y, emX ? z1 : z1 + t));
+      for (let i = 0; i <= ripas; i++) peca(0.075, 0.6, 0.025, comprimento * i / ripas, 0.35);
+      for (const y of [0.2, 0.5]) peca(comprimento, 0.05, 0.035, comprimento / 2, y);
+      for (let i = 0; i <= vaos; i++) peca(0.09, 0.72, 0.09, comprimento * i / vaos, 0.36);
+      malha(g, juntar(pecas), ripa, 0, 0, 0);
+    };
+    // As árvores: um tronco e uma copa de bolas facetadas. As copas de todas vão para poucas
+    // malhas (uma por tom de verde ou de flor), montadas no fim.
+    const CORES_DAS_COPAS = { verde: [0x4d9a45, 0x5fae50, 0x3c8640], amarelo: [0xf4c531, 0xe5ab1c], rosa: [0xf29bbd, 0xe277a5] };
+    const copas = { verde: [[], [], []], amarelo: [[], []], rosa: [[], []] }, troncos = [], moitas = [];
+    const arvore = (x, z, o = {}) => {           // o: { barra: o robô não passa; flor: 'amarelo' ou 'rosa' (um ipê); escala; simples: de longe, com menos bolas }
+      const e = o.escala || 1, sorte = aleatorio(Math.round((x + 80) * 97 + (z + 80) * 131)), tons = copas[o.flor || 'verde'];
+      troncos.push(new T.CylinderGeometry(0.09 * e, 0.15 * e, 1.8 * e, 8).translate(x, 0.9 * e, z));
+      const bolas = o.simples ? [[0, 2.3, 0, 0.82], [0.3, 2.95, 0.1, 0.55]]
+        : [[0, 2.25, 0, 0.72], [0.45, 2.05, 0.15, 0.5], [-0.42, 2.1, 0.12, 0.52], [0.05, 2.1, -0.45, 0.5], [0, 2.15, 0.48, 0.46], [0.05, 2.82, 0.02, 0.5]];
+      bolas.forEach(([dx, dy, dz, r], i) => tons[i % tons.length].push(new T.IcosahedronGeometry(r * e * (0.92 + sorte() * 0.16), 1).rotateY(sorte() * 6.28).translate(x + dx * e, dy * e, z + dz * e)));
+      if (o.barra) bloco('árvore', x - 0.15, x + 0.15, z - 0.15, z + 0.15);
+    };
+    const moita = (x, z, r, flores) => {         // uma moita baixa; com `flores`, salpicada delas
+      const sorte = aleatorio(Math.round((x + 80) * 53 + (z + 80) * 71));
+      moitas.push(new T.IcosahedronGeometry(1, 1).scale(r, r * 0.7, r).translate(x, r * 0.45, z));
+      for (let i = 0; i < (flores || 0); i++) { const a = sorte() * 6.283, d = sorte() * r * 0.8; flor(x + Math.cos(a) * d, r * 0.95 + sorte() * 0.08 - d * 0.3, z + Math.sin(a) * d, 0.055, CORES_DAS_FLORES[Math.floor(sorte() * CORES_DAS_FLORES.length)]); }
+    };
+    // o que fecha o calçamento onde não há parede: as cercas dos jardins e a cerca viva da volta da rotatória
+    const QUINA = Math.asin(MR / R_CALCADA);     // o ângulo em que a volta da calçada encontra a beirada de cada rua
+    sebeCurva(-1, -1, QUINA, Math.PI / 2 - QUINA); sebeCurva(-1, 1, 0.5, Math.PI / 2 - QUINA);   // (do lado do mercadinho, começa depois da quina dele)
+    sebeCurva(1, 1, 0.46, Math.PI / 2 - QUINA); sebeCurva(1, -1, 0.46, Math.PI / 2 - QUINA);
+    sebe(8.12, 3.86, 8.5, 3.86);                  // da quina da nossa casa até a volta
+    cerca(FIM.o, 3.9, -2.75, 3.9);                // o jardim ao lado da nossa casa
+    cerca(FIM.o, 8.6, -4.35, 8.6);                // antes da padaria
+    cerca(2.05, 8.6, 3.35, 8.6);                  // entre a padaria e o mercadinho
+    cerca(23.65, 8.6, FIM.l, 8.6);                // depois da farmácia
+    cerca(11.63, FIM.s, 11.63, 0.85);             // o nosso quintal, na rua do sul
+    sebe(16.37, -0.85, 16.37, 0.85); cerca(16.37, FIM.s, 16.37, -5.15);                      // antes e depois do flat da rua do sul
+    sebe(11.63, 11.65, 11.63, 13.45); cerca(11.63, 17.95, 11.63, FIM.n);                    // antes e depois da escola
+    cerca(16.37, 11.6, 16.37, FIM.n);             // o parquinho
+    // onde a cidade acaba: um cavalete listrado fecha a pista, e uma moita alta, cada calçada
+    const listras = mat(0xffffff, { roughness: 0.6, map: texturaCanvas(256, 32, (c, l, a) => { for (let i = 0; i < 8; i++) { c.fillStyle = i % 2 ? '#ffffff' : '#d8362b'; c.fillRect(i * l / 8, 0, l / 8, a); } }) });
+    const cavalete = (x, z, aoLongoDeX) => {
+      const b = new T.Group();
+      b.position.set(x, 0, z); if (!aoLongoDeX) b.rotation.y = Math.PI / 2;
+      g.add(b);
+      for (const y of [0.5, 0.84]) caixa(2.5, 0.16, 0.04, listras, 0, y, 0, b);
+      for (const dx of [-1.05, 1.05]) { caixa(0.06, 0.96, 0.06, ferro, dx, 0.48, 0, b); caixa(0.06, 0.05, 0.5, ferro, dx, 0.025, 0, b); }
+    };
+    for (const s of [-1, 1]) {
+      cavalete(s < 0 ? CIDADE.oeste - 0.15 : CIDADE.leste + 0.15, PZ, false);
+      cavalete(PX, s < 0 ? CIDADE.sul - 0.15 : CIDADE.norte + 0.15, true);
+      for (const lado of [-1, 1]) {
+        malha(g, caixaSuave(0.4, 0.9, 1.0, 0.12), sebeMat, s < 0 ? FIM.o + 0.2 : FIM.l - 0.2, 0.45, PZ + lado * 1.72);
+        malha(g, caixaSuave(1.0, 0.9, 0.4, 0.12), sebeMat, PX + lado * 1.72, 0.45, s < 0 ? FIM.s + 0.2 : FIM.n - 0.2);
+      }
+    }
+    // as árvores da cidade: na calçada da nossa rua, nos jardins e nos cantos da praça...
+    arvore(-1.6, 4.92, { barra: true });
+    arvore(-4.1, 1.9, { flor: 'rosa' }); arvore(2.7, 10.4, { escala: 0.8 }); arvore(9.9, -3.3); arvore(10.3, -0.5, { flor: 'amarelo', escala: 0.9 });
+    arvore(10.1, 12.0, { escala: 0.95 }); arvore(17.9, 12.1); arvore(17.9, 0.4, { escala: 0.95 });
+    arvore(18.8, 15.0, { flor: 'amarelo', escala: 1.1 }); arvore(20.6, 17.1); arvore(17.7, 17.5, { escala: 0.85 });
+    arvore(-3.2, 13.6, { escala: 1.15 }); arvore(5.8, 14.4, { escala: 1.1 }); arvore(22.4, 14.2); arvore(27.9, -2.6, { flor: 'rosa' }); arvore(4.5, -2.2, { escala: 1.1 }); arvore(-0.5, -2.6);
+    {
+      // ...e as do campo em volta, mais simples, longe das ruas
+      const sorte = aleatorio(4711);
+      for (let i = 0; i < 46; i++) {
+        const a = sorte() * 6.283, longe = 27 + sorte() * 60, x = MEIO.x + Math.cos(a) * longe, z = MEIO.z + Math.sin(a) * longe;
+        if (Math.abs(x - PX) < 4 || Math.abs(z - PZ) < 4) continue;
+        arvore(x, z, { simples: true, escala: 0.9 + sorte() * 0.7, flor: sorte() < 0.12 ? 'amarelo' : sorte() < 0.1 ? 'rosa' : undefined });
+      }
+    }
+    moita(-3.3, 3.2, 0.42, 7); moita(-4.6, 3.3, 0.3, 4); moita(-4.7, 0.8, 0.45);                // o jardim ao lado da casa
+    moita(2.3, 9.2, 0.36, 6); moita(3.1, 9.4, 0.3, 5);                                          // entre a padaria e o mercadinho
+    moita(9.3, 1.5, 0.4, 6); moita(9.6, -0.9, 0.34); moita(8.9, -2.2, 0.45, 8);                 // o quintal
+    moita(17.4, 14.0, 0.45, 8); moita(19.6, 13.4, 0.4, 7); moita(21.2, 15.2, 0.5, 9); moita(17.2, 16.2, 0.36, 5);   // o parquinho
+    moita(18.7, 10.9, 0.38, 6); moita(9.3, 10.9, 0.38, 6); moita(18.7, 1.6, 0.36, 5);          // os cantos da praça
+    banco(20.3, 14.9, Math.PI / 2);               // o banco do parquinho, virado para a rua
+    banco(-2.0, 8.14, 0, AC); bloco('banco', -2.7, -1.3, 7.9, 8.35);                            // o banco da frente da padaria, debaixo do toldo
+    poste(1.5, 4.25); poste(-4.3, 8.3); poste(23.8, 8.3); poste(11.95, 13.0); poste(11.95, -3.0);   // (na beirada da calçada, do lado das casas: no meio dela atrapalhariam o caminho)
     caixa(0.07, 0.95, 0.07, ferro, 7.15, 0.475, 4.28); malha(g, caixaSuave(0.3, 0.2, 0.2, 0.04), liso(0xc8372d, 0.5), 7.15, 1.02, 4.28);   // a caixa de correio
 
+    // --- um carro, estacionado na nossa rua ---
+    // (a frente dele olha para +x; `giro` vira)
+    function carro(x, z, giro, hex) {
+      const c = new T.Group(), LARG = 1.46;
+      c.position.set(x, 0, z); c.rotation.y = giro;
+      g.add(c);
+      const lataria = mat(hex, { roughness: 0.3, metalness: 0.35, envMap: reflexoDaRua, envMapIntensity: 0.9 });
+      const vidraca = mat(0x1c2b35, { roughness: 0.05, metalness: 0.7, envMap: reflexoDaRua, envMapIntensity: 1.3, side: T.DoubleSide });
+      const borracha = liso(0x17181a, 0.9), plastico = liso(0x25282c, 0.6), cromado = mat(0xd0d5da, { metalness: 0.9, roughness: 0.25, envMap: reflexoDaRua });
+      // um perfil de lado (x = comprimento, y = altura; um ponto de quatro números é uma curva), esticado na largura do carro
+      const perfilado = (pontos, largura, chanfro) => {
+        const s = new T.Shape();
+        pontos.forEach((p, i) => { if (!i) s.moveTo(p[0], p[1]); else if (p.length === 4) s.quadraticCurveTo(p[0], p[1], p[2], p[3]); else s.lineTo(p[0], p[1]); });
+        return new T.ExtrudeGeometry(s, { depth: largura - 2 * chanfro, bevelEnabled: true, bevelThickness: chanfro, bevelSize: chanfro * 0.8, bevelSegments: 3, curveSegments: 8 }).translate(0, 0, chanfro - largura / 2);
+      };
+      // a carroceria de baixo, de um para-choque ao outro, e a cabine, mais estreita, por cima
+      malha(c, perfilado([[-1.6, 0.34], [-1.64, 0.62], [-1.64, 0.86, -1.5, 0.9], [0.98, 0.92], [1.5, 0.82], [1.66, 0.78, 1.66, 0.6], [1.62, 0.34]], LARG, 0.06), lataria, 0, 0, 0);
+      malha(c, perfilado([[-1.5, 0.86], [-1.08, 1.32], [-1.04, 1.38, -0.9, 1.38], [0.14, 1.38], [0.28, 1.38, 0.34, 1.33], [0.98, 0.9]], 1.28, 0.05), lataria, 0, 0, 0);
+      // os vidros: os dos lados (dois de cada), o para-brisa e o de trás, deitados sobre a cabine
+      for (const pontos of [[[-1.36, 0.93], [-1.06, 1.27], [-0.44, 1.29], [-0.44, 0.93]], [[-0.36, 0.93], [-0.36, 1.29], [0.28, 1.29], [0.84, 0.93]]]) {
+        const s = new T.Shape();
+        pontos.forEach(([px, py], i) => { if (i) s.lineTo(px, py); else s.moveTo(px, py); });
+        for (const lado of [-1, 1]) malha(c, new T.ShapeGeometry(s), vidraca, 0, 0, lado * 0.642);
+      }
+      malha(c, new T.BoxGeometry(0.64, 0.012, 1.1), vidraca, 0.686, 1.153, 0).rotation.z = -0.592;
+      malha(c, new T.BoxGeometry(0.48, 0.012, 1.08), vidraca, -1.324, 1.121, 0).rotation.z = 0.831;
+      for (const rx of [-1.02, 1.04]) for (const lado of [-1, 1]) {            // as rodas: o pneu, a calota e, atrás, o vão escuro do para-lama
+        const roda = new T.Group();
+        roda.position.set(rx, 0.3, lado * 0.66); roda.rotation.x = Math.PI / 2;
+        c.add(roda);
+        malha(roda, new T.CylinderGeometry(0.3, 0.3, 0.2, 28), borracha, 0, 0, 0);
+        malha(roda, new T.CylinderGeometry(0.18, 0.18, 0.21, 20), cromado, 0, 0, 0);
+        malha(roda, new T.CylinderGeometry(0.36, 0.36, 0.03, 28), plastico, 0, lado * 0.072, 0);
+      }
+      const placaDoCarro = mat(0xffffff, { roughness: 0.5, map: texturaCanvas(256, 84, (p, l, a) => {
+        p.fillStyle = '#f4f4f0'; p.fillRect(0, 0, l, a);
+        p.fillStyle = '#1f4fa3'; p.fillRect(0, 0, l, 20);
+        letras(p, 'BRASIL', l / 2, 11, 15, '#ffffff', l); letras(p, 'ESP3L40', l / 2, 54, 50, '#14181c', l - 16);
+      }) });
+      for (const lado of [-1, 1]) {
+        malha(c, caixaSuave(0.14, 0.2, LARG - 0.04, 0.05), plastico, lado > 0 ? 1.67 : -1.66, 0.43, 0);                       // os para-choques, com a placa
+        malha(c, new T.PlaneGeometry(0.4, 0.13), placaDoCarro, lado > 0 ? 1.745 : -1.735, 0.43, 0).rotation.y = lado * Math.PI / 2;
+        malha(c, caixaSuave(0.06, 0.13, 0.32, 0.025), luminoso({ color: 0xfff6dc }), 1.69, 0.69, lado * 0.47);                // os faróis
+        malha(c, caixaSuave(0.06, 0.14, 0.26, 0.025), mat(0xc9261f, { roughness: 0.3, emissive: 0x5a0b08 }), -1.675, 0.73, lado * 0.5);   // as lanternas
+        malha(c, caixaSuave(0.1, 0.07, 0.06, 0.02), lataria, 0.74, 0.97, lado * 0.7);                                         // os retrovisores
+        for (const lx of [-0.42, 0.5]) malha(c, new T.BoxGeometry(0.012, 0.44, 0.01), plastico, lx, 0.66, lado * 0.731);      // as frestas das portas
+        for (const lx of [-0.62, 0.3]) malha(c, new T.BoxGeometry(0.12, 0.025, 0.02), cromado, lx, 0.84, lado * 0.735);       // as maçanetas
+      }
+      malha(c, new T.BoxGeometry(0.02, 0.1, 0.56), plastico, 1.715, 0.66, 0);                                                 // a grade, entre os faróis
+      const mancha = malha(c, new T.PlaneGeometry(3.9, 2.0), new T.MeshBasicMaterial({ map: texSombra, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }), 0, 0.012, 0);
+      mancha.rotation.x = -Math.PI / 2;
+    }
+    carro(1.9, 5.98, 0, 0x2f6fb5);
+    bloco('carro', 0.2, 3.6, 5.2, 6.75);
+
     // --- as fachadas (não dá para entrar) ---
-    // Cada prédio é uma caixa com a fachada pintada na face que dá para a rua. No desenho, as
+    // Cada prédio de enfeite é uma caixa com a fachada pintada na face da frente. No desenho, as
     // medidas são em metros: x a partir da esquerda de quem olha, y a partir do chão.
     const pintar = o => (c, l, a, e) => {
+      const sorte = aleatorio(l * 31 + a), larg = l / e, alt = a / e;
       const R = (x, y, w, h) => c.fillRect(x * e, a - (y + h) * e, w * e, h * e), bola = (x, y, r) => { c.beginPath(); c.arc(x * e, a - y * e, r * e, 0, 7); c.fill(); };
+      const degrade = (x, y, w, h, emCima, embaixo) => { const d = c.createLinearGradient(0, a - (y + h) * e, 0, a - y * e); d.addColorStop(0, emCima); d.addColorStop(1, embaixo); c.fillStyle = d; R(x, y, w, h); };
+      const vidraca = (x, y, w, h) => {          // um vidro: o céu refletido e um brilho atravessado
+        degrade(x, y, w, h, '#d6ecf7', '#7fb2cf');
+        c.fillStyle = 'rgba(255,255,255,0.35)';
+        c.beginPath(); c.moveTo((x + w * 0.12) * e, a - (y + h * 0.08) * e); c.lineTo((x + w * 0.42) * e, a - (y + h * 0.92) * e); c.lineTo((x + w * 0.6) * e, a - (y + h * 0.92) * e); c.lineTo((x + w * 0.3) * e, a - (y + h * 0.08) * e); c.fill();
+      };
       c.fillStyle = o.parede; c.fillRect(0, 0, l, a);
-      c.fillStyle = 'rgba(0,0,0,0.16)'; R(0, 0, l / e, 0.3);
+      salpicar(c, Math.max(l, a), l * a / 70, sorte, '255,255,255', '0,0,0', 4, 0.03);     // o grão do reboco
+      degrade(0, alt - 0.45, larg, 0.45, 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0)');             // a sombra do beiral
+      c.fillStyle = o.barrado || 'rgba(0,0,0,0.2)'; R(0, 0, larg, 0.38);                   // o barrado
+      c.fillStyle = 'rgba(255,255,255,0.3)'; R(0, 0.38, larg, 0.02);
       for (const [x, w] of o.vitrines || []) {
-        c.fillStyle = '#3d4a54'; R(x - 0.06, 0.5, w + 0.12, 1.62);
-        c.fillStyle = '#a9d2e6'; R(x, 0.56, w, 1.5);
-        c.fillStyle = 'rgba(255,255,255,0.4)'; c.beginPath(); c.moveTo((x + 0.1) * e, a - 0.7 * e); c.lineTo((x + 0.55) * e, a - 1.95 * e); c.lineTo((x + 0.8) * e, a - 1.95 * e); c.lineTo((x + 0.35) * e, a - 0.7 * e); c.fill();
+        c.fillStyle = 'rgba(0,0,0,0.25)'; R(x - 0.1, 0.42, w + 0.2, 1.76);
+        c.fillStyle = '#39454e'; R(x - 0.07, 0.46, w + 0.14, 1.7);
+        vidraca(x, 0.54, w, 1.54);
+        c.fillStyle = 'rgba(40,50,58,0.35)'; R(x, 0.54, w, 0.5);                           // o fundo da vitrine, mais escuro embaixo
+        for (let i = 0, n = Math.max(2, Math.floor(w / 0.24)); i < n; i++) { c.fillStyle = (o.exposto || ['#d9a25a', '#c98a3c', '#e8c27a'])[i % 3]; bola(x + 0.14 + i * (w - 0.28) / (n - 1), 0.7, 0.085); }   // o que está exposto
+        c.fillStyle = '#39454e'; if (w > 2) R(x + w / 2 - 0.025, 0.54, 0.05, 1.54);
       }
       for (const x of o.janelas || []) {
-        c.fillStyle = '#ffffff'; R(x - 0.06, 0.94, 1.02, 1.12);
-        c.fillStyle = '#8fc2dc'; R(x, 1.0, 0.42, 1.0); R(x + 0.48, 1.0, 0.42, 1.0);
-        c.fillStyle = '#7a4a2a'; R(x - 0.1, 0.78, 1.1, 0.16);
-        for (let i = 0; i < 5; i++) { c.fillStyle = ['#e4572e', '#f2c230', '#f06aa8'][i % 3]; bola(x + 0.05 + i * 0.2, 0.98, 0.07); }
+        if (o.venezianas) for (const vx of [x - 0.32, x + 0.92]) {
+          c.fillStyle = o.venezianas; R(vx, 0.98, 0.3, 1.04);
+          c.fillStyle = 'rgba(0,0,0,0.22)'; for (let i = 0; i < 9; i++) R(vx + 0.03, 1.02 + i * 0.11, 0.24, 0.03);
+        }
+        c.fillStyle = 'rgba(0,0,0,0.2)'; R(x - 0.1, 0.9, 1.1, 1.2);
+        c.fillStyle = '#ffffff'; R(x - 0.07, 0.94, 1.04, 1.13);
+        vidraca(x, 1.0, 0.9, 1.0);
+        c.fillStyle = '#ffffff'; R(x + 0.43, 1.0, 0.04, 1.0); R(x, 1.48, 0.9, 0.04);
+        c.fillStyle = '#7a4a2a'; R(x - 0.12, 0.76, 1.14, 0.18);                            // a floreira
+        c.fillStyle = '#4f9d4a'; R(x - 0.1, 0.92, 1.1, 0.05);
+        for (let i = 0; i < 6; i++) { c.fillStyle = ['#e4572e', '#f2c230', '#f06aa8'][i % 3]; bola(x + i * 0.18, 0.99, 0.065); }
       }
       for (const [x, cor] of o.portas || []) {
-        c.fillStyle = 'rgba(0,0,0,0.3)'; R(x - 0.06, 0, 1.02, 2.16);
-        c.fillStyle = cor; R(x, 0, 0.9, 2.1);
-        c.fillStyle = 'rgba(0,0,0,0.18)'; R(x + 0.12, 1.15, 0.66, 0.75); R(x + 0.12, 0.2, 0.66, 0.75);
-        c.fillStyle = '#e9c46a'; bola(x + 0.78, 1.05, 0.045);
+        c.fillStyle = 'rgba(0,0,0,0.28)'; R(x - 0.1, 0, 1.1, 2.46);
+        c.fillStyle = '#f5f2ea'; R(x - 0.07, 0, 1.04, 2.42);                                // o batente
+        vidraca(x, 2.14, 0.9, 0.22);                                                        // a bandeira: o vidro de cima da porta
+        c.fillStyle = cor; R(x, 0.04, 0.9, 2.06);
+        for (const y of [0.22, 1.2]) { c.fillStyle = 'rgba(0,0,0,0.2)'; R(x + 0.12, y, 0.66, 0.76); c.fillStyle = 'rgba(255,255,255,0.14)'; R(x + 0.15, y + 0.03, 0.6, 0.7); }
+        c.fillStyle = '#e9c46a'; bola(x + 0.79, 1.06, 0.045);
+        c.fillStyle = '#b9b4a8'; R(x - 0.15, 0, 1.2, 0.05);                                 // a soleira
       }
-      if (o.toldo) for (let i = 0, [x, w, c1, c2] = o.toldo; i * 0.25 < w; i++) { c.fillStyle = i % 2 ? c1 : c2; R(x + i * 0.25, 2.2, Math.min(0.25, w - i * 0.25), 0.3); }
+      if (o.toldo) {                             // a barra do toldo (a lona é uma peça à parte: ver predio)
+        const [x, w, c1, c2] = o.toldo;
+        degrade(x, 1.9, w, 0.3, 'rgba(0,0,0,0.28)', 'rgba(0,0,0,0)');
+        for (let i = 0; i * 0.25 < w; i++) { c.fillStyle = i % 2 ? c1 : c2; R(x + i * 0.25, 2.2, Math.min(0.25, w - i * 0.25), 0.26); bola(x + i * 0.25 + 0.125, 2.2, 0.125); }
+      }
       if (o.letreiro) {
-        const [texto, fundo, letra] = o.letreiro, y = a / e - 0.62;
-        c.fillStyle = fundo; R(0.3, y, l / e - 0.6, 0.46);
-        letras(c, texto, l / 2, a - (y + 0.23) * e + 3, 0.34 * e, letra, l - e);
+        const [texto, fundo, letra] = o.letreiro, y = alt - 0.66;
+        c.fillStyle = 'rgba(0,0,0,0.25)'; R(0.27, y - 0.04, larg - 0.54, 0.52);
+        c.fillStyle = fundo; R(0.3, y, larg - 0.6, 0.48);
+        c.strokeStyle = letra; c.lineWidth = 0.02 * e; c.strokeRect(0.35 * e, a - (y + 0.43) * e, (larg - 0.7) * e, 0.38 * e);
+        letras(c, texto, l / 2, a - (y + 0.24) * e + 3, 0.3 * e, letra, l - 1.1 * e);
       }
-      if (o.cruz) { c.fillStyle = '#1f9d55'; R(o.cruz - 0.1, 1.2, 0.2, 0.6); R(o.cruz - 0.3, 1.4, 0.6, 0.2); }
+      if (o.cruz) { c.fillStyle = '#ffffff'; bola(o.cruz, 1.5, 0.42); c.fillStyle = '#1f9d55'; R(o.cruz - 0.1, 1.2, 0.2, 0.6); R(o.cruz - 0.3, 1.4, 0.6, 0.2); }
     };
-    function predio(x1, x2, zFrente, lado, altura, corTelha, desenho) {     // lado: +1 = a frente olha para +z; -1 = para -z
-      const fundo = 4, z1 = lado > 0 ? zFrente - fundo : zFrente, L = x2 - x1, E = 128;
-      caixa(L, altura, fundo, liso(new T.Color(desenho.parede).getHex(), 0.9), (x1 + x2) / 2, altura / 2, z1 + fundo / 2);
-      const tex = texturaCanvas(Math.round(L * E), Math.round(altura * E), (c, l, a) => pintar(desenho)(c, l, a, E));
-      const f = malha(g, new T.PlaneGeometry(L, altura), mat(0xffffff, { map: tex, roughness: 0.85 }), (x1 + x2) / 2, altura / 2, zFrente + lado * 0.012);
-      if (lado < 0) f.rotation.y = Math.PI;
-      cobrir(x1, x2, z1, z1 + fundo, altura, 1.1, liso(corTelha, 0.8));
+    // (x, z): o meio da frente; giro: para onde a frente olha (0 = +z, π = -z, π/2 = +x, -π/2 = -x); L: a largura da frente
+    function predio(x, z, giro, L, altura, corDaTelha, desenho) {
+      const p = new T.Group(), fundo = 4, E = 160;
+      p.position.set(x, 0, z); p.rotation.y = giro;
+      g.add(p);
+      malha(p, escalarUV(new T.BoxGeometry(L, altura, fundo), L / 2, altura / 2), rebocado(new T.Color(desenho.parede).getHex()), 0, altura / 2, -fundo / 2);
+      const fachada = texturaCanvas(Math.round(L * E), Math.round(altura * E), (c, l, a) => pintar(desenho)(c, l, a, E));
+      malha(p, new T.PlaneGeometry(L, altura), mat(0xffffff, { map: fachada, roughness: 0.85 }), 0, altura / 2, 0.012);
+      cobrir(-L / 2, L / 2, -fundo, 0, altura, 1.1, corDaTelha, p);
+      if (desenho.toldo) {                       // a lona do toldo, inclinada para a rua
+        const [tx, tw, c1, c2] = desenho.toldo, faixas = Math.round(tw / 0.25);
+        const lona = mat(0xffffff, { roughness: 0.8, map: texturaCanvas(faixas * 32, 32, (c, l, a) => { for (let i = 0; i < faixas; i++) { c.fillStyle = i % 2 ? c1 : c2; c.fillRect(i * 32, 0, 32, a); } }) });
+        malha(p, new T.BoxGeometry(tw, 0.04, 0.8), lona, tx + tw / 2 - L / 2, 2.42, 0.4).rotation.x = 0.3;
+      }
     }
-    predio(-3.4, 3.3, 8.5, -1, 3.1, 0x8a4a3a, { parede: '#e8b4a0', portas: [[1.0, '#7a4a2a']], vitrines: [[2.6, 2.6]], toldo: [2.5, 2.8, '#ffffff', '#d9772b'], letreiro: ['PADARIA', '#7a4a2a', '#fff3d6'] });
-    predio(8.7, 12.6, 8.5, -1, 3.3, 0x5c6b73, { parede: '#eef4ee', portas: [[2.6, '#2f7d5b']], vitrines: [[0.5, 1.6]], letreiro: ['FARMÁCIA', '#1f9d55', '#ffffff'], cruz: 1.3 });
-    predio(8.2, 12.6, 4, 1, 2.9, 0x8a4a3a, { parede: '#a9cbe6', portas: [[0.5, '#c8553d']], janelas: [1.9, 3.2] });
+    predio(11.75, 15.7, Math.PI / 2, 4.2, 3.2, 0xa85a3c, { parede: '#f3e2a9', portas: [[1.65, '#3d6fa8']], janelas: [0.35, 2.95], letreiro: ['ESCOLA', '#3d6fa8', '#ffffff'] });
+
+    // as copas, os troncos, as moitas e as flores, cada tipo numa malha só
+    for (const [nome, tons] of Object.entries(copas)) tons.forEach((pecas, i) => { if (pecas.length) malha(g, juntar(pecas), mat(CORES_DAS_COPAS[nome][i], { roughness: 0.9, flatShading: true }), 0, 0, 0); });
+    malha(g, juntar(troncos), tronco, 0, 0, 0);
+    malha(g, juntar(moitas), mat(0x4a8f44, { roughness: 0.95, flatShading: true }), 0, 0, 0);
+    for (const [cor, pecas] of Object.entries(petalas)) malha(g, juntar(pecas), liso(Number(cor), 0.7), 0, 0, 0);
     // por fora da nossa casa: a janela do quarto, a do banheiro e o batente da porta
     for (const [x, y, w, h] of [[2.0, 1.5, 1.0, 1.0], [-1.3, 1.85, 0.6, 0.45]]) {
       caixa(w + 0.14, h + 0.14, 0.03, branco, x, y, 4.1);
@@ -1292,20 +1946,23 @@
     for (const x of [1.72, 2.54]) caixa(0.26, 1.25, 0.03, liso(0xe8d9c0, 1), x, 1.52, 0.11);
     const quadro = malha(g, new T.PlaneGeometry(0.7, 0.5), M.quadro, 3.93, 1.6, 3.3);
     quadro.rotation.y = -Math.PI / 2;
-    {
-      // A pessoa, sentada na poltrona, de costas para a parede da rua e de frente para onde o
-      // robô começa. Não diz nada até falarem com ela. (O alvo fica nos joelhos: ver criarSala.)
-      const corpo = montarPessoa(), x = 2.0, z = 3.48;
+    // Quem mora na casa deste desafio: sentada numa poltrona, de costas para uma parede (em z =
+    // `parede`) e de frente para onde o robô começa. Não diz nada até falarem com ela. O alvo fica
+    // nos joelhos (ver criarSala). O que ela recebe fica no braço da poltrona: a primeira coisa
+    // do lado da mão direita, a segunda do outro.
+    const morador = (corpo, x, z, sala, parede) => {
       corpo.grupo.position.set(x, 0, z);
       g.add(corpo.grupo);
-      vila.pessoa = pessoa = { nome: 'pessoa', x, z: z - 0.45, rosto: { x, z: z + 0.04 }, sala: 1, corpo, contorno: corpo.contorno, fala: '', recebeu: null,
+      vila.pessoa = pessoa = { nome: 'pessoa', x, z: z - 0.45, rosto: { x, z: z + 0.04 }, sala, corpo, contorno: corpo.contorno, fala: '', recebeu: null, recebidos: [],
         receber(o) {
           corpo.grupo.add(o.malha);
-          o.malha.position.set(0.3, 0.64 + o.alt / 2, -0.29);
+          o.malha.position.set(this.recebidos.length ? -0.3 : 0.3, 0.64 + o.alt / 2, -0.29);
+          this.recebidos.push(o);
           this.fala = FALAS.agradecimento;
         } };
-      bloco('poltrona', x - 0.42, x + 0.42, z - 0.65, 4);
-    }
+      bloco('poltrona', x - 0.42, x + 0.42, z - 0.65, parede);
+    };
+    if (DESAFIO === 4) morador(montarPessoa(), 2.0, 3.48, 1, 4);     // (nos outros desafios a casa é outra: aqui não há ninguém)
 
     // --- banheiro (2): pia com espelho, vaso e box (só enfeite) ---
     const louca = liso(0xf7f7f4, 0.2), vidroDoBox = new T.MeshStandardMaterial({ color: 0xbfe3f0, transparent: true, opacity: 0.28, roughness: 0.05, depthWrite: false, side: T.DoubleSide });
@@ -1430,32 +2087,23 @@
     malha(g, new T.CylinderGeometry(0.2, 0.2, 0.02, 24), preto, 4.62, 0.01, 3.42);
     for (const dx of [-0.34, 0.3]) { malha(g, new T.CylinderGeometry(0.15, 0.15, 0.04, 20), madeira, 4.62 + dx, 0.46, 3.0 + Math.abs(dx) * 0.3); malha(g, new T.CylinderGeometry(0.03, 0.03, 0.44, 10), preto, 4.62 + dx, 0.22, 3.0 + Math.abs(dx) * 0.3); }
     bloco('mesa', 4.1, 5.1, 2.9, 3.94);
-    {
-      // a porta da rua: de correr, como as dos outros desafios; é o jogador que abre, e ela fica aberta
-      const X = 6, Z = 4, folha = caixa(LARGURA_PORTA, ALTURA_PORTA, 0.05, M.porta, X, ALTURA_PORTA / 2, Z);
-      for (const lado of [-1, 1]) caixa(0.05, 0.3, 0.02, M.latao, 0.5, 0, lado * 0.035, folha);
-      const borda = new T.Group(), e = ESPESSURA + 0.14, b = 0.05;
-      g.add(borda);
-      for (const lado of [-1, 1]) caixa(b, ALTURA_PORTA, e, M.destaque, X + lado * (LARGURA_PORTA / 2 + b / 2), ALTURA_PORTA / 2, Z, borda);
-      caixa(LARGURA_PORTA + 2 * b, b, e, M.destaque, X, ALTURA_PORTA + b / 2, Z, borda);
-      borda.visible = false;
-      portasDaVila.push({ nome: 'porta', x: X, z: Z, eixo: 'z', salas: [3, 4], aberta: false, vis: 0, folha, contorno: borda });
-    }
-    for (const [x, z, eixo, a, b] of [[0, 3, 'x', 1, 2], [4, 2, 'x', 1, 3], [6, 8.5, 'z', 4, 5]])   // os vãos sem porta
-      portasDaVila.push({ nome: 'vão', x, z, eixo, salas: [a, b], aberta: true, vis: 1, folha: null, contorno: null });
+    // a porta da rua: de correr, como as dos outros desafios; é o jogador que abre, e ela fica aberta (no desafio 5, que é o da outra casa, fica trancada)
+    portaDaRua(6, 4, 'z', [3, 4], M.porta, DESAFIO !== 4);
+    vao(0, 3, 'x', 1, 2); vao(4, 2, 'x', 1, 3); vao(6, 8.5, 'z', 4, 5);                    // os vãos sem porta: para o banheiro, para a cozinha e o do mercadinho
 
     // --- mercadinho (5): estantes com mercadorias, balcão e caixotes ---
     const rnd = aleatorio(4242), CORES_DAS_CAIXAS = [0xd8433b, 0x2f7de1, 0xf2c230, 0x35a853, 0x9b51e0, 0xf2801f, 0xf06aa8, 0xf4f4f4, 0x24a3a3];
     // Uma estante encostada numa parede, com quatro tábuas. `ao`: (t, f, y) → o ponto a t metros
     // ao longo dela, f metros à frente da parede e y de altura. `vago`: onde não pôr mercadoria.
-    const estante = (comprimento, ao, giro, vago) => {
+    // (`cores` e `sorte`: as cores das mercadorias e de onde vem o acaso, quando não são as do mercadinho)
+    const estante = (comprimento, ao, giro, vago, cores = CORES_DAS_CAIXAS, sorte = rnd) => {
       for (let i = 0; i < 4; i++) {
         const y = 0.3 + i * 0.45, tabua = malha(g, new T.BoxGeometry(comprimento, 0.03, 0.4), branco, ...ao(comprimento / 2, 0.22, y - 0.015));
         tabua.rotation.y = giro;
-        for (let t = 0.14; t < comprimento - 0.1; t += 0.2 + rnd() * 0.06) {
+        for (let t = 0.14; t < comprimento - 0.1; t += 0.2 + sorte() * 0.06) {
           if (vago && i === vago[0] && Math.abs(t - vago[1]) < 0.52) continue;
-          const alt = 0.12 + rnd() * 0.16, lata = rnd() < 0.35, cor = liso(CORES_DAS_CAIXAS[Math.floor(rnd() * CORES_DAS_CAIXAS.length)], 0.5);
-          const m = malha(g, lata ? new T.CylinderGeometry(0.055, 0.055, alt, 14) : new T.BoxGeometry(0.13, alt, 0.1), cor, ...ao(t, 0.2 + rnd() * 0.08, y + alt / 2));
+          const alt = 0.12 + sorte() * 0.16, lata = sorte() < 0.35, cor = liso(cores[Math.floor(sorte() * cores.length)], 0.5);
+          const m = malha(g, lata ? new T.CylinderGeometry(0.055, 0.055, alt, 14) : new T.BoxGeometry(0.13, alt, 0.1), cor, ...ao(t, 0.2 + sorte() * 0.08, y + alt / 2));
           m.rotation.y = giro;
         }
       }
@@ -1474,6 +2122,491 @@
       for (let i = 0; i < 9; i++) malha(g, new T.SphereGeometry(0.06, 12, 10), liso(cor, 0.6), x - 0.14 + (i % 3) * 0.14, 0.36, 8.76 + Math.floor(i / 3) * 0.14);
     }
     bloco('caixotes', 4.08, 5.08, 8.56, 9.14);
+
+    // --- o flat da casa cor-de-rosa (6, 7 e 8), na rua do sul ---
+    // Um flat de luxo: mármore, veludo, dourados. A sala com cozinha (6), por onde se entra, o
+    // quarto (7) e o banheiro (8), em fila. É a casa do desafio 5, onde mora uma mulher; nos
+    // outros desafios a porta da rua dele fica trancada (como a da nossa casa fica no 5).
+    //
+    //    z      +------------+------------+--------+
+    //   -1      |    sofá    | ela  janela|  pia   |
+    //           =   6 sala      7 quarto  .   8    |       = a porta da rua (em z = -2,5)
+    //   -5      |  cozinha   |       cama | banh.  |
+    //           +------------+------------+--------+
+    //         16,25        20,25        24,25    26,65   x
+    const FX = 16.25, FE = 26.65, FZ1 = -5, FZ2 = -1, FS = FZ1 + 0.06, FN = FZ2 - 0.06;   // as paredes do flat (a da rua, a do leste, a do sul e a do norte) e as faces de dentro das duas últimas
+    const dourado = mat(0xd4af61, { metalness: 1, roughness: 0.28 }), veludoVerde = liso(0x1f5f4f, 0.95), veludoAzul = liso(0x27365a, 0.95), rosado = liso(0xe6bfc6, 0.9), laca = liso(0xf7f4ee, 0.25);
+    const marinho = liso(0x1f2a44, 0.4), marinhoClaro = liso(0x2a3858, 0.4), marmoreLiso = liso(0xf3f1ec, 0.12), mostarda = liso(0xd9a441, 0.9), folhaEscura = mat(0x2f6b3a, { roughness: 0.8, flatShading: true });
+    const texMarmore = repetida(texturaCanvas(512, 512, (c, l) => {            // placas de mármore branco de 60 cm; cobre 1,2 m x 1,2 m
+      const sorte = aleatorio(91), m = l / 2;
+      c.fillStyle = '#f3f1ec'; c.fillRect(0, 0, l, l);
+      for (let i = 0; i < 26; i++) {             // os veios: riscos tortos, cinzentos, uns mais fortes que os outros
+        let x = sorte() * l, y = sorte() * l;
+        const rumo = sorte() * 6.28;
+        c.strokeStyle = `rgba(${sorte() < 0.25 ? '168,150,110' : '120,124,130'},${(0.1 + sorte() * 0.3).toFixed(2)})`; c.lineWidth = 0.6 + sorte() * 2.4;
+        c.beginPath(); c.moveTo(x, y);
+        for (let k = 0; k < 9; k++) { const a = rumo + (sorte() - 0.5) * 1.4; x += Math.cos(a) * 40; y += Math.sin(a) * 40; c.lineTo(x, y); }
+        c.stroke();
+      }
+      salpicar(c, l, 2500, sorte, '255,255,255', '90,90,96', 6, 0.04);
+      c.fillStyle = '#c9c2b4';
+      c.fillRect(m - 1, 0, 2, l); c.fillRect(0, m - 1, l, 2); c.fillRect(0, 0, 1, l); c.fillRect(l - 1, 0, 1, l); c.fillRect(0, 0, l, 1); c.fillRect(0, l - 1, l, 1);
+    }));
+    texMarmore.repeat.set(4 / 1.2, 4 / 1.2);
+    const marmore = mat(0xffffff, { map: texMarmore, roughness: 0.12, envMapIntensity: 0.9, vertexColors: true }), marmoreVerde = mat(0x9fb5aa, { map: texMarmore, roughness: 0.12, envMapIntensity: 0.9, vertexColors: true });
+    const madeiraEscura = mat(0xa07c62, { map: texPiso, bumpMap: texRelevoPiso, bumpScale: 1, roughness: 0.35, envMapIntensity: 0.7, vertexColors: true });
+    // A parede do flat: 1 m de largura (repete a cada metro) pela altura da sala. Rodapé alto e
+    // sanca, brancos; um filete dourado; e molduras (um quadro alto por metro e um baixo embaixo dele).
+    const texParedeChique = texturaCanvas(512, 1536, (c, l, a) => {
+      const Y = h => a * (1 - h / A), sorte = aleatorio(92);
+      c.fillStyle = '#ece5d8'; c.fillRect(0, 0, l, a);
+      salpicar(c, Math.max(l, a), 5000, sorte, '255,255,255', '0,0,0', 5, 0.02);
+      c.fillStyle = '#f8f6f1'; c.fillRect(0, 0, l, Y(A - 0.14));
+      c.fillStyle = '#c9a65a'; c.fillRect(0, Y(A - 0.14), l, 5);
+      c.fillStyle = 'rgba(0,0,0,0.08)'; c.fillRect(0, Y(A - 0.14) + 5, l, 8);
+      c.fillStyle = '#f8f6f1'; c.fillRect(0, Y(0.16), l, a - Y(0.16));
+      c.fillStyle = 'rgba(0,0,0,0.14)'; c.fillRect(0, Y(0.16) - 3, l, 3);
+      const moldura = (h0, h1) => {
+        for (const [d, cor] of [[0, 'rgba(0,0,0,0.16)'], [7, 'rgba(255,255,255,0.9)']]) { c.lineWidth = 4; c.strokeStyle = cor; c.strokeRect(46 + d, Y(h1) + d, l - 92 - 2 * d, Y(h0) - Y(h1) - 2 * d); }
+      };
+      moldura(1.02, 2.28); moldura(0.3, 0.86);
+    });
+    texParedeChique.wrapS = T.RepeatWrapping;
+    const chique = { parede: mat(0xffffff, { map: texParedeChique, roughness: 0.9, vertexColors: true }), lisa: liso(0xece5d8, 0.9) };
+    const quadroChique = mat(0xffffff, { roughness: 0.7, map: texturaCanvas(520, 320, (c, l, a) => {
+      c.fillStyle = '#f4efe6'; c.fillRect(0, 0, l, a);
+      c.fillStyle = '#1f2a44'; c.beginPath(); c.moveTo(0, a); c.bezierCurveTo(l * 0.25, a * 0.2, l * 0.5, a * 0.9, l, a * 0.35); c.lineTo(l, a); c.fill();
+      c.fillStyle = '#e6bfc6'; c.beginPath(); c.arc(l * 0.3, a * 0.38, 62, 0, 7); c.fill();
+      c.strokeStyle = '#c9a65a'; c.lineWidth = 7; c.beginPath(); c.moveTo(0, a * 0.72); c.bezierCurveTo(l * 0.3, a * 0.35, l * 0.6, a, l, a * 0.5); c.stroke();
+      c.fillStyle = '#c9a65a'; c.beginPath(); c.arc(l * 0.74, a * 0.3, 26, 0, 7); c.fill();
+    }) });
+    const tapeteChique = mat(0xffffff, { roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, map: texturaCanvas(600, 380, (c, l, a) => {
+      c.fillStyle = '#efe8da'; c.fillRect(0, 0, l, a);
+      salpicar(c, l, 5000, aleatorio(93), '255,255,255', '120,100,70', 3, 0.05);
+      for (const [m, larg, cor] of [[16, 10, '#c9a65a'], [38, 3, '#1f2a44'], [50, 3, '#c9a65a']]) { c.strokeStyle = cor; c.lineWidth = larg; c.strokeRect(m, m, l - 2 * m, a - 2 * m); }
+    }) });
+    const vidroDaRua = mat(0x8fc2dc, { roughness: 0.06, metalness: 0.5, envMap: reflexoDaRua, envMapIntensity: 1.1 });
+    // uma planta de vaso: o tronco fino e um punhado de folhas largas
+    const vasoDePlanta = (x, z, alt, vaso) => {
+      malha(g, new T.CylinderGeometry(0.17, 0.12, 0.3, 20), vaso, x, 0.15, z);
+      malha(g, new T.CylinderGeometry(0.018, 0.022, alt - 0.3, 8), tronco, x, 0.3 + (alt - 0.3) / 2, z);
+      for (let i = 0; i < 7; i++) {
+        const a = i * 2.4, r = 0.1 + (i % 3) * 0.07, folha = malha(g, new T.IcosahedronGeometry(0.16, 1), folhaEscura, x + Math.cos(a) * r, alt - 0.35 + i * 0.07, z + Math.sin(a) * r);
+        folha.scale.set(1, 0.45, 0.7); folha.rotation.set(0.5, a, 0.4);
+      }
+    };
+    const rebocoRosa = rebocado(0xf2b8c6), barradoRosa = liso(0xfaf3f0, 0.9);
+    parede(FX, FZ1, FX, FZ2, [-2.5], -1, rebocoRosa, barradoRosa, chique);
+    parede(FX, FZ2, FE, FZ2, [], 1, rebocoRosa, barradoRosa, chique);
+    parede(FX, FZ1, FE, FZ1, [], -1, rebocoRosa, barradoRosa, chique);
+    parede(FE, FZ1, FE, FZ2, [], 1, rebocoRosa, barradoRosa, chique);
+    parede(20.25, FZ1, 20.25, FZ2, [-3], 0, null, null, chique);
+    parede(24.25, FZ1, 24.25, FZ2, [-2], 0, null, null, chique);
+    piso(FX, 20.25, FZ1, FZ2, marmore); piso(20.25, 24.25, FZ1, FZ2, madeiraEscura); piso(24.25, FE, FZ1, FZ2, marmoreVerde, 2.4 / 4, 1);
+    teto(FX, 20.25, FZ1, FZ2); teto(20.25, 24.25, FZ1, FZ2); teto(24.25, FE, FZ1, FZ2);
+    cobrir(FX, FE, FZ1, FZ2, A, 1.25, 0x5f5a66);
+    portaDaRua(FX, -2.5, 'x', [6, 4], liso(0x1f4e5a, 0.45), DESAFIO !== 5);              // a porta da rua (trancada nos desafios que não são o desta casa)
+    vao(20.25, -3, 'x', 6, 7); vao(24.25, -2, 'x', 7, 8);
+    {
+      // por fora, na rua: o batente da porta, a marquise, as arandelas, uma janela, os vasos de buxinho e o capacho
+      const xf = FX - 0.1;
+      for (const z of [-3.25, -1.75]) caixa(0.05, ALTURA_PORTA + 0.1, 0.1, branco, xf, (ALTURA_PORTA + 0.1) / 2, z);
+      caixa(0.05, 0.1, 1.6, branco, xf, ALTURA_PORTA + 0.05, -2.5);
+      caixa(0.6, 0.06, 1.9, liso(0x2b2f3a, 0.5), FX - 0.36, 2.36, -2.5);
+      for (const z of [-3.5, -1.5]) {
+        caixa(0.06, 0.2, 0.08, dourado, xf, 1.76, z); malha(g, new T.SphereGeometry(0.07, 12, 10), globoDaRua, xf - 0.07, 1.9, z);
+        malha(g, new T.CylinderGeometry(0.14, 0.11, 0.3, 16), liso(0x2b2f3a, 0.5), FX - 0.26, CIDADE.alto + 0.15, z);
+        malha(g, new T.CylinderGeometry(0.015, 0.015, 0.3, 6), tronco, FX - 0.26, CIDADE.alto + 0.45, z);
+        malha(g, new T.IcosahedronGeometry(0.19, 1), folhaEscura, FX - 0.26, CIDADE.alto + 0.72, z);
+      }
+      caixa(0.03, 1.14, 0.94, branco, xf, 1.5, -4.2);
+      malha(g, new T.PlaneGeometry(0.8, 1.0), vidroDaRua, xf - 0.018, 1.5, -4.2).rotation.y = -Math.PI / 2;
+      caixa(0.01, 1.0, 0.04, branco, xf - 0.022, 1.5, -4.2); caixa(0.01, 0.04, 0.8, branco, xf - 0.022, 1.5, -4.2);
+      caixa(0.22, 0.2, 1.0, liso(0x2b2f3a, 0.6), xf - 0.1, 0.84, -4.2);
+      for (let i = 0; i < 5; i++) malha(g, new T.SphereGeometry(0.085, 10, 8), liso([0xf06aa8, 0xffffff, 0xf29bbd][i % 3], 0.7), xf - 0.1, 1.0, -4.6 + i * 0.2);
+      caixa(0.5, 0.012, 0.9, liso(0x2b2f3a, 1), FX - 0.35, CIDADE.alto + 0.006, -2.5);
+    }
+    {
+      // a sala com cozinha (6): a bancada e a geladeira na parede do sul; o sofá na do norte
+      const B1 = 16.4, B2 = 19.1, bm = (B1 + B2) / 2, bc = B2 - B1;
+      caixa(bc, 0.1, 0.5, preto, bm, 0.05, FS + 0.27);
+      caixa(bc, 0.78, 0.6, marinho, bm, 0.49, FS + 0.3);
+      malha(g, caixaSuave(bc + 0.04, 0.05, 0.66, 0.012), marmoreLiso, bm, 0.905, FS + 0.32);                  // o tampo e o frontão, de mármore
+      caixa(bc, 0.62, 0.02, marmoreLiso, bm, 1.24, FS + 0.012);
+      caixa(bc, 0.7, 0.35, marinho, bm, 1.92, FS + 0.175);                                                   // os armários de cima
+      for (let i = 0; i < 4; i++) {
+        const x = B1 + bc / 4 * (i + 0.5);
+        malha(g, caixaSuave(bc / 4 - 0.03, 0.72, 0.02, 0.008), marinhoClaro, x, 0.49, FS + 0.605); caixa(0.16, 0.014, 0.02, dourado, x, 0.8, FS + 0.625);
+        malha(g, caixaSuave(bc / 4 - 0.03, 0.64, 0.02, 0.008), marinhoClaro, x, 1.92, FS + 0.355); caixa(0.16, 0.014, 0.02, dourado, x, 1.66, FS + 0.375);
+      }
+      caixa(0.56, 0.012, 0.38, M.inox, 16.75, 0.932, FS + 0.32); caixa(0.44, 0.012, 0.26, M.inoxEscuro, 16.75, 0.935, FS + 0.34);   // a pia, com a torneira dourada
+      malha(g, new T.CylinderGeometry(0.014, 0.014, 0.3, 12), dourado, 16.75, 1.08, FS + 0.1);
+      malha(g, new T.CylinderGeometry(0.012, 0.012, 0.18, 12), dourado, 16.75, 1.22, FS + 0.18).rotation.x = Math.PI / 2;
+      caixa(0.6, 0.01, 0.44, liso(0x15171a, 0.1), 17.55, 0.936, FS + 0.3);                                   // o fogão, de vidro preto
+      for (const dx of [-0.14, 0.14]) for (const dz of [-0.1, 0.1]) malha(g, new T.RingGeometry(0.05, 0.065, 24), luminoso({ color: 0x8a2a20 }), 17.55 + dx, 0.943, FS + 0.3 + dz).rotation.x = -Math.PI / 2;
+      const cupula = mat(0xd4af61, { metalness: 1, roughness: 0.28, side: T.DoubleSide }), lampadinha = luminoso({ color: 0xfff0cf });
+      for (const x of [17.0, 17.75, 18.5]) {                                                                 // três pendentes sobre a bancada
+        semSombra.push(caixa(0.006, 0.52, 0.006, preto, x, 2.33, FS + 0.9));
+        semSombra.push(malha(g, new T.ConeGeometry(0.1, 0.14, 20, 1, true), cupula, x, 2.0, FS + 0.9));
+        malha(g, new T.SphereGeometry(0.04, 12, 10), lampadinha, x, 1.96, FS + 0.9);
+      }
+      bloco('bancada', FX, B2, FZ1, FS + 0.64);
+      {
+        // O filtro de água, na bancada (o copo fica ao lado dele: ver "os objetos"). Com o copo vazio
+        // na mão, o ESPACO enche o copo (desafio 5: ela precisa de água para tomar o remédio).
+        const corpo = malha(g, caixaSuave(0.2, 0.34, 0.2, 0.03), laca, 18.25, 0.93 + 0.17, FS + 0.2);
+        caixa(0.15, 0.13, 0.012, mat(0x7fc4ea, { roughness: 0.1 }), 18.25, 1.18, FS + 0.303);                    // o visor da água
+        malha(g, new T.CylinderGeometry(0.012, 0.012, 0.07, 8), M.inox, 18.25, 1.02, FS + 0.32);                 // a bica
+        vila.filtro = { nome: 'filtro', x: 18.25, z: FS + 0.3, alt: 0.34, sala: 6, malha: corpo, contorno: contorno(corpo, new T.BoxGeometry(0.27, 0.4, 0.27), 0, 1) };
+      }
+      for (const x of [16.9, 17.6]) {                                                                        // duas banquetas de veludo
+        malha(g, new T.CylinderGeometry(0.17, 0.17, 0.07, 24), veludoVerde, x, 0.7, FS + 0.95);
+        malha(g, new T.CylinderGeometry(0.02, 0.02, 0.66, 10), dourado, x, 0.33, FS + 0.95);
+        malha(g, new T.CylinderGeometry(0.15, 0.15, 0.015, 24), dourado, x, 0.008, FS + 0.95);
+        malha(g, new T.TorusGeometry(0.11, 0.008, 6, 24), dourado, x, 0.28, FS + 0.95).rotation.x = Math.PI / 2;
+      }
+      bloco('banquetas', 16.7, 17.8, FS + 0.75, FS + 1.15);
+      const gelada = montarMovel();                                                                          // a geladeira (de enfeite: esta não abre)
+      gelada.grupo.position.set(19.65, 0, FS + gelada.prof / 2);
+      g.add(gelada.grupo);
+      bloco('geladeira', 19.11, 20.25, FZ1, FS + gelada.prof + 0.1);
+      const SX = 18.3;                                                                                       // o sofá, de veludo verde, com duas almofadas
+      malha(g, caixaSuave(2.0, 0.3, 0.85, 0.08), veludoVerde, SX, 0.27, FN - 0.43);
+      malha(g, caixaSuave(2.0, 0.55, 0.2, 0.08), veludoVerde, SX, 0.62, FN - 0.1);
+      for (const lado of [-1, 1]) {
+        malha(g, caixaSuave(0.2, 0.4, 0.85, 0.08), veludoVerde, SX + lado * 0.9, 0.5, FN - 0.43);
+        malha(g, caixaSuave(0.78, 0.14, 0.6, 0.06), veludoVerde, SX + lado * 0.4, 0.47, FN - 0.5);
+        malha(g, caixaSuave(0.36, 0.36, 0.12, 0.05), rosado, SX + lado * 0.5, 0.7, FN - 0.3).rotation.x = -0.25;
+        for (const dz of [-0.78, -0.1]) malha(g, new T.CylinderGeometry(0.02, 0.015, 0.12, 8), dourado, SX + lado * 0.9, 0.06, FN + dz);
+      }
+      bloco('sofá', SX - 1.0, SX + 1.0, FN - 0.86, FZ2);
+      caixa(1.38, 0.88, 0.03, dourado, SX, 1.78, FN - 0.016);                                                // o quadro, em cima do sofá
+      malha(g, new T.PlaneGeometry(1.3, 0.8), quadroChique, SX, 1.78, FN - 0.034).rotation.y = Math.PI;
+      vasoDePlanta(16.75, FN - 0.4, 1.5, dourado); bloco('planta', 16.45, 17.05, FN - 0.7, FZ2);
+      malha(g, new T.CylinderGeometry(0.15, 0.15, 0.02, 20), dourado, 19.75, 0.01, FN - 0.35);               // a luminária de pé
+      malha(g, new T.CylinderGeometry(0.012, 0.012, 1.55, 8), dourado, 19.75, 0.78, FN - 0.35);
+      malha(g, new T.CylinderGeometry(0.11, 0.17, 0.24, 20, 1, true), luminoso({ color: 0xffe9c4, side: T.DoubleSide }), 19.75, 1.62, FN - 0.35);
+      bloco('luminária', 19.55, 19.95, FN - 0.55, FZ2);
+      malha(g, new T.PlaneGeometry(2.4, 1.5), tapeteChique, 18.2, 0.012, -2.95).rotation.x = -Math.PI / 2;
+    }
+    {
+      // o quarto (7): a cama na parede do sul, a penteadeira, a janela e, na poltrona, a mulher
+      const CX = 23.33, CL = 1.65;                 // o meio da cama e a largura dela
+      malha(g, caixaSuave(CL + 0.06, 0.3, 2.06, 0.05), veludoAzul, CX, 0.17, FS + 1.05);                      // a base estofada, o colchão, o edredom e a manta dobrada
+      malha(g, caixaSuave(CL, 0.2, 1.96, 0.06), branco, CX, 0.42, FS + 1.06);
+      malha(g, caixaSuave(CL + 0.02, 0.1, 1.3, 0.04), laca, CX, 0.54, FS + 1.36);
+      malha(g, caixaSuave(CL + 0.03, 0.06, 0.45, 0.025), mostarda, CX, 0.6, FS + 1.75);
+      for (const dx of [-0.4, 0.4]) {
+        malha(g, caixaSuave(0.62, 0.14, 0.38, 0.06), branco, CX + dx, 0.58, FS + 0.36);
+        malha(g, caixaSuave(0.4, 0.3, 0.12, 0.05), rosado, CX + dx * 0.9, 0.69, FS + 0.58).rotation.x = -0.3;
+      }
+      malha(g, caixaSuave(CL + 0.3, 1.3, 0.12, 0.05), veludoAzul, CX, 0.75, FS + 0.07);                       // a cabeceira alta, estofada, com botões dourados
+      for (let i = 0; i < 4; i++) for (let k = 0; k < 2; k++) malha(g, new T.SphereGeometry(0.02, 8, 6), dourado, CX - 0.6 + i * 0.4, 0.95 + k * 0.3, FS + 0.135);
+      bloco('cama', CX - CL / 2 - 0.03, 24.25, FZ1, FS + 2.1);
+      for (const dx of [-0.42, 0.42]) {                                                                       // dois quadros em cima da cabeceira
+        caixa(0.46, 0.56, 0.03, dourado, CX + dx, 1.95, FS + 0.016);
+        malha(g, new T.PlaneGeometry(0.4, 0.5), quadroChique, CX + dx, 1.95, FS + 0.034);
+      }
+      malha(g, caixaSuave(0.42, 0.36, 0.4, 0.03), laca, 22.2, 0.34, FS + 0.24);                               // o criado-mudo, com o abajur
+      for (const dx of [-0.17, 0.17]) for (const dz of [0.08, 0.4]) malha(g, new T.CylinderGeometry(0.012, 0.012, 0.16, 8), dourado, 22.2 + dx, 0.08, FS + dz);
+      malha(g, new T.CylinderGeometry(0.025, 0.06, 0.22, 12), dourado, 22.2, 0.63, FS + 0.24);
+      malha(g, new T.CylinderGeometry(0.08, 0.13, 0.17, 20, 1, true), luminoso({ color: 0xffe9c4, side: T.DoubleSide }), 22.2, 0.82, FS + 0.24);
+      bloco('criado-mudo', 21.97, 22.43, FZ1, FS + 0.46);
+      if (DESAFIO === 5) morador(montarPessoa(true), 21.5, FN - 0.46, 7, FZ2);                               // a mulher, com a mão na testa
+      const PX0 = 20.25 + 0.06;                    // a penteadeira, na parede da sala: o tampo de mármore, o espelho redondo e o banquinho
+      malha(g, caixaSuave(0.42, 0.04, 1.0, 0.012), marmoreLiso, PX0 + 0.22, 0.76, -1.62);
+      for (const dz of [-0.44, 0.44]) for (const dx of [0.05, 0.39]) malha(g, new T.CylinderGeometry(0.014, 0.014, 0.74, 8), dourado, PX0 + dx, 0.37, -1.62 + dz);
+      malha(g, new T.CylinderGeometry(0.33, 0.33, 0.02, 40), dourado, PX0 + 0.012, 1.42, -1.62).rotation.z = Math.PI / 2;
+      malha(g, new T.CircleGeometry(0.29, 40), mat(0xe6eef2, { metalness: 1, roughness: 0.04 }), PX0 + 0.025, 1.42, -1.62).rotation.y = Math.PI / 2;
+      malha(g, new T.CylinderGeometry(0.16, 0.16, 0.08, 20), rosado, PX0 + 0.7, 0.44, -1.62);
+      malha(g, new T.CylinderGeometry(0.02, 0.1, 0.4, 12), dourado, PX0 + 0.7, 0.2, -1.62);
+      bloco('penteadeira', 20.25, PX0 + 0.88, -2.15, FZ2);
+      caixa(1.06, 1.26, 0.03, branco, 23.1, 1.5, FN - 0.015);                                                 // a janela, com cortinas de veludo
+      malha(g, new T.PlaneGeometry(0.94, 1.14), luminoso({ color: 0xcfe9fa }), 23.1, 1.5, FN - 0.032).rotation.y = Math.PI;
+      caixa(0.03, 1.14, 0.012, branco, 23.1, 1.5, FN - 0.036); caixa(0.94, 0.03, 0.012, branco, 23.1, 1.5, FN - 0.036);
+      for (const dx of [-0.72, 0.72]) malha(g, caixaSuave(0.36, 2.2, 0.06, 0.025), rosado, 23.1 + dx, 1.26, FN - 0.07);
+      malha(g, new T.CylinderGeometry(0.014, 0.014, 2.0, 8), dourado, 23.1, 2.38, FN - 0.07).rotation.z = Math.PI / 2;
+      const LX = 22.25, LZ = -3;                   // o lustre, no meio do quarto: um aro dourado com velas
+      // (o lustre fica logo abaixo da lâmpada do quarto: se fizesse sombra, cada pingente viraria uma mancha enorme na parede)
+      semSombra.push(caixa(0.012, 0.5, 0.012, dourado, LX, 2.34, LZ));
+      const aro = malha(g, new T.TorusGeometry(0.34, 0.018, 8, 40), dourado, LX, 2.08, LZ);
+      aro.rotation.x = Math.PI / 2;
+      semSombra.push(aro);
+      const chama = luminoso({ color: 0xfff0cf });
+      for (let i = 0; i < 6; i++) {
+        const a = i * Math.PI / 3, x = LX + Math.cos(a) * 0.34, z = LZ + Math.sin(a) * 0.34;
+        semSombra.push(malha(g, new T.CylinderGeometry(0.014, 0.014, 0.09, 8), laca, x, 2.14, z));
+        malha(g, new T.SphereGeometry(0.026, 10, 8), chama, x, 2.21, z);
+        semSombra.push(malha(g, new T.OctahedronGeometry(0.03), mat(0xeaf6ff, { roughness: 0.05, metalness: 0.3, envMapIntensity: 1.5 }), x, 2.0, z));
+      }
+      malha(g, new T.CircleGeometry(1.05, 40), mat(0xf1ece2, { roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }), 21.6, 0.012, -3.3).rotation.x = -Math.PI / 2;
+    }
+    {
+      // o banheiro (8): a banheira solta na parede do sul, a pia de mármore com o espelho redondo na do norte e o vaso na do leste
+      const BE = FE - 0.06;
+      const banheira = malha(g, new T.CylinderGeometry(0.5, 0.42, 0.56, 32), louca, 25.5, 0.3, FS + 0.5);
+      banheira.scale.set(1.6, 1, 0.78);
+      const agua = malha(g, new T.CircleGeometry(0.45, 32), mat(0xbfe6ee, { roughness: 0.05, metalness: 0.2 }), 25.5, 0.5, FS + 0.5);
+      agua.rotation.x = -Math.PI / 2; agua.scale.set(1.6, 0.78, 1);
+      malha(g, new T.CylinderGeometry(0.018, 0.018, 0.86, 10), dourado, 24.62, 0.43, FS + 0.5);               // a torneira de pé, dourada
+      malha(g, new T.CylinderGeometry(0.016, 0.016, 0.22, 10), dourado, 24.72, 0.85, FS + 0.5).rotation.z = Math.PI / 2;
+      bloco('banheira', 24.5, 26.4, FZ1, FS + 0.95);
+      caixa(1.2, 0.42, 0.42, marinho, 25.6, 0.62, FN - 0.21);                                                 // a pia: o gabinete, o tampo, a cuba e a torneira
+      malha(g, caixaSuave(1.26, 0.04, 0.46, 0.012), marmoreLiso, 25.6, 0.85, FN - 0.23);
+      malha(g, new T.CylinderGeometry(0.17, 0.11, 0.1, 24), louca, 25.6, 0.92, FN - 0.25);
+      malha(g, new T.CylinderGeometry(0.012, 0.012, 0.24, 10), dourado, 25.6, 0.99, FN - 0.07);
+      malha(g, new T.CylinderGeometry(0.32, 0.32, 0.02, 40), dourado, 25.6, 1.55, FN - 0.012).rotation.x = Math.PI / 2;
+      malha(g, new T.CircleGeometry(0.28, 40), mat(0xe6eef2, { metalness: 1, roughness: 0.04 }), 25.6, 1.55, FN - 0.025).rotation.y = Math.PI;
+      bloco('pia', 24.95, 26.3, FN - 0.5, FZ2);
+      malha(g, caixaSuave(0.5, 0.4, 0.38, 0.06), louca, BE - 0.3, 0.2, -2.9);                                 // o vaso
+      malha(g, caixaSuave(0.18, 0.42, 0.42, 0.04), louca, BE - 0.1, 0.6, -2.9);
+      malha(g, caixaSuave(0.46, 0.04, 0.4, 0.015), branco, BE - 0.32, 0.42, -2.9);
+      bloco('vaso', BE - 0.6, FE, -3.2, -2.6);
+      malha(g, new T.CylinderGeometry(0.012, 0.012, 0.6, 8), dourado, 24.25 + 0.1, 1.2, -4.0).rotation.x = Math.PI / 2;   // a toalha, no porta-toalhas
+      caixa(0.03, 0.5, 0.44, branco, 24.25 + 0.1, 0.96, -4.0);
+      malha(g, new T.CircleGeometry(0.42, 32), mat(0xe6bfc6, { roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }), 25.3, 0.012, -2.7).rotation.x = -Math.PI / 2;
+    }
+
+    // --- a farmácia (9), na rua do leste: de portas abertas, como o mercadinho ---
+    {
+      const X1 = 19.6, X2 = 23.5, Z1 = 8.5, Z2 = 12.5, XP = 21.5, XM = (X1 + X2) / 2, rebocoF = rebocado(0xeef4ee), barradoF = liso(0x2f7d5b, 0.9), verdeF = liso(0x2f9d7a, 0.5);
+      parede(X1, Z1, X2, Z1, [XP], -1, rebocoF, barradoF);
+      parede(X1, Z2, X2, Z2, [], 1, rebocoF, barradoF);
+      parede(X1, Z1, X1, Z2, [], -1, rebocoF, barradoF);
+      parede(X2, Z1, X2, Z2, [], 1, rebocoF, barradoF);
+      piso(X1, X2, Z1, Z2, M.ladrilho, (X2 - X1) / 4, 1);
+      teto(X1, X2, Z1, Z2);
+      cobrir(X1, X2, Z1, Z2, A + 0.7, 0.9, 0x5c6b73);
+      vao(XP, Z1, 'z', 4, 9);
+      caixa(X2 - X1 + 0.12, 0.7, 0.14, rebocoF, XM, A + 0.35, Z1); caixa(X2 - X1 + 0.12, 0.7, 0.14, rebocoF, XM, A + 0.35, Z2);   // a platibanda, com o letreiro
+      caixa(0.14, 0.7, Z2 - Z1, rebocoF, X1, A + 0.35, (Z1 + Z2) / 2); caixa(0.14, 0.7, Z2 - Z1, rebocoF, X2, A + 0.35, (Z1 + Z2) / 2);
+      const letreiroF = texturaCanvas(1024, 170, (c, l, a) => {
+        c.fillStyle = '#1f9d55'; c.fillRect(0, 0, l, a);
+        c.strokeStyle = '#ffffff'; c.lineWidth = 8; c.strokeRect(10, 10, l - 20, a - 20);
+        letras(c, 'FARMÁCIA', l / 2, a / 2 + 6, 112, '#ffffff', l - 330);
+        c.fillStyle = '#ffffff';
+        for (const x of [100, l - 100]) { c.fillRect(x - 15, a / 2 - 45, 30, 90); c.fillRect(x - 45, a / 2 - 15, 90, 30); }
+      });
+      malha(g, new T.PlaneGeometry(3.5, 0.58), mat(0xffffff, { map: letreiroF, roughness: 0.6 }), XM, A + 0.36, Z1 - 0.075).rotation.y = Math.PI;
+      for (const x of [20.2, 22.85]) {                                                                        // as vitrines, de enfeite
+        caixa(1.0, 1.5, 0.04, liso(0x3d4a54, 0.5), x, 1.3, Z1 - 0.095);
+        malha(g, new T.PlaneGeometry(0.88, 1.38), vidroDaRua, x, 1.3, Z1 - 0.118).rotation.y = Math.PI;
+      }
+      const cruz = mat(0xffffff, { roughness: 0.5, emissive: 0xffffff, emissiveIntensity: 0.25, map: texturaCanvas(128, 128, (c, l) => {
+        c.fillStyle = '#ffffff'; c.fillRect(0, 0, l, l);
+        c.fillStyle = '#1f9d55'; c.fillRect(l * 0.36, l * 0.12, l * 0.28, l * 0.76); c.fillRect(l * 0.12, l * 0.36, l * 0.76, l * 0.28);
+      }) });
+      malha(g, new T.BoxGeometry(0.06, 0.6, 0.6), [cruz, cruz, verdeF, verdeF, verdeF, verdeF], X1 + 0.3, 2.35, Z1 - 0.48).castShadow = true;   // a cruz verde, de pé na fachada: vê-se de quem vem pela rua
+      caixa(0.04, 0.04, 0.3, ferro, X1 + 0.3, 2.62, Z1 - 0.2);
+      // por dentro: as estantes do fundo e da esquerda, e o balcão
+      const CORES_DA_FARMACIA = [0xffffff, 0xe3f1ec, 0x2f9d7a, 0x3d8fd1, 0xf06a6a, 0xf2c230], acaso = aleatorio(5151);
+      estante(3.0, (t, f, y) => [20.0 + t, y, Z2 - 0.06 - f], 0, [1, 1.5], CORES_DA_FARMACIA, acaso);       // na parede do fundo, com o lugar dos três remédios vago
+      bloco('estante', 20.0, 23.0, Z2 - 0.5, Z2);
+      estante(2.2, (t, f, y) => [X1 + 0.06 + f, y, 9.4 + t], Math.PI / 2, null, CORES_DA_FARMACIA, acaso);
+      bloco('estante', X1, X1 + 0.5, 9.4, 11.6);
+      caixa(0.7, 0.95, 1.5, branco, 23.05, 0.475, 10.1); caixa(0.74, 0.05, 1.54, verdeF, 23.05, 0.975, 10.1);   // o balcão, com a caixa registradora
+      malha(g, caixaSuave(0.34, 0.22, 0.3, 0.03), liso(0x3a4046, 0.4), 23.05, 1.11, 10.35); caixa(0.02, 0.16, 0.22, luminoso({ color: 0x9fe8b0 }), 22.87, 1.16, 10.35);
+      bloco('balcão', 22.7, X2, 9.3, 10.9);
+    }
+
+    // --- a casa azul (10 e 11), na rua do leste ---
+    // A cozinha (10), por onde se entra, e a sala (11). É a casa do desafio 6: o morador quer pão
+    // de queijo com café, e o café se faz aqui, na cafeteira, com a água da geladeira e o pó de
+    // café do mercadinho. Nos outros desafios a porta da rua dela fica trancada.
+    //
+    //    z      +--------===---+--------------+
+    //    4      |              | janela   ele |       === a porta da rua (em x = 21)
+    //           |  10 cozinha  .   11 sala    |
+    //    0      | pia  cafet. geladeira   TV  |
+    //           +--------------+--------------+
+    //         19,6           22,4           25,2   x
+    const casaAzul = { geladeira: null, movel: null, ZS: 0.06 };   // (o que os objetos do desafio 6 precisam saber dela: ver "os objetos")
+    {
+      const X1 = 19.6, XM = 22.4, X2 = 25.2, Z1 = 0, Z2 = 4, zs = casaAzul.ZS, rebocoAzul = rebocado(0xa9cbe6), barradoAzul = liso(0x6f93b5, 0.9);
+      parede(X1, Z1, X2, Z1, [], -1, rebocoAzul, barradoAzul);
+      parede(X1, Z2, X2, Z2, [21], 1, rebocoAzul, barradoAzul);
+      parede(X1, Z1, X1, Z2, [], -1, rebocoAzul, barradoAzul);
+      parede(X2, Z1, X2, Z2, [], 1, rebocoAzul, barradoAzul);
+      parede(XM, Z1, XM, Z2, [2]);
+      piso(X1, XM, Z1, Z2, M.ladrilho, (XM - X1) / 4, 1); piso(XM, X2, Z1, Z2, M.piso, (X2 - XM) / 4, 1);
+      teto(X1, XM, Z1, Z2); teto(XM, X2, Z1, Z2);
+      cobrir(X1, X2, Z1, Z2, A, 1.2, 0x8a4a3a);
+      portaDaRua(21, Z2, 'z', [10, 4], liso(0xc8553d, 0.5), DESAFIO !== 6, 1);            // (corre para o leste: do outro lado a parede acaba logo)
+      vao(XM, 2, 'x', 10, 11);
+      // por fora, na rua: o batente da porta, duas janelas com floreira e o capacho
+      for (const x of [20.25, 21.75]) caixa(0.1, ALTURA_PORTA + 0.1, 0.05, branco, x, (ALTURA_PORTA + 0.1) / 2, Z2 + 0.1);
+      caixa(1.6, 0.1, 0.05, branco, 21, ALTURA_PORTA + 0.05, Z2 + 0.1);
+      for (const x of [23.0, 24.5]) {
+        caixa(1.04, 1.14, 0.03, branco, x, 1.5, Z2 + 0.1);
+        malha(g, new T.PlaneGeometry(0.9, 1.0), vidroDaRua, x, 1.5, Z2 + 0.118);
+        caixa(0.04, 1.0, 0.01, branco, x, 1.5, Z2 + 0.122); caixa(0.9, 0.04, 0.01, branco, x, 1.5, Z2 + 0.122);
+        caixa(1.1, 0.2, 0.22, liso(0x7a4a2a, 0.8), x, 0.86, Z2 + 0.2);
+        for (let i = 0; i < 5; i++) malha(g, new T.SphereGeometry(0.085, 10, 8), liso([0xe4572e, 0xf2c230, 0xffffff][i % 3], 0.7), x - 0.4 + i * 0.2, 1.01, Z2 + 0.2);
+      }
+      caixa(0.9, 0.012, 0.5, liso(0x7a5a3a, 1), 21, CIDADE.alto + 0.006, Z2 + 0.36);
+      // a cozinha (10): a bancada com a pia e a cafeteira, e a geladeira, na parede do sul; uma mesinha na do oeste
+      const B1 = X1 + 0.06, B2 = 21.4, bm = (B1 + B2) / 2, bc = B2 - B1, azulejado = liso(0xf3f1ea, 0.2);
+      caixa(bc, 0.1, 0.44, preto, bm, 0.05, zs + 0.24);
+      caixa(bc, 0.78, 0.54, armario, bm, 0.49, zs + 0.27);
+      malha(g, caixaSuave(bc + 0.04, 0.04, 0.58, 0.012), tampo, bm, 0.9, zs + 0.29);
+      caixa(bc, 0.6, 0.02, azulejado, bm, 1.22, zs + 0.012);
+      caixa(bc, 0.7, 0.35, armario, bm, 1.9, zs + 0.175);
+      for (let i = 0; i < 3; i++) {
+        const x = B1 + bc / 3 * (i + 0.5);
+        malha(g, caixaSuave(bc / 3 - 0.03, 0.72, 0.02, 0.008), portinha, x, 0.49, zs + 0.55); caixa(0.12, 0.014, 0.02, M.latao, x, 0.79, zs + 0.57);
+        malha(g, caixaSuave(bc / 3 - 0.03, 0.64, 0.02, 0.008), portinha, x, 1.9, zs + 0.355); caixa(0.014, 0.12, 0.02, M.latao, x + bc / 6 - 0.07, 1.67, zs + 0.375);
+      }
+      caixa(0.56, 0.012, 0.38, M.inox, 20.1, 0.921, zs + 0.3); caixa(0.44, 0.012, 0.26, M.inoxEscuro, 20.1, 0.924, zs + 0.32);   // a pia
+      malha(g, new T.CylinderGeometry(0.014, 0.014, 0.26, 12), M.inox, 20.1, 1.05, zs + 0.1);
+      malha(g, new T.CylinderGeometry(0.012, 0.012, 0.16, 12), M.inox, 20.1, 1.17, zs + 0.17).rotation.x = Math.PI / 2;
+      bloco('bancada', X1, B2, Z1, zs + 0.58);
+      {
+        // A cafeteira, na bancada: com a água ou o pó de café na mão, o ESPACO põe na cafeteira; com
+        // os dois lá dentro, a jarra enche e aparece a xícara de café pronta (ver usarNaVila).
+        const CX = 20.95, CZ = zs + 0.26, corpo = malha(g, caixaSuave(0.2, 0.32, 0.22, 0.03), preto, CX, 0.92 + 0.16, CZ);
+        caixa(0.16, 0.03, 0.2, M.inox, CX, 0.935, CZ + 0.14);                                                // a chapa
+        malha(g, new T.CylinderGeometry(0.065, 0.055, 0.13, 20, 1, true), new T.MeshStandardMaterial({ color: 0xdfeef5, transparent: true, opacity: 0.4, roughness: 0.05, side: T.DoubleSide, depthWrite: false }), CX, 1.015, CZ + 0.15);
+        const jarra = malha(g, new T.CylinderGeometry(0.058, 0.05, 0.1, 20), liso(0x2b160c, 0.2), CX, 1.0, CZ + 0.15);   // o café na jarra, que só aparece quando ele fica pronto
+        jarra.visible = false;
+        caixa(0.03, 0.03, 0.01, luminoso({ color: 0xff5a3c }), CX + 0.06, 1.2, CZ + 0.112);                  // a luzinha
+        vila.cafeteira = { nome: 'cafeteira', x: CX, z: CZ + 0.1, alt: 0.32, sala: 10, itens: [], pronta: false, malha: corpo, jarra, contorno: contorno(corpo, new T.BoxGeometry(0.27, 0.38, 0.29), 0, 1) };
+      }
+      const movel = casaAzul.movel = montarMovel();                                                          // a geladeira, com a garrafa de água dentro
+      movel.grupo.position.set(21.95, 0, zs + movel.prof / 2);
+      g.add(movel.grupo);
+      rechearGeladeira(movel);
+      casaAzul.geladeira = { nome: 'geladeira', x: 21.95, z: zs + movel.prof, sala: 10, aberta: false, vis: 0, folhas: movel.folhas, contorno: movel.borda, dentro: [] };
+      abrem.push(casaAzul.geladeira);
+      bloco('geladeira', 21.95 - 0.54, XM, Z1, zs + movel.prof + 0.3);
+      malha(g, new T.CylinderGeometry(0.36, 0.36, 0.04, 28), madeira, X1 + 0.5, 0.74, 2.45);                 // a mesinha, com um banquinho
+      malha(g, new T.CylinderGeometry(0.04, 0.04, 0.72, 12), preto, X1 + 0.5, 0.36, 2.45);
+      malha(g, new T.CylinderGeometry(0.18, 0.18, 0.02, 20), preto, X1 + 0.5, 0.01, 2.45);
+      malha(g, new T.CylinderGeometry(0.15, 0.15, 0.04, 20), madeira, X1 + 0.62, 0.46, 3.1); malha(g, new T.CylinderGeometry(0.03, 0.03, 0.44, 10), preto, X1 + 0.62, 0.22, 3.1);
+      bloco('mesa', X1, X1 + 0.92, 2.05, 3.3);
+      // a sala (11): o morador na poltrona, de costas para a parede da rua; a TV na do sul; a estante na do leste
+      if (DESAFIO === 6) morador(montarPessoa(false, 0x2f7d5b), 24.0, 3.48, 11, Z2);
+      caixa(1.5, 0.42, 0.4, madeira, 24.0, 0.21, zs + 0.2);                                                  // o rack, com a TV
+      caixa(1.16, 0.66, 0.04, preto, 24.0, 0.93, zs + 0.12); caixa(1.08, 0.58, 0.01, liso(0x10151c, 0.08), 24.0, 0.93, zs + 0.142);
+      caixa(0.3, 0.08, 0.16, preto, 24.0, 0.46, zs + 0.14);
+      bloco('rack', 23.2, 24.8, Z1, zs + 0.42);
+      const xe = X2 - 0.06;                                                                                  // a estante de livros
+      caixa(0.3, 1.8, 1.3, madeiraClara, xe - 0.15, 0.9, 1.75);
+      { const sorte = aleatorio(6161); for (let k = 0; k < 4; k++) for (let i = 0; i < 9; i++) caixa(0.2, 0.26 + sorte() * 0.08, 0.1 + sorte() * 0.03, liso(CORES_DAS_CAIXAS[Math.floor(sorte() * CORES_DAS_CAIXAS.length)], 0.7), xe - 0.2, 0.2 + k * 0.42 + 0.14, 1.2 + i * 0.135); }
+      bloco('estante', xe - 0.32, X2, 1.08, 2.42);
+      malha(g, new T.PlaneGeometry(1.9, 1.3), M.tapete, 23.8, 0.012, 1.9).rotation.x = -Math.PI / 2;         // o tapete
+      caixa(1.06, 1.26, 0.03, branco, 23.0, 1.5, Z2 - 0.075);                                                // a janela, por dentro
+      malha(g, new T.PlaneGeometry(0.94, 1.14), luminoso({ color: 0xbfe3f7 }), 23.0, 1.5, Z2 - 0.092).rotation.y = Math.PI;
+      caixa(0.03, 1.14, 0.012, branco, 23.0, 1.5, Z2 - 0.096); caixa(0.94, 0.03, 0.012, branco, 23.0, 1.5, Z2 - 0.096);
+      malha(g, new T.PlaneGeometry(0.7, 0.5), M.quadro, XM + 0.065, 1.6, 0.9).rotation.y = Math.PI / 2;      // um quadro
+    }
+
+    // --- a padaria (12), na rua do oeste: de portas abertas, como as outras lojas ---
+    {
+      const X1 = -4.2, X2 = 1.9, Z1 = 8.5, Z2 = 12.5, XP = 0.5, XM = (X1 + X2) / 2, rebocoP = rebocado(0xe8b4a0), barradoP = liso(0x7a4a2a, 0.9);
+      parede(X1, Z1, X2, Z1, [XP], -1, rebocoP, barradoP);
+      parede(X1, Z2, X2, Z2, [], 1, rebocoP, barradoP);
+      parede(X1, Z1, X1, Z2, [], -1, rebocoP, barradoP);
+      parede(X2, Z1, X2, Z2, [], 1, rebocoP, barradoP);
+      piso(X1, X2, Z1, Z2, M.piso, (X2 - X1) / 4, 1);
+      teto(X1, X2, Z1, Z2);
+      cobrir(X1, X2, Z1, Z2, A + 0.7, 0.9, 0x8a4a3a);
+      vao(XP, Z1, 'z', 4, 12);
+      caixa(X2 - X1 + 0.12, 0.7, 0.14, rebocoP, XM, A + 0.35, Z1); caixa(X2 - X1 + 0.12, 0.7, 0.14, rebocoP, XM, A + 0.35, Z2);   // a platibanda, com o letreiro
+      caixa(0.14, 0.7, Z2 - Z1, rebocoP, X1, A + 0.35, (Z1 + Z2) / 2); caixa(0.14, 0.7, Z2 - Z1, rebocoP, X2, A + 0.35, (Z1 + Z2) / 2);
+      const letreiroP = texturaCanvas(1024, 160, (c, l, a) => {
+        c.fillStyle = '#7a4a2a'; c.fillRect(0, 0, l, a);
+        c.strokeStyle = '#fff3d6'; c.lineWidth = 8; c.strokeRect(10, 10, l - 20, a - 20);
+        letras(c, 'PADARIA', l / 2, a / 2 + 6, 112, '#fff3d6', l - 120);
+      });
+      malha(g, new T.PlaneGeometry(4.6, 0.62), mat(0xffffff, { map: letreiroP, roughness: 0.6 }), XM, A + 0.36, Z1 - 0.075).rotation.y = Math.PI;
+      caixa(3.1, 1.5, 0.04, liso(0x4a3324, 0.5), -2.1, 1.3, Z1 - 0.095);                                     // a vitrine, com o toldo
+      malha(g, new T.PlaneGeometry(2.98, 1.38), vidroDaRua, -2.1, 1.3, Z1 - 0.118).rotation.y = Math.PI;
+      caixa(0.05, 1.38, 0.02, liso(0x4a3324, 0.5), -2.1, 1.3, Z1 - 0.125);
+      const lonaP = mat(0xffffff, { roughness: 0.8, map: texturaCanvas(384, 32, (c, l, a) => { for (let i = 0; i < 12; i++) { c.fillStyle = i % 2 ? '#ffffff' : '#d9772b'; c.fillRect(i * 32, 0, 32, a); } }) });
+      malha(g, new T.BoxGeometry(3.4, 0.04, 0.85), lonaP, -2.1, 2.33, Z1 - 0.48).rotation.x = -0.32;
+      // por dentro: a estante dos pães no fundo, o balcão de vidro e os cestos
+      const CORES_DOS_PAES = [0xd9a25a, 0xc98a3c, 0xe8c27a, 0x8a5a2a, 0xf1dfb5, 0xb9773a], acaso = aleatorio(7171);
+      estante(5.2, (t, f, y) => [X1 + 0.2 + t, y, Z2 - 0.06 - f], 0, [1, XP - X1 - 0.2], CORES_DOS_PAES, acaso);   // com o lugar dos três pães vago
+      bloco('estante', X1 + 0.2, X1 + 5.4, Z2 - 0.5, Z2);
+      caixa(2.4, 0.9, 0.7, madeira, -2.2, 0.45, 10.35);                                                      // o balcão: a base de madeira e a vitrine de vidro, com pães dentro
+      malha(g, new T.BoxGeometry(2.36, 0.36, 0.66), new T.MeshStandardMaterial({ color: 0xdfeef5, transparent: true, opacity: 0.28, roughness: 0.05, depthWrite: false }), -2.2, 1.09, 10.35);
+      caixa(2.4, 0.03, 0.7, madeiraClara, -2.2, 1.285, 10.35);
+      for (let i = 0; i < 9; i++) { const p = malha(g, new T.SphereGeometry(0.07, 12, 8), liso(CORES_DOS_PAES[i % 3], 0.8), -3.2 + i * 0.25, 0.96, 10.25 + (i % 2) * 0.2); p.scale.set(1.4, 0.7, 1); }
+      malha(g, caixaSuave(0.34, 0.22, 0.3, 0.03), liso(0x3a4046, 0.4), -1.3, 1.41, 10.35); caixa(0.02, 0.16, 0.22, luminoso({ color: 0x9fe8b0 }), -1.3, 1.46, 10.19);   // a caixa registradora
+      bloco('balcão', -3.4, -1.0, 9.9, 10.8);
+      for (const [x, cor] of [[-3.7, 0xd9a25a], [-3.1, 0xe8c27a]]) {                                         // dois cestos de pão, perto da vitrine
+        malha(g, new T.CylinderGeometry(0.24, 0.2, 0.3, 20), M.palhaEscura, x, 0.15, 8.95);
+        for (let i = 0; i < 6; i++) { const p = malha(g, new T.SphereGeometry(0.06, 10, 8), liso(cor, 0.8), x - 0.1 + (i % 3) * 0.1, 0.33, 8.89 + Math.floor(i / 3) * 0.12); p.scale.set(1, 0.7, 2.2); }
+      }
+      bloco('cestos', -4.0, -2.8, 8.6, 9.25);
+    }
+
+    // --- a hora do dia e a chuva ---
+    // A cidade pode estar de dia, no fim da tarde ou de noite (?hora=dia|tarde|noite no endereço; a
+    // tecla N troca), e de vez em quando chove (sozinha, uns 100 segundos a cada 7 minutos; ?chuva=1
+    // chove sempre, ?chuva=0 nunca; a tecla P liga e desliga). Nada disso muda o jogo: só a luz, o
+    // céu e o que se vê — na página e na imagem da iA.
+    //   sol: de onde vem a luz (de noite, a da lua); tom: a cor que tinge o céu e a névoa;
+    //   postes e janelas: quanto os postes da rua e as janelas das casas acendem; exposicao: quanto
+    //   a imagem inteira clareia (de noite, pouco: é o que escurece também o que a luz do ambiente
+    //   ilumina); lampada: por quanto a lâmpada de dentro de casa é reforçada, para compensar.
+    const HORAS = {
+      dia: { sol: [0.5, 1, -0.45], corDoSol: 0xfff0d6, forcaDoSol: 2.8, ceu: 0.8, corDoCeu: 0xeef5ff, corDoChao: 0xd9d3c6, rebatida: 0.4, tom: [1, 1, 1], postes: 0, janelas: 0, exposicao: 1, lampada: 1 },
+      tarde: { sol: [-0.9, 0.3, -0.35], corDoSol: 0xff9c52, forcaDoSol: 2.4, ceu: 0.5, corDoCeu: 0xffd2ad, corDoChao: 0xa98b7c, rebatida: 0.2, tom: [1.3, 0.8, 0.52], postes: 3, janelas: 0.5, exposicao: 0.8, lampada: 1.25 },
+      noite: { sol: [0.35, 1, 0.5], corDoSol: 0x9db4ea, forcaDoSol: 0.35, ceu: 0.14, corDoCeu: 0x7388c4, corDoChao: 0x1b2030, rebatida: 0.04, tom: [0.22, 0.3, 0.62], postes: 22, janelas: 1.6, exposicao: 0.3, lampada: 2.8 },
+    };
+    const clima = vila.clima = { hora: HORAS[ENDERECO.get('hora')] ? ENDERECO.get('hora') : 'dia', chuva: ENDERECO.get('chuva') === '1' ? true : ENDERECO.get('chuva') === '0' ? false : null, fase: Math.random() * 420, molhado: 0, v: null };
+    clima.chovendo = () => clima.chuva != null ? clima.chuva : (performance.now() / 1000 + clima.fase) % 420 < 100;
+    vidroDaRua.emissive.set(0xffc27a);
+    // As gotas: riscos que caem em toda a cidade, menos em cima das construções (dentro de casa não chove).
+    const GOTAS = 5000, telhados = Object.values(areas).filter(a => a.n !== 4).map(a => [a.x1 - 0.3, a.x2 + 0.3, a.z1 - 0.3, a.z2 + 0.3]).concat([[7.45, 12.05, 13.3, 18.1]]);
+    const gotas = new Float32Array(GOTAS * 6), acasoDaChuva = aleatorio(9090);
+    for (let i = 0; i < GOTAS; i++) {
+      let x, z;
+      do { x = MEIO.x - 26 + acasoDaChuva() * 52; z = MEIO.z - 24 + acasoDaChuva() * 48; } while (telhados.some(c => x > c[0] && x < c[1] && z > c[2] && z < c[3]));
+      const y = acasoDaChuva() * 14;
+      gotas.set([x, y, z, x + 0.05, y + 0.45, z], i * 6);
+    }
+    const geoDaChuva = new T.BufferGeometry();
+    geoDaChuva.setAttribute('position', new T.BufferAttribute(gotas, 3));
+    const chuva = new T.LineSegments(geoDaChuva, new T.LineBasicMaterial({ color: 0xcfe0ee, transparent: true, opacity: 0, depthWrite: false }));
+    chuva.frustumCulled = false;
+    chuva.visible = false;
+    g.add(chuva);
+    const rumoDoSol = new T.Vector3(), corDaHora = new T.Color(), tomDoCeu = new T.Color(), cinza = new T.Color();
+    // A cada quadro: a luz, o céu e a névoa vão devagar para os da hora escolhida; a chuva chega e passa aos poucos.
+    clima.passo = dt => {
+      const h = HORAS[clima.hora], k = dt >= 1 ? 1 : 1 - Math.exp(-dt * 1.5);
+      const v = clima.v || (clima.v = { sol: new T.Vector3(...h.sol).normalize(), forca: h.forcaDoSol, ceu: h.ceu, rebatida: h.rebatida, postes: h.postes, janelas: h.janelas, exposicao: h.exposicao, lampada: h.lampada,
+        tom: new T.Color(...h.tom), corDoSol: new T.Color(h.corDoSol), corDoCeu: new T.Color(h.corDoCeu), corDoChao: new T.Color(h.corDoChao) });
+      clima.molhado += ((clima.chovendo() ? 1 : 0) - clima.molhado) * k;
+      const m = clima.molhado;
+      v.sol.lerp(rumoDoSol.set(...h.sol).normalize(), k).normalize();
+      for (const [campo, alvo] of [['forca', h.forcaDoSol], ['ceu', h.ceu], ['rebatida', h.rebatida], ['postes', h.postes], ['janelas', h.janelas], ['exposicao', h.exposicao], ['lampada', h.lampada]]) v[campo] += (alvo - v[campo]) * k;
+      v.tom.lerp(corDaHora.setRGB(...h.tom), k); v.corDoSol.lerp(corDaHora.set(h.corDoSol), k); v.corDoCeu.lerp(corDaHora.set(h.corDoCeu), k); v.corDoChao.lerp(corDaHora.set(h.corDoChao), k);
+      sol.position.copy(MEIO).addScaledVector(v.sol, 70);
+      sol.intensity = v.forca * (1 - 0.7 * m); sol.color.copy(v.corDoSol);
+      luzGeral.intensity = v.ceu * (1 - 0.2 * m); luzGeral.color.copy(v.corDoCeu); luzGeral.groundColor.copy(v.corDoChao);
+      rebatida.intensity = v.rebatida;
+      renderer.toneMappingExposure = v.exposicao * (1 - 0.2 * m);
+      clima.lampada = v.lampada;
+      const medio = (v.tom.r + v.tom.g + v.tom.b) / 3 * 0.6;                 // com chuva, o céu fica cinzento e mais escuro, e a névoa chega perto
+      tomDoCeu.copy(v.tom).lerp(cinza.setRGB(medio, medio, medio * 1.05), 0.8 * m);
+      materialDoCeu.color.copy(tomDoCeu).multiplyScalar(CLARO);
+      cena.fog.color.copy(horizonte).multiply(tomDoCeu).multiplyScalar(CLARO);
+      cena.fog.near = 50 - 34 * m; cena.fog.far = 240 - 140 * m;
+      for (const l of luzesDosPostes) l.intensity = v.postes;
+      vidroDaRua.emissiveIntensity = v.janelas;
+      asfalto.roughness = 0.95 - 0.5 * m;                                    // o asfalto molhado brilha
+      chuva.visible = m > 0.02;
+      chuva.material.opacity = 0.55 * m;
+      if (chuva.visible && dt < 1) {
+        const queda = dt * 11;
+        for (let i = 0; i < GOTAS; i++) { const o = i * 6; let y = gotas[o + 1] - queda; if (y < 0) y += 14; gotas[o + 1] = y; gotas[o + 4] = y + 0.45; }
+        geoDaChuva.attributes.position.needsUpdate = true;
+      }
+    };
+    clima.passo(1);
 
     // --- os objetos: os três ingredientes, a massa e o bolo ---
     const novo = (n, forma, material) => { const o = novoObjeto(salas[n], forma, forma.nome, material); o.sala = n; return o; };
@@ -1566,10 +2699,105 @@
       o.icone = iconeDePacote(fundo, faixa);
       return o;
     };
-    pacote('café', '#1d1f22', '#c8372d', '#ffffff', 5.72);
+    const poDeCafe = pacote('pó de café', '#1d1f22', '#c8372d', '#ffffff', 5.72);
+    poDeCafe.paraOCafe = true;                  // com a água, é o que a cafeteira da casa azul pede (desafio 6)
     const chocolate = pacote('chocolate', '#5a3219', '#e9c46a', '#3b1f0e', 6.0);
     chocolate.ingrediente = true;
     pacote('biscoito', '#f2c230', '#2f7de1', '#ffffff', 6.28);
+    // Na estante da farmácia, três caixas de remédio do mesmo tamanho, cada uma com o nome e para
+    // que serve: xarope, analgésico e antiácido. Só o analgésico serve para a dor de cabeça (desafio 5).
+    const remedio = (nome, para, fundo, faixa, x) => {
+      const lado = liso(new T.Color(fundo).getHex(), 0.5), frente = rotulo(320, 224, (c, l, a) => {
+        c.fillStyle = fundo; c.fillRect(0, 0, l, a);
+        c.fillStyle = faixa; c.fillRect(0, 0, l, 62);
+        c.fillStyle = '#ffffff'; c.fillRect(l / 2 - 8, 9, 16, 44); c.fillRect(l / 2 - 22, 23, 44, 16);   // uma cruz
+        letras(c, nome.toUpperCase(), l / 2, 116, 50, '#14181c', l - 20);
+        letras(c, para, l / 2, 178, 32, faixa, l - 20);
+      });
+      const o = novo(9, { nome, alt: 0.14, raio: 0.1, geo: new T.BoxGeometry(0.2, 0.14, 0.05), casca: new T.BoxGeometry(0.25, 0.19, 0.1) }, [lado, lado, lado, lado, frente, frente]);
+      assentar(salas[9], o, x, 12.22, 0.75 + o.alt / 2);
+      o.icone = iconeDePacote(fundo, faixa);
+      return o;
+    };
+    remedio('xarope', 'para tosse', '#fff1cf', '#d9772b', 21.2);
+    const analgesico = remedio('analgésico', 'para dor de cabeça', '#ffffff', '#c8372d', 21.5);
+    remedio('antiácido', 'para azia', '#e3f1ff', '#2f7de1', 21.8);
+    // O copo, na bancada do flat, ao lado do filtro; e o mesmo copo cheio de água, que só existe
+    // depois de o vazio passar pelo filtro (desafio 5).
+    const iconeDeCopo = cheio => (g, x, y, s) => {
+      traco(g); g.fillStyle = 'rgba(216, 238, 248, 0.35)';
+      g.beginPath(); g.moveTo(x - s * 0.26, y - s * 0.36); g.lineTo(x + s * 0.26, y - s * 0.36); g.lineTo(x + s * 0.2, y + s * 0.38); g.lineTo(x - s * 0.2, y + s * 0.38); g.closePath(); g.fill(); g.stroke();
+      if (cheio) { g.fillStyle = '#6fbdf0'; g.beginPath(); g.moveTo(x - s * 0.235, y - s * 0.1); g.lineTo(x + s * 0.235, y - s * 0.1); g.lineTo(x + s * 0.2, y + s * 0.36); g.lineTo(x - s * 0.2, y + s * 0.36); g.closePath(); g.fill(); }
+    };
+    const vidroDoCopo = new T.MeshStandardMaterial({ color: 0xd8eef8, transparent: true, opacity: 0.45, roughness: 0.05, side: T.DoubleSide, depthWrite: false });
+    const formaDoCopo = nome => ({ nome, alt: 0.12, raio: 0.06, geo: new T.CylinderGeometry(0.04, 0.032, 0.12, 20, 1, true), casca: new T.CylinderGeometry(0.065, 0.06, 0.17, 20) });
+    const copo = vila.copo = novo(6, formaDoCopo('copo'), vidroDoCopo);
+    malha(copo.malha, new T.CircleGeometry(0.032, 20), vidroDoCopo, 0, -0.058, 0).rotation.x = -Math.PI / 2;
+    assentar(salas[6], copo, 18.6, FS + 0.32, 0.93 + copo.alt / 2);
+    copo.icone = iconeDeCopo(false);
+    const copoCheio = vila.copoCheio = novo(6, formaDoCopo('copo de água'), vidroDoCopo);
+    malha(copoCheio.malha, new T.CircleGeometry(0.032, 20), vidroDoCopo, 0, -0.058, 0).rotation.x = -Math.PI / 2;
+    malha(copoCheio.malha, new T.CylinderGeometry(0.037, 0.031, 0.09, 20), mat(0x6fbdf0, { roughness: 0.05, transparent: true, opacity: 0.85 }), 0, -0.012, 0);
+    copoCheio.icone = iconeDeCopo(true);
+    copoCheio.fechado = true;
+    // Na estante da padaria, três pães: pão francês, pão de queijo e sonho. O morador da casa azul quer o pão de queijo (desafio 6).
+    const pao = (nome, x, forma, enfeitar, icone) => {
+      const o = novo(12, Object.assign({ nome }, forma), forma.material);
+      enfeitar(o.malha);
+      assentar(salas[12], o, x, 12.22, 0.75 + o.alt / 2);
+      o.icone = icone;
+      return o;
+    };
+    const dourado2 = liso(0xe3b04b, 0.8), assado = liso(0xc98a3c, 0.8), louca2 = liso(0xf7f7f4, 0.3);
+    const iconeDePao = (cor, n, creme) => (g, x, y, s) => {
+      traco(g);
+      g.fillStyle = '#f7f7f4'; g.beginPath(); g.ellipse(x, y + s * 0.26, s * 0.44, s * 0.1, 0, 0, 7); g.fill(); g.stroke();   // o prato
+      g.fillStyle = cor;
+      if (n > 1) for (const [dx, dy] of [[-0.2, 0.08], [0.2, 0.08], [0, -0.12]]) { g.beginPath(); g.arc(x + dx * s, y + dy * s, s * 0.17, 0, 7); g.fill(); g.stroke(); }
+      else { g.beginPath(); g.ellipse(x, y + s * 0.02, s * (creme ? 0.3 : 0.4), s * 0.2, 0, 0, 7); g.fill(); g.stroke(); }
+      if (creme) { g.fillStyle = '#fff6d8'; g.fillRect(x - s * 0.3, y, s * 0.6, s * 0.06); }
+    };
+    pao('pão francês', 0.22, { alt: 0.09, raio: 0.1, geo: new T.CylinderGeometry(0.1, 0.09, 0.016, 24).translate(0, -0.037, 0), casca: new T.CylinderGeometry(0.13, 0.13, 0.14, 24), material: louca2 }, m => {
+      const p = malha(m, new T.SphereGeometry(0.05, 16, 10), assado, 0, 0.005, 0); p.scale.set(1.7, 0.75, 0.9); p.castShadow = true;
+    }, iconeDePao('#c98a3c', 1, false));
+    const paoDeQueijo = pao('pão de queijo', 0.5, { alt: 0.09, raio: 0.1, geo: new T.CylinderGeometry(0.1, 0.09, 0.016, 24).translate(0, -0.037, 0), casca: new T.CylinderGeometry(0.13, 0.13, 0.14, 24), material: louca2 }, m => {
+      for (const [dx, dz] of [[-0.042, 0.02], [0.042, 0.02], [0, -0.045]]) malha(m, new T.SphereGeometry(0.036, 14, 10), dourado2, dx, 0.002, dz).castShadow = true;
+      malha(m, new T.SphereGeometry(0.034, 14, 10), dourado2, 0, 0.045, 0).castShadow = true;
+    }, iconeDePao('#e3b04b', 3, false));
+    pao('sonho', 0.78, { alt: 0.09, raio: 0.1, geo: new T.CylinderGeometry(0.1, 0.09, 0.016, 24).translate(0, -0.037, 0), casca: new T.CylinderGeometry(0.13, 0.13, 0.14, 24), material: louca2 }, m => {
+      const p = malha(m, new T.SphereGeometry(0.06, 16, 10), liso(0xd9a25a, 0.8), 0, 0.008, 0); p.scale.set(1, 0.72, 1); p.castShadow = true;
+      malha(m, new T.TorusGeometry(0.058, 0.009, 6, 24), liso(0xfff6d8, 0.6), 0, 0.01, 0).rotation.x = Math.PI / 2;
+      malha(m, new T.SphereGeometry(0.03, 10, 8), liso(0xffffff, 0.9), 0, 0.045, 0).scale.set(1.5, 0.3, 1.5);
+    }, iconeDePao('#d9a25a', 1, true));
+    // Na geladeira da casa azul, uma garrafa de água; e a xícara de café, que só existe depois que
+    // a água e o pó de café passam pela cafeteira (desafio 6).
+    const garrafa = novo(10, { nome: 'água', alt: AGUA.alt, raio: AGUA.raio, geo: AGUA.geo, casca: AGUA.casca }, mat(0xa9d6ff, { roughness: 0.06, envMapIntensity: 1.3 }));
+    malha(garrafa.malha, new T.CylinderGeometry(0.0535, 0.0535, 0.085, 32, 1, true), liso(0x1f6fd1, 0.6), 0, -0.055, 0).castShadow = true;   // o rótulo e a tampa
+    malha(garrafa.malha, new T.CylinderGeometry(0.024, 0.024, 0.03, 20), liso(0x1f6fd1, 0.4), 0, 0.135, 0).castShadow = true;
+    assentar(salas[10], garrafa, 21.95 - 0.15, casaAzul.ZS + casaAzul.movel.prof - 0.2, casaAzul.movel.Y1 + 0.007 + garrafa.alt / 2);
+    garrafa.icone = (g, x, y, s) => {
+      traco(g); g.fillStyle = '#a9d6ff';
+      g.beginPath(); g.rect(x - s * 0.14, y - s * 0.2, s * 0.28, s * 0.62); g.fill(); g.stroke();
+      g.beginPath(); g.rect(x - s * 0.07, y - s * 0.4, s * 0.14, s * 0.2); g.fill(); g.stroke();
+      g.fillStyle = '#1f6fd1'; g.fillRect(x - s * 0.14 + 3, y, s * 0.28 - 6, s * 0.18);
+    };
+    garrafa.paraOCafe = true;
+    garrafa.fechado = true;
+    casaAzul.geladeira.dentro.push(garrafa);
+    const cafe = vila.cafe = novo(10, { nome: 'café', alt: 0.08, raio: 0.07, geo: new T.CylinderGeometry(0.042, 0.03, 0.07, 20).translate(0, -0.005, 0), casca: new T.CylinderGeometry(0.075, 0.075, 0.13, 20) }, louca2);
+    malha(cafe.malha, new T.CylinderGeometry(0.037, 0.037, 0.006, 20), liso(0x2b160c, 0.2), 0, 0.029, 0);              // o café
+    malha(cafe.malha, new T.TorusGeometry(0.022, 0.006, 6, 16), louca2, 0.05, -0.002, 0);                              // a asa
+    malha(cafe.malha, new T.CylinderGeometry(0.065, 0.065, 0.008, 24), louca2, 0, -0.036, 0);                          // o pires
+    assentar(salas[10], cafe, 20.62, casaAzul.ZS + 0.36, 0.92 + cafe.alt / 2);
+    cafe.icone = (g, x, y, s) => {
+      traco(g);
+      g.fillStyle = '#f7f7f4'; g.beginPath(); g.ellipse(x, y + s * 0.3, s * 0.42, s * 0.09, 0, 0, 7); g.fill(); g.stroke();   // o pires
+      g.beginPath(); g.moveTo(x - s * 0.26, y - s * 0.2); g.lineTo(x + s * 0.26, y - s * 0.2); g.lineTo(x + s * 0.18, y + s * 0.26); g.lineTo(x - s * 0.18, y + s * 0.26); g.closePath(); g.fill(); g.stroke();
+      g.beginPath(); g.arc(x + s * 0.3, y + s * 0.02, s * 0.1, -1.3, 1.3); g.stroke();                                // a asa
+      g.fillStyle = '#2b160c'; g.beginPath(); g.ellipse(x, y - s * 0.2, s * 0.25, s * 0.06, 0, 0, 7); g.fill();
+    };
+    cafe.fechado = true;
+    cafe.malha.visible = false;
     // a massa: a tigela cheia. Fica no lugar da tigela, escondida, até os três ingredientes estarem nela.
     const massa = vila.massa = novo(3, { nome: 'massa', alt: 0.11, raio: 0.15, geo: perfil, casca: cascaDaTigela }, ceramica);
     malha(massa.malha, new T.CylinderGeometry(0.128, 0.118, 0.02, 32), liso(0x6b3d1e, 0.6), 0, 0.03, 0);
@@ -1589,8 +2817,11 @@
     queimado.fechado = true;
     bolo.icone = iconeDeBolo('#7a4a2a', '#f7d9e3', '#c8372d');
     queimado.icone = iconeDeBolo('#1a1512', null, null);
+    // o que a pessoa deste desafio quer: entregar tudo a ela é a vitória (a ordem é a das falas de "falta": ver DESAFIOS)
+    vila.pedidos = DESAFIO === 5 ? [analgesico, copoCheio] : DESAFIO === 6 ? [paoDeQueijo, cafe] : [bolo];
 
     fazSombra(g);
+    for (const m of semSombra) m.castShadow = false;
   }
 
   // Põe um objeto em cima da cabeça do robô. Ali ele só aparece no reflexo (camada 1, como
@@ -1754,7 +2985,10 @@
     if (!pessoa || !pessoa.fala) return;
     const cx = camera.position.x, cz = camera.position.z, r = pessoa.rosto, parede = centro(pessoa.sala) + SALA.L / 2;
     if (REGRAS.vila) {                                      // na vila: só de dentro do cômodo dela, ou de um dos vãos dele
-      if (areaEm(cx, cz) !== pessoa.sala && !portasDaVila.some(p => p.aberta && p.salas.includes(pessoa.sala) && noVaoDe(p, cx, cz))) return;
+      // (a câmera de quem voa pode estar fora de todos os lugares, ou acima do telhado: aí também não se vê o balão)
+      const onde = Object.values(areas).find(a => cabeNoLugar(a, cx, cz, 0));
+      if (camera.position.y > SALA.A) return;
+      if ((!onde || onde.n !== pessoa.sala) && !portasDaVila.some(p => p.aberta && p.salas.includes(pessoa.sala) && noVaoDe(p, cx, cz))) return;
     } else if ((cx - parede) * (r.x - parede) < 0) {        // câmera na outra sala: só pela porta aberta
       const z = cz + (r.z - cz) * (parede - cx) / (r.x - cx);
       if (!portaAberta || Math.abs(z - Z_PORTA) > LARGURA_PORTA / 2 - 0.1) return;
@@ -1830,14 +3064,16 @@
     return { grupo, braco, escrever, contorno: { set visible(v) { cascas.forEach(c => { c.visible = v; }); } } };
   }
 
-  // ---------- pessoa (desafio 3) ----------
+  // ---------- pessoa (desafios 3, 4 e 5) ----------
   // Uma pessoa sentada numa poltrona, olhando para -z; a origem é o chão, no meio da poltrona.
   // Devolve o grupo e `contorno`, a borda de destaque em volta do corpo (não da poltrona).
-  function montarPessoa() {
+  // Com `mulher`, é a moradora do flat (desafio 5): de vestido, cabelo comprido, numa poltrona
+  // clara, com o cotovelo esquerdo no braço da poltrona e a mão na testa, de dor de cabeça.
+  function montarPessoa(mulher, camisa) {       // (camisa: outra cor de blusa, para o morador de outra casa não ser igual)
     const grupo = new T.Group(), cascas = [];
-    const pele = mat(0xd8a47f, { roughness: 0.6 }), cabelo = mat(0x2b1d15, { roughness: 0.85 }), escuro = mat(0x1c1512, { roughness: 0.5 });
-    const blusa = mat(0x2f4f7f, { roughness: 0.85 }), calca = mat(0x4b5563, { roughness: 0.85 }), sapato = mat(0x2a2320, { roughness: 0.5 });
-    const tecido = mat(0xa85a3c, { roughness: 0.95 });
+    const pele = mat(mulher ? 0xe0b090 : 0xd8a47f, { roughness: 0.6 }), cabelo = mat(mulher ? 0x5a2c1a : 0x2b1d15, { roughness: 0.85 }), escuro = mat(0x1c1512, { roughness: 0.5 });
+    const blusa = mat(camisa || (mulher ? 0x8c2f4b : 0x2f4f7f), { roughness: 0.85 }), calca = mulher ? blusa : mat(0x4b5563, { roughness: 0.85 }), sapato = mat(mulher ? 0xc9a57a : 0x2a2320, { roughness: 0.5 });
+    const tecido = mat(mulher ? 0xece4d6 : 0xa85a3c, { roughness: 0.95 }), canela = mulher ? pele : calca, perna = mulher ? 0.11 : 0.13;
     const BORDA = 0.028;
     const caixa = (l, a, p, material, x, y, z, naBorda) => {
       const r = Math.min(0.05, Math.min(l, a, p) / 3);
@@ -1855,18 +3091,20 @@
     caixa(0.80, 0.72, 0.18, tecido, 0, 0.70, 0.29);
     for (const x of [-0.335, 0.335]) caixa(0.13, 0.32, 0.64, tecido, x, 0.48, -0.06);
     for (const x of [-0.33, 0.33]) for (const z of [-0.3, 0.3])
-      malha(grupo, new T.CylinderGeometry(0.025, 0.02, 0.05, 12), M.nogueira, x, 0.025, z);
+      malha(grupo, new T.CylinderGeometry(0.025, 0.02, 0.05, 12), mulher ? M.latao : M.nogueira, x, 0.025, z);
 
     // pernas: coxas no assento, canelas para baixo
     for (const x of [-0.1, 0.1]) {
       caixa(0.15, 0.14, 0.50, calca, x, 0.53, -0.215, true);
-      caixa(0.13, 0.42, 0.13, calca, x, 0.27, -0.455, true);
-      caixa(0.13, 0.08, 0.26, sapato, x, 0.045, -0.5);
+      caixa(perna, 0.42, perna, canela, x, 0.27, -0.455, true);
+      caixa(perna, 0.08, 0.26, sapato, x, 0.045, -0.5);
     }
+    if (mulher) caixa(0.42, 0.1, 0.52, calca, 0, 0.6, -0.2);                             // a saia do vestido, por cima das coxas
     caixa(0.38, 0.52, 0.22, blusa, 0, 0.74, 0.06, true);                                 // tronco
     for (const lado of [-1, 1]) {
+      if (mulher && lado < 0) continue;                                                  // (o braço esquerdo dela é outro: ver abaixo)
       caixa(0.1, 0.30, 0.1, blusa, lado * 0.245, 0.80, 0.06, true);                      // braço
-      caixa(0.09, 0.09, 0.30, blusa, lado * 0.3, 0.69, -0.07, true);                     // antebraço, apoiado no braço da poltrona
+      caixa(0.09, 0.09, 0.30, mulher ? pele : blusa, lado * 0.3, 0.69, -0.07, true);     // antebraço, apoiado no braço da poltrona
       bola(0.05, pele, lado * 0.3, 0.69, -0.26);                                         // mão
     }
     malha(grupo, new T.CylinderGeometry(0.05, 0.055, 0.1, 16), pele, 0, 1.03, 0.05);     // pescoço
@@ -1876,7 +3114,24 @@
     malha(grupo, new T.SphereGeometry(0.124, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.5), cabelo, 0, CY + 0.004, CX + 0.004).rotation.x = 0.45;
     for (const x of [-0.042, 0.042]) bola(0.014, escuro, x, CY + 0.02, CX - 0.105);      // olhos
     bola(0.016, pele, 0, CY - 0.012, CX - 0.117);                                        // nariz
-    malha(grupo, new T.BoxGeometry(0.046, 0.01, 0.01), mat(0x8a3b32, { roughness: 0.6 }), 0, CY - 0.05, CX - 0.102);   // boca
+    malha(grupo, new T.BoxGeometry(0.046, 0.01, 0.01), mat(mulher ? 0xb3263a : 0x8a3b32, { roughness: 0.6 }), 0, CY - 0.05, CX - 0.102);   // boca
+    if (mulher) {
+      // o cabelo comprido: atrás, até os ombros, e uma mecha de cada lado; e os brincos
+      malha(grupo, caixaSuave(0.25, 0.36, 0.09, 0.04), cabelo, 0, CY - 0.15, CX + 0.095);
+      for (const lado of [-1, 1]) {
+        malha(grupo, caixaSuave(0.06, 0.3, 0.12, 0.025), cabelo, lado * 0.118, CY - 0.11, CX + 0.045);
+        malha(grupo, new T.SphereGeometry(0.014, 10, 8), M.latao, lado * 0.121, CY - 0.045, CX - 0.03);
+      }
+      // a dor de cabeça: o cotovelo esquerdo no braço da poltrona e a mão na testa
+      const membro = (de, ate, grossura, material) => {
+        const m = malha(grupo, caixaSuave(grossura, grossura, de.distanceTo(ate) + grossura * 0.5, grossura * 0.3), material, (de.x + ate.x) / 2, (de.y + ate.y) / 2, (de.z + ate.z) / 2);
+        m.lookAt(ate);
+      };
+      const ombro = new T.Vector3(-0.245, 0.93, 0.06), cotovelo = new T.Vector3(-0.31, 0.7, -0.14), mao = new T.Vector3(-0.105, 1.2, -0.055);
+      membro(ombro, cotovelo, 0.1, blusa);
+      membro(cotovelo, mao, 0.085, pele);
+      bola(0.05, pele, mao.x, mao.y, mao.z);
+    }
 
     sombraNoChao(grupo, 0.6, 0.006);
     fazSombra(grupo);
@@ -1897,9 +3152,15 @@
   // rumo: múltiplos de 45°, 0 = de frente para o espelho; segurando / naCabeca: objeto ou null
   const estado = { x: REGRAS.inicio.x || 0, z: REGRAS.inicio.z, rumo: REGRAS.inicio.rumo, sala: REGRAS.inicio.sala || 1, segurando: null, naCabeca: null, maoLevantada: false, texto: '', ganhou: false, perdeu: false };
   // (luz, luzY, luzZ e forca: onde está a lâmpada, que acompanha o robô, e a força dela: ver luzDaqui)
-  const visual = { x: estado.x, z: estado.z, yaw: estado.rumo * GIRO, braco: 0, luz: 0, luzY: SALA.A - 0.35, luzZ: 0, forca: 2.1 };
-  // Onde fica a lâmpada (há uma só): no meio da sala em que o robô está. Na vila, cada lugar diz onde (ver areas).
-  const luzDaqui = () => REGRAS.vila ? areas[estado.sala].luz : { x: centro(estado.sala), y: SALA.A - 0.35, z: 0, forca: 2.1 };
+  // (chao: a altura do chão debaixo do robô: na vila, a calçada é um degrau acima do asfalto: ver alturaDoChao)
+  const visual = { x: estado.x, z: estado.z, yaw: estado.rumo * GIRO, braco: 0, luz: 0, luzY: SALA.A - 0.35, luzZ: 0, forca: 2.1, chao: 0 };
+  // Onde fica a lâmpada (há uma só): no meio da sala em que o robô está. Na vila, cada lugar diz
+  // onde (ver areas); na rua, onde quem ilumina é o sol, a lâmpada fica na casa ou na loja mais perto.
+  const luzDaqui = () => {
+    if (!REGRAS.vila) return { x: centro(estado.sala), y: SALA.A - 0.35, z: 0, forca: 2.1 };
+    const l = areas[estado.sala].luz;
+    return typeof l === 'function' ? l() : l;
+  };
   let modoIA = false;
 
   function vetores() {
@@ -2064,7 +3325,7 @@
     const maisPertoPrimeiro = coisas => coisas.filter(perto).sort(ordemAntiga ? (a, b) => alcance(a) - alcance(b) : (a, b) => centralidade(b) - centralidade(a));
     const soltosNaLista = [];
     const gente = REGRAS.vila ? vila.pessoa : s.pessoa;
-    const portas = REGRAS.vila ? portasDaVila.filter(p => p.folha) : REGRAS.portaManual && s.porta ? [s.porta] : [];
+    const portas = REGRAS.vila ? portasDaVila.filter(p => p.folha && !p.trancada) : REGRAS.portaManual && s.porta ? [s.porta] : [];   // (a porta trancada não é alvo: é a da casa de outro desafio)
     if (!REGRAS.vila && o && s.outroRobo && !s.outroRobo.recebeu && perto(s.outroRobo)) lista.push(s.outroRobo);
     if (gente && !gente.recebeu && (o || !estado.maoLevantada) && perto(gente)) lista.push(gente);
     lista.push(...maisPertoPrimeiro([...portas, ...abrem].filter(a => !a.aberta)));
@@ -2082,6 +3343,8 @@
       if (REGRAS.vila) {
         if (o.ingrediente && !vila.tigela.pronta && perto(vila.tigela)) lista.push(vila.tigela);
         if ((o === vila.massa || vila.forno.dentro) && perto(vila.forno)) lista.push(vila.forno);   // pôr a massa no forno, ou tirar o que está lá
+        if (o === vila.copo && perto(vila.filtro)) lista.push(vila.filtro);                           // encher o copo no filtro
+        if (o.paraOCafe && !vila.cafeteira.pronta && perto(vila.cafeteira)) lista.push(vila.cafeteira);   // pôr a água ou o pó na cafeteira
         if (REGRAS.inventario) lista.push(...soltos());
       } else if (perto(s.cesta)) lista.push(s.cesta);
       lista.push(null);
@@ -2183,6 +3446,8 @@
     if (abrem.includes(a)) return `${a.aberta ? 'fechar' : 'abrir'}: ${a.nome}`;
     if (a === vila.tigela) return `pôr ${o.nome} na tigela`;
     if (a === vila.forno) return vila.forno.dentro ? 'tirar do forno' : 'pôr a massa no forno';
+    if (a === vila.filtro) return 'encher o copo';
+    if (a === vila.cafeteira) return `pôr ${o.nome} na cafeteira`;
     return `pegar: ${a.nome}`;
   }
   // Diz onde está cada alvo e escreve o indicador. É chamada depois de todo comando (ver resposta).
@@ -2414,7 +3679,7 @@
   function animar(k, kPorta) {
     const carregando = REGRAS.bracoCaido ? BRACO.caido : BRACO.estendido;
     const braco = estado.maoLevantada ? BRACO.levantado : estado.segurando ? carregando : BRACO.caido;
-    const l = luzDaqui(), alvo = { x: estado.x, z: estado.z, yaw: estado.rumo * GIRO, braco, luz: l.x, luzY: l.y, luzZ: l.z, forca: l.forca };
+    const l = luzDaqui(), alvo = { x: estado.x, z: estado.z, yaw: estado.rumo * GIRO, braco, luz: l.x, luzY: l.y, luzZ: l.z, forca: l.forca, chao: alturaDoChao(estado.x, estado.z) };
     for (const c in alvo) visual[c] += (alvo[c] - visual[c]) * k;
     for (const gel of abrem) {                  // as duas portas da geladeira (ou do armário) giram para fora, uma para cada lado
       gel.vis += ((gel.aberta ? 1 : 0) - gel.vis) * kPorta;
@@ -2424,7 +3689,7 @@
       if (!p.folha) continue;
       p.vis += ((p.aberta ? 1 : 0) - p.vis) * kPorta;
       const ao = p.eixo === 'x' ? 'z' : 'x';
-      p.folha.position[ao] = p[ao] - (LARGURA_PORTA + 0.03) * p.vis;
+      p.folha.position[ao] = p[ao] + (p.sentido || -1) * (LARGURA_PORTA + 0.03) * p.vis;   // (para o lado em que a parede tem lugar para ela)
     }
     if (REGRAS.vila) tiqueDoForno();            // o relógio da cozinha, o tempo de forno e o bolo que queima
     for (const s of Object.values(salas)) {
@@ -2440,7 +3705,7 @@
     }
   }
   function aplicarVisual() {
-    robo.position.set(visual.x, 0, visual.z);
+    robo.position.set(visual.x, visual.chao, visual.z);
     robo.rotation.y = visual.yaw;
     bracoDireito.rotation.x = visual.braco;
     if (estado.segurando) {                     // o objeto acompanha a mão
@@ -2449,8 +3714,8 @@
       else o.position.set(0.31, 0.76 - 0.47 * Math.cos(b), -0.015 - 0.47 * Math.sin(b));              // logo acima da mão
     }
     lampada.position.set(visual.luz, visual.luzY, visual.luzZ);
-    lampada.intensity = visual.forca;
-    camera.position.set(visual.x, ALTURA_OLHOS, visual.z);
+    lampada.intensity = visual.forca * (vila.clima ? vila.clima.lampada : 1);   // (de noite a imagem inteira escurece, e a lâmpada de dentro é reforçada: ver "a hora do dia e a chuva")
+    camera.position.set(visual.x, ALTURA_OLHOS + visual.chao, visual.z);
     camera.rotation.set(INCLINACAO, visual.yaw, 0);
     atualizarBalao();
   }
@@ -2538,6 +3803,7 @@
     if (ASSISTINDO) horaGravada += dt * 1000;   // o relógio do jogo (ver hora): entre um botão gravado e o outro ele anda com a gravação
     if (toca) toca.soltar();                    // os botões gravados cuja hora chegou
     animar(1 - Math.exp(-dt * 14), 1 - Math.exp(-dt * 5));
+    if (vila.clima) vila.clima.passo(real);       // a hora do dia e a chuva da cidade
     if (vista.voando) { aplicarVisual(); voar(real); desenharDeFora(); }   // quem assiste de fora vê tudo ao vivo, mesmo no modo iA
     else if (!modoIA) { aplicarVisual(); desenhar(); }
     requestAnimationFrame(quadro);
@@ -2556,8 +3822,8 @@
   elAjuda.textContent = '';
   // (No modo voador as teclas do jogo dão lugar às de quem voa, que não são do jogo e por isso vêm explicadas: ver "o modo voador".)
   for (const [classe, fileiras, dica] of [['do-jogo', [REGRAS.passoDeLado ? ['Q', 'W', 'E'] : ['W'], ['A', 'S', 'D'], ['Espaço', 'Tab'], ['L', 'T', 'F']]],
-    ['do-voador', [['Q', 'W', 'E'], ['A', 'S', 'D'], ['Shift', 'Z']], 'W A S D voam · Q e E descem e sobem · Shift corre · Z vai até o robô · arrastar o mouse vira'],
-    ['da-pagina', [['1', '2', '3', '4', 'M', 'C'], ['Shift+T', 'I', 'R', 'H', 'G']]]]) {
+    ['do-voador', [['Q', 'W', 'E'], ['A', 'S', 'D'], ['Shift', 'Z', 'Esc']], 'W A S D voam · Q e E descem e sobem · Shift corre · Z vai até o robô · um clique prende o mouse, que passa a virar a câmera · Esc solta'],
+    ['da-pagina', [['1', '2', '3', '4', '5', '6', 'M', 'C'], ['Shift+T', 'I', 'R', 'H', 'G'].concat(REGRAS.vila ? ['N', 'P'] : [])]]]) {
     const grupo = document.createElement('div');
     grupo.className = classe;
     for (const teclas of fileiras) {
@@ -2721,7 +3987,8 @@
   // Troca-se pela tecla C ou pelo botão da página (#vista); vale também assistindo a uma
   // gravação. No modo voador o teclado é de quem voa — W A S D andam, Q e E descem e sobem,
   // Shift corre, Z volta para perto do robô — e os botões do jogo, no teclado, ficam
-  // desligados (a iA continua jogando pelo MCP). Arrastar o mouse vira a câmera; a roda anda.
+  // desligados (a iA continua jogando pelo MCP). Um clique prende o mouse no jogo, e aí mexer
+  // o mouse vira a câmera, até o Esc soltar (ver "o mouse, no modo voador"); a roda anda.
   // A visão escolhida e o lugar da câmera ficam guardados na aba, porque a página recarrega a
   // cada `comecar` e quando se volta numa gravação.
   const voador = new T.PerspectiveCamera(60, 1, 0.05, 140);
@@ -2732,7 +3999,7 @@
   const entre = (v, a, b) => Math.max(a, Math.min(b, v));
   // Até onde a câmera vai. Nas salas com espelho ela não sai do prédio: de fora dele, ou de
   // trás do espelho, o truque do reflexo ficaria à mostra (o mundo é desenhado duas vezes).
-  const VOO = REGRAS.vila ? { x1: -7, x2: 15, y1: 0.25, y2: 10, z1: -3.5, z2: 16 }
+  const VOO = REGRAS.vila ? { x1: CIDADE.oeste - 14, x2: CIDADE.leste + 14, y1: 0.25, y2: 16, z1: CIDADE.sul - 14, z2: CIDADE.norte + 14 }
     : { x1: centro(1) - SALA.L / 2 + 0.15, x2: centro(REGRAS.salas) + SALA.L / 2 - 0.15, y1: 0.25, y2: SALA.A - 0.15, z1: Z_ESPELHO + 0.15, z2: SALA.P / 2 - 0.15 };
   // Põe a câmera perto do robô, olhando para ele: de preferência atrás dele, a 2,3 m e mais
   // alta do que ele, mas dentro do cômodo em que ele está e fora dos móveis. Se atrás houver
@@ -2746,7 +4013,8 @@
       const g = a + k * Math.PI / 4;
       for (const longe of [2.3, 1.9, 1.5, 1.1]) {   // nessa direção, o ponto mais afastado que não cai dentro de um móvel
         let x = estado.x + Math.sin(g) * longe, z = estado.z + Math.cos(g) * longe;
-        if (c) { x = entre(x, c.x1 + 0.3, c.x2 - 0.3); z = entre(z, c.z1 + 0.3, c.z2 - 0.3); }
+        if (c.partes) ({ x, z } = pontoNoLugar(c, x, z, 0.3));   // (na vila o lugar pode não ser um retângulo: a rua)
+        else { x = entre(x, c.x1 + 0.3, c.x2 - 0.3); z = entre(z, c.z1 + 0.3, c.z2 - 0.3); }
         x = entre(x, VOO.x1, VOO.x2); z = entre(z, VOO.z1, VOO.z2);
         if (noMeioDeUmMovel(x, z) && longe > 1.1) continue;
         const d = Math.hypot(x - estado.x, z - estado.z) + (k === 0 ? 0.5 : k === 1 || k === 7 ? 0.25 : 0) - (noMeioDeUmMovel(x, z) ? 1 : 0);   // (atrás vale mais)
@@ -2754,10 +4022,11 @@
         break;
       }
     }
-    Object.assign(vista, { posta: true, x: melhor.x, y: entre(2.05, VOO.y1, VOO.y2), z: melhor.z });
+    const chao = alturaDoChao(estado.x, estado.z);
+    Object.assign(vista, { posta: true, x: melhor.x, y: entre(2.05 + chao, VOO.y1, VOO.y2), z: melhor.z });
     const dx = estado.x - vista.x, dz = estado.z - vista.z;
     vista.yaw = Math.atan2(-dx, -dz);
-    vista.pitch = Math.atan2(0.5 - vista.y, Math.hypot(dx, dz) || 1e-6);   // mirando os joelhos dele: o robô fica no meio da tela, acima do campo das intenções
+    vista.pitch = Math.atan2(0.5 + chao - vista.y, Math.hypot(dx, dz) || 1e-6);   // mirando os joelhos dele: o robô fica no meio da tela, acima do campo das intenções
   }
   // Anda com a câmera: para a frente é para onde ela olha (subindo ou descendo junto); de lado, na horizontal.
   function andar(frente, lado, sobe) {
@@ -2797,7 +4066,7 @@
   function porPensamento() {
     if (!elPensa) return;
     const ultima = intencoes[intencoes.length - 1];
-    v3.set(visual.x, 1.52, visual.z).applyMatrix4(voador.matrixWorldInverse);
+    v3.set(visual.x, 1.52 + visual.chao, visual.z).applyMatrix4(voador.matrixWorldInverse);
     if (!ultima || v3.z > -0.15) { elPensa.hidden = true; return; }      // nada a dizer, ou o robô está atrás de quem olha
     const longe = -v3.z;
     v3.applyMatrix4(voador.projectionMatrix);
@@ -2828,6 +4097,7 @@
     if (voando === vista.voando) return;
     vista.voando = voando;
     apertadas.clear();
+    if (!voando) soltar();                      // de volta à visão da iA, o mouse fica livre
     if (voando && !vista.posta) irAteORobo();
     mostrarVista();
     guardarVista();
@@ -2854,18 +4124,41 @@
     verComo(b.dataset.vista);
   });
   window.addEventListener('pagehide', guardarVista);
-  // o mouse, no modo voador: arrastar vira a câmera; a roda anda para a frente e para trás
+  // O mouse, no modo voador. Um clique na imagem prende o mouse no jogo: daí em diante é só
+  // mexer o mouse para virar a câmera, sem segurar botão nenhum, e o Esc solta (quem prende e
+  // solta é o navegador: "pointer lock"). Se o navegador não prender, arrastar com o botão
+  // apertado vira do mesmo jeito. A roda anda para a frente e para trás.
   let arrasto = null;
+  const preso = () => document.pointerLockElement === canvas;
+  const virarVista = (dx, dy, quanto) => {
+    vista.yaw -= dx * quanto;
+    vista.pitch = entre(vista.pitch - dy * quanto, -1.45, 1.45);
+  };
+  function prender() {
+    if (preso() || !canvas.requestPointerLock) return;
+    try {
+      const pedido = canvas.requestPointerLock();
+      if (pedido && pedido.catch) pedido.catch(() => { });   // (logo depois de um Esc o navegador recusa: o clique seguinte prende)
+    } catch (e) { }
+  }
+  const soltar = () => { if (preso() && document.exitPointerLock) document.exitPointerLock(); };
+  document.addEventListener('pointerlockchange', () => {
+    arrasto = null;
+    document.body.classList.toggle('preso', preso());
+    canvas.style.cursor = vista.voando ? 'grab' : '';
+    if (preso() && !vista.voando) soltar();     // (prendeu depois de a visão já ter voltado para a da iA)
+  });
+  document.addEventListener('mousemove', e => { if (preso() && vista.voando) virarVista(e.movementX || 0, e.movementY || 0, 0.0026); });
   canvas.addEventListener('pointerdown', e => {
-    if (!vista.voando || e.button !== 0) return;
+    if (!vista.voando || e.button !== 0 || preso()) return;
     arrasto = { x: e.clientX, y: e.clientY };
-    canvas.setPointerCapture(e.pointerId);
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { }
     canvas.style.cursor = 'grabbing';
+    prender();
   });
   canvas.addEventListener('pointermove', e => {
-    if (!arrasto) return;
-    vista.yaw -= (e.clientX - arrasto.x) * 0.0045;
-    vista.pitch = entre(vista.pitch - (e.clientY - arrasto.y) * 0.0045, -1.45, 1.45);
+    if (!arrasto || preso()) return;
+    virarVista(e.clientX - arrasto.x, e.clientY - arrasto.y, 0.0045);
     arrasto = { x: e.clientX, y: e.clientY };
   });
   for (const fim of ['pointerup', 'pointercancel']) canvas.addEventListener(fim, () => { arrasto = null; canvas.style.cursor = vista.voando ? 'grab' : ''; });
@@ -2886,6 +4179,9 @@
     // Quem assiste (vale também numa gravação): C troca a visão e, no modo voador, o teclado é de quem voa.
     if (elCaixa.hidden && !e.ctrlKey && !e.altKey && !e.metaKey) {
       if (e.code === 'KeyC') { e.preventDefault(); if (!e.repeat) verComo(); return; }
+      // na cidade: N troca a hora do dia (dia, fim de tarde, noite) e P liga ou desliga a chuva
+      if (vila.clima && e.code === 'KeyN') { if (!e.repeat) vila.clima.hora = { dia: 'tarde', tarde: 'noite', noite: 'dia' }[vila.clima.hora]; return; }
+      if (vila.clima && e.code === 'KeyP') { if (!e.repeat) vila.clima.chuva = !vila.clima.chovendo(); return; }
       if (vista.voando && TECLAS_DO_VOO.has(e.code)) { e.preventDefault(); apertadas.add(e.code); return; }
       if (vista.voando && e.code === 'KeyZ') { if (!e.repeat) irAteORobo(); return; }
     }
@@ -2925,6 +4221,8 @@
       case 'Digit2': case 'Numpad2': comecar(2); break;
       case 'Digit3': case 'Numpad3': comecar(3); break;
       case 'Digit4': case 'Numpad4': comecar(4); break;
+      case 'Digit5': case 'Numpad5': comecar(5); break;
+      case 'Digit6': case 'Numpad6': comecar(6); break;
     }
   });
 
@@ -2939,8 +4237,14 @@
   contador.malha.visible = REGRAS.contador;
   inventario.malha.visible = !!REGRAS.inventario;
   // resultado: o jogo acabou para quem joga? (no desafio 4 dá para perder: o bolo queima)
+  // (verDe: põe a câmera de quem voa num ponto, olhando para outro: é de quem assiste e dos testes, e não muda nada no jogo)
   window.jogo = { apertar, comecar, mover, virar, pegar, levantar, escrever, frame, reiniciar, estado, salas, itens, desafio: DESAFIO, diagnostico: () => ultima,
-    resultado: () => estado.ganhou ? 'ganhou' : estado.perdeu ? 'perdeu' : '' };
+    resultado: () => estado.ganhou ? 'ganhou' : estado.perdeu ? 'perdeu' : '',
+    verDe(x, y, z, paraX, paraY, paraZ) {
+      const dx = paraX - x, dy = paraY - y, dz = paraZ - z;
+      Object.assign(vista, { posta: true, x: entre(x, VOO.x1, VOO.x2), y: entre(y, VOO.y1, VOO.y2), z: entre(z, VOO.z1, VOO.z2), yaw: Math.atan2(-dx, -dz), pitch: entre(Math.atan2(dy, Math.hypot(dx, dz) || 1e-6), -1.45, 1.45) });
+      verComo('voador');
+    } };
   abrirVista();                                 // a visão de quem assiste: a da iA ou a de quem voa
   ajustarTamanho();
   aplicarVisual();

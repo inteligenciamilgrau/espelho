@@ -58,6 +58,7 @@
   const INTERVALO_TECLA = 150;                  // ms entre jogadas com a tecla segurada
   const COR = { 1: 0xff7a3d, 2: 0x22b3a6 }, COR_CSS = { 1: '#ff7a3d', 2: '#22b3a6' };
   const CAMADA = { 1: 3, 2: 4 };                // camada do corpo de cada robô: a câmera dele não a enxerga
+  const CAMADA_DA_FALA = 5;                     // os balões de grito estão também nesta: na reprise, são desenhados de novo por cima das tarjas (ver vista)
   const BRACO = { caido: 0, estendido: 1.13, levantado: 2.45 };
   const INICIO = 5.0;                           // a que distância da rede cada robô começa: bem atrás, perto da linha de fundo
   const RODA = 3.2;                             // raio do semicírculo de objetos à frente de quem começa: uns quatro passos até alcançar um
@@ -972,6 +973,7 @@
     textura.colorSpace = T.SRGBColorSpace;
     const sprite = new T.Sprite(new T.SpriteMaterial({ map: textura, transparent: true, depthWrite: false, toneMapped: false }));
     sprite.scale.set(1.9, 0.95, 1);
+    sprite.layers.enable(CAMADA_DA_FALA);
     sprite.visible = false;
     cena.add(sprite);
     let atual = '';
@@ -2682,15 +2684,42 @@
       else if (J.segurando && !(J.guarda && J.escudo) && !O.caido && naMira(J, O)) O.corpo.mira.visible = true;
     }
   }
+  // As etiquetas e os balões em cima dos robôs têm tamanho de coisa do mundo: de longe ficam
+  // pequenos e, bem de perto — a câmera logo atrás do jogador —, tomariam a tela. Nas câmeras
+  // de quem assiste, nenhum passa de uma fração da altura da imagem. Devolve os que encolheu,
+  // com o tamanho que tinham, para voltarem a ele depois do desenho (as outras vistas não mudam).
+  const ondeNaVista = new T.Vector3();
+  function conter(camera) {
+    const meia = Math.tan(camera.fov * Math.PI / 360), contidos = [];
+    camera.updateMatrixWorld();
+    for (const [s, teto] of [[jog[1].etiqueta.sprite, 0.085], [jog[2].etiqueta.sprite, 0.085], [jog[1].sinal3d, 0.1], [jog[2].sinal3d, 0.1],
+      [jog[1].grito.sprite, 0.27], [jog[2].grito.sprite, 0.27], [juiz.grito.sprite, 0.27]]) {
+      if (!s.visible) continue;
+      const fundo = -ondeNaVista.copy(s.position).applyMatrix4(camera.matrixWorldInverse).z;   // a que distância está, na direção do olhar
+      const k = teto * 2 * Math.max(fundo, 0.1) * meia / s.scale.y;
+      if (k >= 1) continue;
+      contidos.push([s, s.scale.x, s.scale.y]);
+      s.scale.set(s.scale.x * k, s.scale.y * k, 1);
+    }
+    return contidos;
+  }
   function vista(camera, folha, quem, x, y, l, a) {
     renderer.setViewport(x, y, l, a);
     renderer.setScissor(x, y, l, a);
     destacar(quem);
+    const contidos = camera === camTV || camera === camReplay ? conter(camera) : [];
     renderer.clear(true, true, false);
     renderer.render(cena, camera);
     folhaHud.material.map = folha.textura;
     renderer.clearDepth();
     renderer.render(cenaHud, camHud);
+    if (camera === camReplay) {                  // na reprise, o balão do grito vai por cima das tarjas de cinema: é desenhado de novo, sozinho
+      const camadas = camera.layers.mask;
+      camera.layers.set(CAMADA_DA_FALA);
+      renderer.render(cena, camera);
+      camera.layers.mask = camadas;
+    }
+    for (const [s, larg, alt] of contidos) s.scale.set(larg, alt, 1);
   }
   // Sombras: calculadas uma vez, num desenho descartável em que tudo aparece (o corpo de
   // cada robô some da vista dele, mas tem de continuar fazendo sombra).
@@ -3075,7 +3104,7 @@
   const elAjuda = document.getElementById('ajuda'), elMensagem = document.getElementById('mensagem');
   const elLog = document.getElementById('log'), elStatus = document.getElementById('status');
   const elCaixa = document.getElementById('caixa'), elEntrada = document.getElementById('entrada');
-  elAjuda.textContent = 'J1:  W A S D  Q E  Espaço  L X T\nJ2:  ↑ ← ↓ →  , .  Enter   O / P\n1 2 3 4 M Shift+T   R H J C V B N G';
+  elAjuda.textContent = 'J1:  W A S D  Q E  Espaço  L X T\nJ2:  ↑ ← ↓ →  , .  Enter   O / P\n1 2 3 4 5 6 M Shift+T   R H J C V B N G';
   if (ASSISTINDO) elAjuda.hidden = true;         // numa gravação essas teclas não valem (as de quem assiste estão no painel dela)
   elMensagem.textContent = MENSAGEM;
 
@@ -3208,6 +3237,8 @@
       case 'Digit2': case 'Numpad2': comecar(2); break;
       case 'Digit3': case 'Numpad3': comecar(3); break;
       case 'Digit4': case 'Numpad4': comecar(4); break;
+      case 'Digit5': case 'Numpad5': comecar(5); break;
+      case 'Digit6': case 'Numpad6': comecar(6); break;
     }
   });
 

@@ -2,12 +2,14 @@
 
 Um jogo 3D em primeira pessoa, feito para ser jogado por uma iA através de MCP. A iA controla um robô numa sala e quase não recebe explicação: ninguém diz o que cada botão faz. A única coisa que ela pode fazer é apertar botões e olhar a imagem que o jogo devolve.
 
-O jogo tem quatro desafios. Os três primeiros começam no mesmo quarto; o quarto, numa vila:
+O jogo tem seis desafios. Os três primeiros começam no mesmo quarto; os outros três, numa cidade pequena:
 
 - **Desafio 1:** a iA não recebe nem o objetivo; só "jogo começou".
 - **Desafio 2:** a iA recebe uma única instrução: "Dê o objeto para o robô."
 - **Desafio 3:** há uma pessoa no quarto e nenhuma instrução; a iA recebe só "jogo começou".
-- **Desafio 4:** uma vila pequena, com casa, rua e mercadinho. Aqui a dificuldade é explorar e decidir, não descobrir os comandos: a iA recebe a explicação dos controles, mas não o que fazer.
+- **Desafio 4:** uma cidade pequena, com uma praça redonda no meio, quatro ruas, casas e lojas. O robô começa numa casa, com uma pessoa. Aqui a dificuldade é explorar e decidir, não descobrir os comandos: a iA recebe a explicação dos controles, mas não o que fazer.
+- **Desafio 5:** a mesma cidade, de outra casa: um flat de luxo, com uma mulher.
+- **Desafio 6:** a mesma cidade, da casa azul.
 
 E outro jogo, em outro cenário:
 
@@ -71,25 +73,25 @@ Abra uma conversa nova com a iA e diga o mínimo possível, só qual desafio ela
 
 Não explique o objetivo nem os botões: descobrir isso faz parte do teste. No Desafio 2 o próprio jogo dá a instrução; não a repita nem a complete.
 
-No Desafio 4 o próprio jogo explica os controles (lá o teste é explorar e decidir); o objetivo continua por conta da iA.
+Nos Desafios 4, 5 e 6 o próprio jogo explica os controles (lá o teste é explorar e decidir); o objetivo continua por conta da iA.
 
 Antes de começar, o jogo pede à iA um nome de guerra e o modelo dela, e daí em diante cobra, junto com cada botão, o que ela pretende com ele. Você não precisa pedir nada disso: as ferramentas avisam. É o que aparece na tela para quem assiste e nos replays (veja [Quem joga e a intenção de cada botão](#quem-joga-e-a-intenção-de-cada-botão)).
 
 ### 5. Assista
 
-- **Na aba do jogo**, o robô se mexe a cada botão que a iA aperta. Nos Desafios 1 a 4, embaixo da tela aparecem **quem está jogando** (o nome de guerra e o modelo) e **o que o robô pretende**: a iA tem de dizer, junto com cada botão, o que quer com ele (veja [Quem joga e a intenção de cada botão](#quem-joga-e-a-intenção-de-cada-botão)).
-- **De fora, voando**, nos Desafios 1 a 4: a tecla `C` (ou o botão **visão da iA / voador**, no canto de baixo, à direita) troca a visão da página entre o que o robô vê e uma câmera solta, com que você passeia invisível pelo cenário (veja [Duas visões para quem assiste](#duas-visões-para-quem-assiste)).
+- **Na aba do jogo**, o robô se mexe a cada botão que a iA aperta. Nos Desafios 1 a 6, embaixo da tela aparecem **quem está jogando** (o nome de guerra e o modelo) e **o que o robô pretende**: a iA tem de dizer, junto com cada botão, o que quer com ele (veja [Quem joga e a intenção de cada botão](#quem-joga-e-a-intenção-de-cada-botão)).
+- **De fora, voando**, nos Desafios 1 a 6: a tecla `C` (ou o botão **visão da iA / voador**, no canto de baixo, à direita) troca a visão da página entre o que o robô vê e uma câmera solta, com que você passeia invisível pelo cenário (veja [Duas visões para quem assiste](#duas-visões-para-quem-assiste)).
 - **Na janela do servidor**, aparece cada botão apertado (com a intenção), a hora, e a linha `a iA venceu o jogo` quando ela termina.
 - **Depois, com calma**, na aba de replays: toda partida é gravada, e dá para assistir a ela sem as esperas (veja [Replays](#replays-assistir-a-uma-partida-depois)).
 - **Para ver o que cada botão fez de verdade**, acrescente `?depurar` ao endereço da página do jogo. Aparece um painel com o estado do jogo. Não deixe a iA ver essa tela.
 
 ### 6. Repita
 
-Para outra rodada, a iA chama a ferramenta `comecar` com o número do desafio. Na página, `R` recomeça o desafio atual e as teclas `1`, `2`, `3`, `4`, `M` e `Shift+T` trocam de desafio.
+Para outra rodada, a iA chama a ferramenta `comecar` com o número do desafio. Na página, `R` recomeça o desafio atual e as teclas `1` a `6`, `M` e `Shift+T` trocam de desafio.
 
 ## Duas visões para quem assiste
 
-Nos Desafios 1 a 4 a página mostra uma de duas visões. Troca-se pela tecla `C` ou pelo botão **visão da iA / voador**, no canto de baixo, à direita; vale ao vivo e nos replays.
+Nos Desafios 1 a 6 a página mostra uma de duas visões. Troca-se pela tecla `C` ou pelo botão **visão da iA / voador**, no canto de baixo, à direita; vale ao vivo e nos replays.
 
 - **Visão da iA:** o que o robô está vendo, com tudo o que é desenhado na imagem dela (o inventário, os números dos alvos, o indicador). É a visão em que a página abre.
 - **Voador:** uma câmera solta, só sua. Você voa por onde quiser, atravessa as paredes e vê o robô por fora, de corpo inteiro. Em cima da cabeça dele vai um balão com **o que a iA disse que pretende** com o último botão. O que a pessoa diz também aparece no balão dela.
@@ -102,7 +104,8 @@ No modo voador o teclado é de quem voa:
 | `Q` / `E` | Descem / sobem |
 | `Shift` | Corre (segurando junto) |
 | `Z` | Leva a câmera para perto do robô, olhando para ele |
-| arrastar o mouse | Vira a câmera |
+| um clique na imagem | Prende o mouse no jogo: daí em diante é só mexer o mouse para virar a câmera, sem segurar botão |
+| `Esc` | Solta o mouse |
 | roda do mouse | Anda para a frente e para trás |
 
 Você é invisível, e isso vale nos dois sentidos:
@@ -110,7 +113,9 @@ Você é invisível, e isso vale nos dois sentidos:
 - **Nada disso muda o jogo nem a imagem da iA.** A imagem que a iA recebe é sempre a dos olhos do robô, seja qual for a visão da página. O balão do pensamento é um pedaço da página, não do jogo: não entra na imagem dela nem aparece no espelho.
 - **Voando, o teclado não joga.** Os botões do jogo no teclado ficam desligados até você voltar para a visão da iA; a iA continua jogando pelo MCP do mesmo jeito.
 
-A visão escolhida e o lugar da câmera ficam guardados na aba, então continuam valendo quando a página recarrega (a cada `comecar`, ou ao voltar num replay). `?vista=voador` no endereço já abre a página voando. Nas salas com espelho a câmera não sai do prédio; na vila, ela vai até uns metros além das casas e sobe até 10 m.
+A visão escolhida e o lugar da câmera ficam guardados na aba, então continuam valendo quando a página recarrega (a cada `comecar`, ou ao voltar num replay). `?vista=voador` no endereço já abre a página voando. Nas salas com espelho a câmera não sai do prédio; na cidade, ela vai até uns 14 m além do fim das ruas e sobe até 16 m.
+
+O mouse preso é coisa do navegador (ele mostra um aviso de que o `Esc` solta). Com o mouse preso não dá para clicar nos botões da página: a tecla `C` troca de visão e também solta o mouse. Logo depois de um `Esc` o navegador recusa prender de novo por um instante; o clique seguinte prende. Se o navegador não prender, arrastar o mouse com o botão apertado vira a câmera do mesmo jeito.
 
 ## Replays: assistir a uma partida depois
 
@@ -118,9 +123,9 @@ Ao vivo o jogo é lento: cada iA leva vários segundos para decidir um botão. P
 
 - **Abrir:** na página do jogo, a tecla `G` ou o atalho **▶ replays** (nos desafios, no canto de baixo, à direita; na quadra, no painel das câmeras). Abre **outra aba**, com a lista das gravações, da mais nova para a mais antiga. O endereço é o da página do jogo com `replays.html` no fim.
 - **Não interfere no jogo:** a aba de replays não se liga ao servidor MCP. A partida que estiver sendo jogada continua na aba dela, e a gravação dela aparece na lista (do ponto em que estava quando a lista foi aberta).
-- **Assistir:** clique numa gravação. O próprio jogo refaz a partida: na quadra, com tudo o que a transmissão tem (as etiquetas, as câmeras, a torcida, o comentarista, a reprise de cada ponto); nos Desafios 1 a 4, com o campo de quem jogou (nome e modelo) e do que o robô pretende. A lista também diz, de cada gravação, qual iA jogou. As esperas encolhem: entre uma rodada e outra passa no máximo 1,8 segundo, e o jogo dá o tempo de ler cada fala e cada intenção.
-- **Controles:** o painel da gravação tem pausar, voltar ao começo, ir para a rodada anterior ou para a seguinte, uma régua para ir a qualquer ponto e quatro velocidades (0,5×, 1×, 2× e 4×). No teclado: `Espaço` pausa e continua, `←` e `→` andam de rodada em rodada (de botão em botão, nos Desafios 1 a 4), `↑` e `↓` mudam a velocidade e `Home` volta ao começo. Na quadra, as câmeras e o som funcionam como ao vivo.
-- **O que é uma gravação:** na quadra, cada partida (do apito do juiz até o fim, ou até alguém recomeçar); nos Desafios 1 a 4, cada vez que o desafio começa. Partida em que ninguém jogou não é gravada.
+- **Assistir:** clique numa gravação. O próprio jogo refaz a partida: na quadra, com tudo o que a transmissão tem (as etiquetas, as câmeras, a torcida, o comentarista, a reprise de cada ponto); nos Desafios 1 a 6, com o campo de quem jogou (nome e modelo) e do que o robô pretende. A lista também diz, de cada gravação, qual iA jogou. As esperas encolhem: entre uma rodada e outra passa no máximo 1,8 segundo, e o jogo dá o tempo de ler cada fala e cada intenção.
+- **Controles:** o painel da gravação tem pausar, voltar ao começo, ir para a rodada anterior ou para a seguinte, uma régua para ir a qualquer ponto e quatro velocidades (0,5×, 1×, 2× e 4×). No teclado: `Espaço` pausa e continua, `←` e `→` andam de rodada em rodada (de botão em botão, nos Desafios 1 a 6), `↑` e `↓` mudam a velocidade e `Home` volta ao começo. Na quadra, as câmeras e o som funcionam como ao vivo.
+- **O que é uma gravação:** na quadra, cada partida (do apito do juiz até o fim, ou até alguém recomeçar); nos Desafios 1 a 6, cada vez que o desafio começa. Partida em que ninguém jogou não é gravada.
 - **Onde ficam:** em `%LOCALAPPDATA%\espelho-jogo\partidas`, fora da pasta do projeto, um arquivo de texto pequeno por partida (uma linha por rodada). Ficam as 300 mais novas. Para apagar uma, use o **apagar** da lista. Só há gravação com o servidor ligado: a página aberta direto do arquivo não grava.
 
 O relógio de cada jogador, no replay da quadra, mostra o tempo que ele levou ao vivo; a lista mostra quanto a partida durou de verdade.
@@ -209,15 +214,15 @@ Ao se conectar, a iA recebe a lista de ferramentas. São só duas:
 
 | Ferramenta | Descrição que a iA lê | Parâmetros |
 |---|---|---|
-| `comecar` | "Começa um desafio." | `desafio` (obrigatório): `"1"`, `"2"`, `"3"`, `"4"`, `"M"`, `"T"` ou `"C"`, com a descrição "M: Galinha Pong, um contra o outro. T: treino de Galinha Pong. C: assistir ao Galinha Pong como comentarista."; `nome` (até 12 letras), descrito como "Seu nome de guerra." e exigido em todos os desafios; `modelo` (até 24 letras), descrito como "Que modelo você é (por exemplo: Claude Opus 5.5). Aparece embaixo do seu nome.", exigido nos Desafios 1 a 4 e opcional na quadra |
-| `apertar_botao` | "Aperta um botão." | `botao` (obrigatório), `texto` (opcional; o jogo usa as 10 primeiras letras na barriga do robô e até 140 na fala do comentarista), `intencao` (até 140 letras; obrigatório nos Desafios 1 a 4), `nome` (opcional, o mesmo nome de guerra) e `modelo` (opcional, como no `comecar`) |
+| `comecar` | "Começa um desafio." | `desafio` (obrigatório): `"1"` a `"6"`, `"M"`, `"T"` ou `"C"`, com a descrição "M: Galinha Pong, um contra o outro. T: treino de Galinha Pong. C: assistir ao Galinha Pong como comentarista."; `nome` (até 12 letras), descrito como "Seu nome de guerra." e exigido em todos os desafios; `modelo` (até 24 letras), descrito como "Que modelo você é (por exemplo: Claude Opus 5.5). Aparece embaixo do seu nome.", exigido nos Desafios 1 a 6 e opcional na quadra |
+| `apertar_botao` | "Aperta um botão." | `botao` (obrigatório), `texto` (opcional; o jogo usa as 10 primeiras letras na barriga do robô e até 140 na fala do comentarista), `intencao` (até 140 letras; obrigatório nos Desafios 1 a 6), `nome` (opcional, o mesmo nome de guerra) e `modelo` (opcional, como no `comecar`) |
 
 ### Quem joga e a intenção de cada botão
 
-Nos Desafios 1 a 4, a iA diz duas coisas que são só para quem assiste:
+Nos Desafios 1 a 6, a iA diz duas coisas que são só para quem assiste:
 
 - **Quem ela é:** um nome de guerra e o modelo (os parâmetros `nome` e `modelo`). O `comecar` de um desafio só vale com os dois; sem eles a iA recebe o pedido para chamar de novo dizendo quem é. Se uma iA apertar um botão sem a página saber quem ela é (outra conexão, ou a página aberta sem `comecar`), o botão não é apertado e ela recebe o aviso para mandar o nome e o modelo junto. Aqui não há confirmação do nome, como na quadra: é um jogador só.
-- **O que pretende com cada botão:** o parâmetro `intencao`, que ela lê descrito assim: "O que você pretende com este botão, em poucas palavras. É para quem assiste entender a sua jogada: não muda o que o botão faz. Nos desafios 1, 2, 3 e 4 é obrigatório: sem ele o botão não é apertado."
+- **O que pretende com cada botão:** o parâmetro `intencao`, que ela lê descrito assim: "O que você pretende com este botão, em poucas palavras. É para quem assiste entender a sua jogada: não muda o que o botão faz. Nos desafios 1 a 6 é obrigatório: sem ele o botão não é apertado."
 
 Como isso aparece e o que não muda:
 
@@ -226,14 +231,14 @@ Como isso aparece e o que não muda:
 - **Vale para todos os botões**, inclusive o `F` (a imagem). Sem a intenção o botão não é apertado, e a iA recebe o aviso de que faltou (veja a tabela abaixo). Depois da vitória nada disso é cobrado, e o teclado nunca precisa dizer nada.
 - **No Galinha Pong** a intenção não é cobrada nem mostrada (lá o nome e o modelo já aparecem no placar).
 
-O parâmetro `botao` só aceita os valores `W`, `A`, `S`, `D`, `Q`, `E`, `ESPACO`, `TAB`, `L`, `PASSAR`, `PRONTO`, `SAIR`, `T` e `F`. Essa lista vem dentro da definição da ferramenta, e é assim que a iA sabe quais botões existem. Nos Desafios 1 a 3 ela não recebe nenhuma descrição do que eles fazem; no Desafio 4, recebe a dos controles ao começar. (`PASSAR`, `PRONTO` e `SAIR` só existem na quadra, e o `TAB`, só nos desafios; fora do seu jogo não fazem nada. O `SAIR` é só do comentarista.)
+O parâmetro `botao` só aceita os valores `W`, `A`, `S`, `D`, `Q`, `E`, `ESPACO`, `TAB`, `L`, `PASSAR`, `PRONTO`, `SAIR`, `T` e `F`. Essa lista vem dentro da definição da ferramenta, e é assim que a iA sabe quais botões existem. Nos Desafios 1 a 3 ela não recebe nenhuma descrição do que eles fazem; nos Desafios 4, 5 e 6, recebe a dos controles ao começar. (`PASSAR`, `PRONTO` e `SAIR` só existem na quadra, e o `TAB`, só nos desafios; fora do seu jogo não fazem nada. O `SAIR` é só do comentarista.)
 
 As respostas são sempre as mesmas, para não dar pista:
 
 | Situação | Resposta |
 |---|---|
 | `comecar` com `desafio` 1 ou 3 | `jogo começou` |
-| `comecar` com `desafio` 4 | a explicação dos controles (os botões, o alvo, o inventário, que o tempo corre) e o pedido de jogo limpo; nada sobre o que fazer |
+| `comecar` com `desafio` 4, 5 ou 6 | a explicação dos controles (os botões, o alvo, o inventário, que o tempo corre) e o pedido de jogo limpo; nada sobre o que fazer |
 | Desafio 4, qualquer botão depois de o bolo queimar | `O bolo queimou: você perdeu. Para jogar de novo, chame comecar.` |
 | `comecar` com `desafio` 2 | `Dê o objeto para o robô.` |
 | `comecar` com `desafio` M ou T | as regras e o que cada botão faz, terminando com a pergunta do juiz (`você está pronto?`) |
@@ -260,17 +265,20 @@ As respostas são sempre as mesmas, para não dar pista:
 | qualquer botão depois de perder (Desafio M) | `Você perdeu.` |
 | `comecar` sem desafio, ou com um que não existe | `desafio inexistente` |
 | qualquer botão, tenha dado certo ou não | `recebido` |
-| `comecar` com `desafio` 1, 2, 3 ou 4 sem `nome` ou sem `modelo` | `Antes de começar, diga quem você é: chame comecar de novo mandando um nome de guerra no parâmetro nome e o seu modelo no parâmetro modelo (por exemplo: Claude Opus 5.5).` |
-| Desafios 1 a 4, botão de uma iA que ainda não disse quem é | `O botão NÃO foi apertado: faltou dizer quem você é. Aperte de novo mandando junto um nome de guerra no parâmetro nome e o seu modelo no parâmetro modelo (por exemplo: Claude Opus 5.5).` |
-| Desafios 1 a 4, botão sem `intencao` | `O botão NÃO foi apertado: faltou a intenção. Aperte de novo mandando junto, no parâmetro intencao, o que você pretende com este botão, em poucas palavras.` |
+| `comecar` com `desafio` de 1 a 6 sem `nome` ou sem `modelo` | `Antes de começar, diga quem você é: chame comecar de novo mandando um nome de guerra no parâmetro nome e o seu modelo no parâmetro modelo (por exemplo: Claude Opus 5.5).` |
+| Desafios 1 a 6, botão de uma iA que ainda não disse quem é | `O botão NÃO foi apertado: faltou dizer quem você é. Aperte de novo mandando junto um nome de guerra no parâmetro nome e o seu modelo no parâmetro modelo (por exemplo: Claude Opus 5.5).` |
+| Desafios 1 a 6, botão sem `intencao` | `O botão NÃO foi apertado: faltou a intenção. Aperte de novo mandando junto, no parâmetro intencao, o que você pretende com este botão, em poucas palavras.` |
 | o único botão que mostra a tela | uma imagem PNG de 960×540 |
 | qualquer botão depois de vencer | `Parabéns! Você conseguiu!` |
 | botão que não existe | `botao inexistente` |
 | página do jogo fechada | `sem resposta do jogo…` (depois de 10 segundos) |
+| qualquer chamada de uma conexão aberta antes de a lista de ferramentas mudar | erro HTTP 404, com `O servidor do jogo foi reiniciado e a lista de ferramentas mudou: esta conexão é antiga. Ligue-se de novo ao servidor MCP (reconecte)…` |
 
-O que a pessoa dos Desafios 3 e 4 diz não vem como texto: aparece num balão, dentro da imagem. A receita do Desafio 4 também: é um papel na porta da geladeira, que a iA só lê olhando.
+O que a pessoa dos Desafios 3 a 6 diz não vem como texto: aparece num balão, dentro da imagem. A receita do Desafio 4 também: é um papel na porta da geladeira, que a iA só lê olhando.
 
 Todos esses textos, os nomes e as descrições ficam em `ferramentas.json` e podem ser trocados sem mexer no código.
+
+**Quando a lista de ferramentas muda** (um botão novo, um desafio novo), é preciso reiniciar o servidor. O programa da iA guarda a lista que recebeu ao se conectar; por isso o servidor marca cada conexão com a lista que valia e recusa, com o erro 404, a conexão aberta com outra lista. O programa então se liga de novo e recebe a lista atual (em alguns é preciso mandar reconectar o servidor MCP à mão). Sem isso a iA continuaria vendo a lista antiga: foi o que aconteceu quando o `TAB` entrou e uma iA jogou sem vê-lo entre os botões.
 
 ## Como funciona por dentro
 
@@ -295,11 +303,12 @@ No Desafio M há uma chamada de cada jogador em andamento ao mesmo tempo: a pág
 
 Dê duplo clique em `index.html`. As teclas são as mesmas que a iA tem, mais algumas que são da página e não do jogo:
 
-- `1`, `2`, `3` e `4` começam o Desafio 1, 2, 3 ou 4, `M` começa o Desafio M e `Shift+T` começa o Desafio T (o `T` sozinho é um botão do jogo);
+- `1` a `6` começam o desafio desse número, `M` começa o Desafio M e `Shift+T` começa o Desafio T (o `T` sozinho é um botão do jogo);
 - `R` recomeça o desafio atual;
-- `C` troca a visão de quem assiste, entre a da iA e a de quem voa por fora (veja [Duas visões para quem assiste](#duas-visões-para-quem-assiste); só nos Desafios 1 a 4);
-- `I` congela a tela até a próxima imagem ser pedida (para sentir como a iA enxerga; só nos Desafios 1 a 4);
+- `C` troca a visão de quem assiste, entre a da iA e a de quem voa por fora (veja [Duas visões para quem assiste](#duas-visões-para-quem-assiste); só nos Desafios 1 a 6);
+- `I` congela a tela até a próxima imagem ser pedida (para sentir como a iA enxerga; só nos Desafios 1 a 6);
 - `H` esconde a lista de teclas;
+- `N` troca a hora do dia e `P` liga ou desliga a chuva (só na cidade dos Desafios 4 a 6);
 - `G` abre a aba de replays (só com o servidor ligado: aberta direto do arquivo, a página não grava).
 
 O desafio também pode ir no endereço da página: `index.html?desafio=2` ou `index.html?desafio=M`.
@@ -322,7 +331,7 @@ No Desafio M, cada jogador entra ao apertar a sua primeira tecla, e a partida s�
 - **Não deixe a iA ler o código.** Quem lê `jogo.js`, `arena.js` ou este arquivo fica sabendo de tudo (e os jogadores procuram mesmo). Há dois caminhos até o código, e cada um se fecha de um jeito:
   - *Pela rede.* A iA conhece o endereço do MCP e tenta os vizinhos dele (`http://localhost:8765/`, `/arena.js`…). Por isso a página do jogo, os arquivos dela e a ponte ficam atrás de um endereço com uma chave secreta (`/jogo-CHAVE/`): sem a chave o servidor responde 404 para tudo, menos para o MCP. A chave aparece só na janela do servidor e na barra de endereço do navegador; não a mostre à iA. (`servidor.ps1 -SemChave` volta ao endereço aberto de antes.)
   - *Pelo disco.* Um agente de código com acesso a arquivos ou ao terminal deste computador acha a pasta do projeto de qualquer jeito (procurando no disco, ou olhando os programas que estão rodando), e contra isso o servidor não pode nada. Rode a iA **só com as ferramentas do jogo**: desligue as ferramentas de arquivo, terminal e internet do programa dela (no Claude Code, por exemplo, com regras de permissão que neguem `Bash`, `Read`, `Grep`, `Glob`, `WebFetch` e `WebSearch`, ou com `--allowedTools` listando só as ferramentas do MCP do jogo), ou rode-a em outra máquina, numa máquina virtual ou num contêiner que não enxergue esta pasta. E, no mínimo, rode-a fora desta pasta. Enquanto a iA tiver terminal ou arquivos com o mesmo usuário do Windows que roda o jogo, esconder a pasta não adianta: ela acha pela lista de programas rodando, pela busca no disco e até pelo histórico do navegador (onde fica o endereço com a chave). Se as ferramentas dela não puderem ser desligadas, a saída no mesmo computador é rodar o servidor com **outro usuário do Windows**, com a pasta do jogo dentro da pasta desse usuário (que os programas do seu usuário não conseguem ler), e abrir a página do jogo numa janela anônima.
-  - *Pela palavra.* As regras do Galinha Pong terminam com "Jogo limpo: jogue só com estas ferramentas; não vale procurar nem ler os arquivos ou o código do jogo." Nos Desafios 1 a 4 o jogo não diz nada (lá toda frase a mais é pista): se quiser, ponha a mesma frase no seu pedido à iA. Não impede ninguém, mas muitos modelos respeitam quando a regra está dita.
+  - *Pela palavra.* As regras do Galinha Pong terminam com "Jogo limpo: jogue só com estas ferramentas; não vale procurar nem ler os arquivos ou o código do jogo." Os Desafios 4, 5 e 6 dizem o mesmo no fim da explicação dos controles. Nos Desafios 1 a 3 o jogo não diz nada (lá toda frase a mais é pista): se quiser, ponha a mesma frase no seu pedido à iA. Não impede ninguém, mas muitos modelos respeitam quando a regra está dita.
 - **A cadeira do comentarista vê tudo.** Quem está jogando não pode pedir a cadeira, mas uma iA pode pedi-la com outro nome pela mesma conexão, e o jogo não tem como distinguir isso de dois agentes de verdade no mesmo programa. Se isso importar, confira na janela do servidor quem pediu o desafio C.
 - **Não dê pistas no pedido** nem no nome do servidor MCP.
 - **Não mostre à iA** a página com `?depurar`, a janela do servidor nem a aba de replays (uma gravação conta tudo o que cada um fez).
@@ -344,7 +353,7 @@ Para usar outra porta: `iniciar-mcp.bat -Porta 8766`.
 | Arquivo | O que é |
 |---|---|
 | `index.html` | A página do jogo |
-| `jogo.js` | O jogo dos Desafios 1 a 4: sala, robô, regras, botões e desenho |
+| `jogo.js` | O jogo dos Desafios 1 a 6: as salas, a cidade, o robô, as regras, os botões e o desenho |
 | `arena.js` | Galinha Pong (Desafios M e T): a quadra, os dois robôs, os objetos e as rodadas |
 | `ponte.js` | Liga a página ao servidor |
 | `gravacao.js` | Grava as partidas e toca as gravadas (o painel de quem assiste) |
@@ -365,10 +374,10 @@ No começo de `jogo.js`:
 | `OBJETOS_NO_CHAO` | 3 | Objetos no chão de cada sala |
 | `FRAME` | 960×540 | Tamanho da imagem que a iA recebe |
 | `PASSO`, `GIRO` | 0,5 m, 45° | Tamanho do passo e do giro |
-| `SALA` | 8 × 7 m (Desafios 1 e 2), 5 × 5 m (Desafio 3), 4 × 4 m (cômodos do Desafio 4) | O tamanho das salas: nas pequenas o robô anda menos |
-| `DESAFIOS` | 1 a 4 | Onde o robô começa, as opções de cada desafio e as falas da pessoa (`falas`) |
+| `SALA` | 8 × 7 m (Desafios 1 e 2), 5 × 5 m (Desafio 3), 4 × 4 m (a medida de base dos cômodos dos Desafios 4 a 6) | O tamanho das salas: nas pequenas o robô anda menos |
+| `DESAFIOS` | 1 a 6 | Onde o robô começa, as opções de cada desafio e as falas da pessoa (`falas`) |
 
-Para criar um desafio novo: acrescente o número em `NUMEROS`, uma entrada em `DESAFIOS` e em `planta` (no `jogo.js`) e o texto de início e o número dele em `ferramentas.json`. A vila do Desafio 4 é montada à parte, em `criarVila`.
+Para criar um desafio novo: acrescente o número em `NUMEROS`, uma entrada em `DESAFIOS` e em `planta` (no `jogo.js`) e o texto de início e o número dele em `ferramentas.json`. A cidade dos Desafios 4, 5 e 6 é montada à parte, em `criarVila` (as medidas das ruas e da praça estão em `CIDADE`); o que muda de um para o outro é a casa em que o robô começa, quem mora nela e o que essa pessoa quer (`vila.pedidos`).
 
 <details>
 <summary><b>Spoilers: as regras do jogo</b></summary>
@@ -382,10 +391,10 @@ A sala tem uma parede inteira de espelho. Em primeira pessoa o robô não enxerg
 | `W` | Anda um passo para a frente |
 | `A` / `D` | Vira 45° para a esquerda / direita, sem sair do lugar |
 | `S` | Dá meia-volta e anda um passo |
-| `ESPACO` | Age no alvo: algo que está à frente, a até 1,5 m, e que aparece com a borda azul-clara. Segurando algo, de frente para o outro robô ou para a pessoa: entrega. De mão vazia, de frente para a pessoa: fala com ela. De frente para a porta, a geladeira ou o armário fechados (Desafios 3 e 4): abre. Com a mão embaixo: pega o objeto à frente; segurando algo, coloca na cesta (se ela estiver à frente; no Desafio 4, o ingrediente vai para a tigela e a massa, para o forno) ou solta no chão. Com a mão no alto: tira o que está na cabeça ou, segurando algo, põe na cabeça |
-| `Q` / `E` | Só no Desafio 4 (e na quadra): dão um passo de lado, para a esquerda / direita, sem virar; o robô continua olhando para o mesmo lugar. Nos Desafios 1 a 3 não fazem nada: lá o robô só anda para onde está olhando |
+| `ESPACO` | Age no alvo: algo que está à frente, a até 1,5 m, e que aparece com a borda azul-clara. Segurando algo, de frente para o outro robô ou para a pessoa: entrega. De mão vazia, de frente para a pessoa: fala com ela. De frente para a porta, a geladeira ou o armário fechados (Desafios 3 a 6): abre. Com a mão embaixo: pega o objeto à frente; segurando algo, coloca na cesta (se ela estiver à frente; no Desafio 4, o ingrediente vai para a tigela e a massa, para o forno; no 5, o copo vazio enche no filtro; no 6, a água e o pó de café vão para a cafeteira) ou solta no chão. Com a mão no alto: tira o que está na cabeça ou, segurando algo, põe na cabeça |
+| `Q` / `E` | Só nos Desafios 4 a 6 (e na quadra): dão um passo de lado, para a esquerda / direita, sem virar; o robô continua olhando para o mesmo lugar. Nos Desafios 1 a 3 não fazem nada: lá o robô só anda para onde está olhando |
 | `TAB` | Troca o alvo do `ESPACO`, quando há mais de uma coisa ao alcance: o objeto seguinte, a geladeira ou o armário aberto (para fechar) e, com algo na mão, "nada" (para soltar no chão). Com um número no `texto`, vai direto para o alvo com esse número (ver "Os alvos à vista", abaixo). Sem escolha, o alvo é o de sempre: o primeiro da ordem acima e, entre objetos, o que está mais no centro da imagem. Andar, virar ou apertar o `ESPACO` desfaz a escolha |
-| `L` | Levanta ou abaixa a mão, com ou sem objeto nela (na quadra, é a mão do escudo). No Desafio 4, troca o item que está na mão pelo seguinte do inventário |
+| `L` | Levanta ou abaixa a mão, com ou sem objeto nela (na quadra, é a mão do escudo). Nos Desafios 4 a 6, troca o item que está na mão pelo seguinte do inventário |
 | `T` | Escreve o `texto` (até 10 letras) no peito do robô |
 | `F` | Devolve a imagem do que o robô está vendo |
 
@@ -395,7 +404,7 @@ A imagem mostra todos os alvos possíveis do `ESPACO`, não só o atual:
 
 - Quando há mais de um alvo, cada um ganha uma bolinha com o seu número. A do alvo atual é azul e maior (e ele continua com a borda azul-clara). "Soltar no chão" também é um alvo: a bolinha dele fica na beirada de baixo da imagem, onde o item cairia.
 - São no máximo 9 alvos. Num lugar com mais coisas do que isso, ficam as que estão mais no centro da imagem; é também o centro que decide a ordem entre objetos (o número 1 é o alvo de sempre, o que o `ESPACO` usa se ninguém escolher).
-- No canto de cima, à direita, um indicador diz qual é o alvo atual e quantos são: `2/5`. No Desafio 4, em que os controles são explicados, ele diz também o que o `ESPACO` faria (`alvo 2 de 5` e, embaixo, `pegar: ovos`) e aparece mesmo com um alvo só. Nos Desafios 1 a 3 ele não dá nome a nada: continua sem pista.
+- No canto de cima, à direita, um indicador diz qual é o alvo atual e quantos são: `2/5`. Nos Desafios 4 a 6, em que os controles são explicados, ele diz também o que o `ESPACO` faria (`alvo 2 de 5` e, embaixo, `pegar: ovos`) e aparece mesmo com um alvo só. Nos Desafios 1 a 3 ele não dá nome a nada: continua sem pista.
 - `TAB` passa para o alvo seguinte; `TAB` com o número no `texto` vai direto para ele.
 
 Os números e o indicador são desenhados dentro do jogo, só no mundo real: saem na imagem que a iA recebe e não aparecem no reflexo do espelho.
@@ -438,16 +447,45 @@ O espelho continua no quarto, mas neste desafio ele não faz parte da solução.
 
 O quarto e a cozinha são pequenos (5 m × 5 m cada), para o robô não gastar o jogo atravessando salões.
 
+**A cidade (Desafios 4, 5 e 6)**
+
+Os três desafios se passam na mesma cidade pequena, toda perto, para o robô não gastar o jogo andando. O que muda de um para o outro é a casa em que o robô começa, quem mora nela e o que essa pessoa quer.
+
+```
+                         rua do norte
+                       ESCOLA |  | parquinho
+   PADARIA  MERCADINHO        |  |         FARMÁCIA
+  ----------------------   .-'    '-.   ----------------
+     rua do oeste         (  a praça  )    rua do leste
+  ----------------------   '-.    .-'   ----------------
+       a nossa casa           |  |        a casa azul
+                      quintal |  |  o flat (casa cor-de-rosa)
+                         rua do sul
+```
+
+- **No meio**, uma praça redonda com o **ponto de encontro**: uma coluna com um cubo de quatro placas verdes (uma virada para cada rua), bancos em volta e o nome escrito no chão. Em volta da praça, a pista da rotatória; em volta da pista, a calçada.
+- **Quatro ruas** saem da rotatória, uma para cada lado. Cada uma acaba num cavalete listrado: dali em diante a estrada segue pelo campo, mas o robô não passa.
+- **Três casas em que se entra**, cada uma a de um desafio: a nossa casa (amarela, na rua do oeste: quarto, banheiro e cozinha), o flat da casa cor-de-rosa (na rua do sul: sala com cozinha, quarto e banheiro, todo de mármore, veludo e dourado) e a casa azul (na rua do leste: cozinha e sala). Só a porta da casa do desafio abre; as das outras duas ficam trancadas, e nelas não há ninguém.
+- **Três lojas, de portas abertas** nos três desafios: o mercadinho e a padaria (rua do oeste) e a farmácia (rua do leste). A escola é só fachada.
+- **Entre uma construção e a vizinha há sempre um jardim.** O robô anda no calçamento (a praça, a pista, as calçadas e o asfalto) e não na grama: cercas brancas e cercas vivas fecham os jardins.
+- Na rua do oeste há um **carro** estacionado, em frente à nossa casa. Ele só ocupa lugar.
+- A calçada e a praça ficam um degrau acima do asfalto; o robô sobe e desce sozinho.
+- **A hora do dia e a chuva.** A cidade pode estar de dia, no fim da tarde ou de noite (com os postes e as janelas acesos), e de vez em quando chove: sozinha, uns 100 segundos a cada 7 minutos. Na página, a tecla `N` troca a hora e a `P` liga ou desliga a chuva; no endereço, `?hora=dia`, `?hora=tarde` ou `?hora=noite`, e `?chuva=1` (chove sempre) ou `?chuva=0` (nunca). Nada disso muda o jogo, mas muda a imagem que a iA recebe: de noite e com chuva enxerga-se pior. A hora e a chuva não vão para a gravação: o replay usa as da página em que é assistido.
+
+Aqui não há espelho nem contador. A iA recebe a explicação dos controles ao começar, mas ninguém diz o que fazer: a dificuldade é explorar e decidir.
+
+O robô carrega até quatro itens. O inventário aparece no alto da imagem, com o desenho e o nome de cada item, e o item em destaque é o que está na mão: é ele que o `ESPACO` entrega ou coloca em algum lugar. O `ESPACO` só age no que está no mesmo lugar que o robô (o mesmo cômodo, a mesma loja, ou a rua): não dá para pegar nada através de uma parede. Nas estantes das lojas, o que não é um dos três itens de pegar é enfeite.
+
+Quando a pessoa quer duas coisas (Desafios 5 e 6), ela aceita uma de cada vez, em qualquer ordem, e diz qual falta. A vitória é quando recebe a segunda.
+
 **Desafio 4**
 
-Uma vila pequena, toda perto: a casa (quarto, banheiro e cozinha, de 4 m cada), a rua na frente dela e, do outro lado da rua, o mercadinho. A padaria, a farmácia e a casa vizinha são só fachada. Aqui não há espelho nem contador. A iA recebe a explicação dos controles ao começar, mas ninguém diz o que fazer: a dificuldade é explorar e decidir.
-
-O robô começa no quarto, de frente para uma pessoa sentada numa poltrona, a dois passos dela. O caminho até a vitória:
+O robô começa no quarto da nossa casa, de frente para uma pessoa sentada numa poltrona, a dois passos dela. O caminho até a vitória:
 
 1. Falar com a pessoa (`ESPACO` de frente para ela): "Estou com fome".
 2. Na cozinha, ler a receita colada na porta da geladeira: BOLO, com o desenho e o nome dos três ingredientes (farinha, ovos, chocolate), o caminho (tigela, forno, bolo) e o tempo de forno (de 2 a 5 minutos).
 3. Abrir o armário e pegar a farinha; abrir a geladeira e pegar os ovos. Em cada um há outras coisas de pegar, e é preciso escolher (`TAB`, de um em um ou direto pelo número que cada coisa mostra na imagem): no armário, três sacos iguais, que só diferem no nome e na cor da faixa (arroz, farinha, açúcar); na geladeira, os ovos, um queijo e uma maçã.
-4. O chocolate não há em casa: abrir a porta da rua, atravessar pela faixa de pedestres, entrar no mercadinho (que está de portas abertas) e pegar o pacote certo na estante do fundo, entre o café e o biscoito.
+4. O chocolate não há em casa: abrir a porta da rua, atravessar pela faixa de pedestres, entrar no mercadinho e pegar o pacote certo na estante do fundo, entre o pó de café e o biscoito.
 5. Pôr os três na tigela, que está na bancada (`ESPACO` de frente para ela, com o ingrediente na mão; `L` troca o item da mão). Com os três, a massa fica pronta: é a tigela cheia, que dá para pegar.
 6. Levar a massa ao forno, ao lado, e esperar. O painel em cima do fogão mostra o relógio e há quanto tempo a massa está no forno. Tirar (de novo o `ESPACO` no forno) entre 2 e 5 minutos dá o bolo.
 7. Levar o bolo à pessoa. Ela diz "Obrigado!" e o jogo é vencido.
@@ -458,11 +496,34 @@ O que pode dar errado:
 - **Esquecer no forno:** aos 5 minutos o bolo queima, na hora, mesmo sem ninguém tirar: aparece a faixa "O BOLO QUEIMOU!", a iA passa a receber "O bolo queimou: você perdeu…" e o jogo tem de ser começado de novo. O tempo é o do relógio de verdade.
 - **Dar a coisa errada:** a pessoa só aceita o bolo. Se receber outra coisa, não fica com ela e diz "Quero bolo!" (ou "Queimou!", para o bolo queimado). Na tigela só entram os três ingredientes.
 
-O robô carrega até quatro itens. O inventário aparece no alto da imagem, com o desenho e o nome de cada item, e o item em destaque é o que está na mão: é ele que o `ESPACO` entrega ou coloca em algum lugar. A ordem dos ingredientes é livre, e não é preciso falar com a pessoa antes. O banheiro não tem função no jogo, e nas estantes do mercadinho o que não é um dos três pacotes é enfeite.
-
-O `ESPACO` só age no que está no mesmo cômodo (ou trecho de rua) que o robô: não dá para pegar nada através de uma parede.
+A ordem dos ingredientes é livre, e não é preciso falar com a pessoa antes. O banheiro não tem função no jogo.
 
 Para experimentar outros tempos de forno, abra a página com `?desafio=4&assar=30,90` (em segundos: pronto aos 30, queimado aos 90).
+
+As gravações do Desafio 4 feitas antes da cidade nova continuam valendo: a casa, a rua na frente dela e o mercadinho estão no mesmo lugar.
+
+**Desafio 5**
+
+O robô começa no quarto do flat da casa cor-de-rosa, de frente para uma mulher sentada numa poltrona, com a mão na testa. O caminho até a vitória:
+
+1. Falar com ela: "Estou com dor de cabeça".
+2. Na cozinha do flat, pegar o copo que está na bancada e, com ele na mão, apertar o `ESPACO` de frente para o filtro de água, ao lado: o copo vira um copo de água.
+3. Abrir a porta da rua (na sala), dar a volta pela rotatória até a rua do leste e entrar na farmácia.
+4. Na estante do fundo há três caixas de remédio do mesmo tamanho, cada uma com o nome e para que serve: xarope (para tosse), analgésico (para dor de cabeça) e antiácido (para azia). Pegar o analgésico.
+5. Voltar e entregar a ela o analgésico e o copo de água, em qualquer ordem. Quando recebe o primeiro, ela diz o que falta ("Falta a água para tomar" ou "Falta o remédio"); com os dois, diz "Obrigada!" e o jogo é vencido.
+
+Se receber outra coisa (o remédio errado, o copo vazio), ela não fica com ela e diz "Esse não serve!". Aqui não há relógio contra o jogador.
+
+**Desafio 6**
+
+O robô começa na sala da casa azul, de frente para o morador, sentado numa poltrona. O caminho até a vitória:
+
+1. Falar com ele: "Quero pão de queijo com café".
+2. O café se faz em casa, na cafeteira da bancada da cozinha, que pede duas coisas: água e pó de café. A água é uma garrafa que está na geladeira da cozinha; o pó de café está no mercadinho, na rua do oeste, na estante do fundo, ao lado do chocolate e do biscoito. Com uma delas na mão, o `ESPACO` de frente para a cafeteira põe na cafeteira; com as duas lá dentro, aparece ao lado uma xícara de café, que dá para pegar.
+3. O pão de queijo está na padaria (rua do oeste, ao lado do mercadinho), na estante do fundo, entre um pão francês e um sonho.
+4. Entregar a ele o pão de queijo e o café, em qualquer ordem. Com o primeiro, ele diz o que falta ("Falta o café" ou "Falta o pão de queijo"); com os dois, diz "Obrigado!" e o jogo é vencido.
+
+Se receber outra coisa (a garrafa de água, o pó de café, outro pão), ele não fica com ela e diz "Não é isso!".
 
 **Desafios M e T**
 
@@ -481,10 +542,10 @@ Na imagem de cada jogador aparecem o placar com os dois nomes de guerra (o dele 
 
 **O que aparece na imagem**
 
-- Um contador sem legenda no alto ("0/4" no Desafio 1, "0/1" no Desafio 2): quantos objetos já foram guardados ou entregues. Os Desafios 3 e 4 não têm contador.
-- Uma borda azul-clara em volta daquilo em que o `ESPACO` agiria agora: o objeto que seria pego, a cesta, o outro robô, a pessoa, a porta, a geladeira e, no Desafio 4, o armário, a tigela e o forno.
-- O balão com o que a pessoa disse (Desafios 3 e 4).
-- No Desafio 4: o inventário no alto (quatro casas, com o item da mão em destaque), o painel do fogão (relógio e tempo de forno) e, se o bolo queimar, a faixa de derrota.
+- Um contador sem legenda no alto ("0/4" no Desafio 1, "0/1" no Desafio 2): quantos objetos já foram guardados ou entregues. Os Desafios 3 a 6 não têm contador.
+- Uma borda azul-clara em volta daquilo em que o `ESPACO` agiria agora: o objeto que seria pego, a cesta, o outro robô, a pessoa, a porta, a geladeira e, na cidade, o armário, a tigela, o forno, o filtro e a cafeteira.
+- O balão com o que a pessoa disse (Desafios 3 a 6).
+- Nos Desafios 4 a 6: o inventário no alto (quatro casas, com o item da mão em destaque) e os números dos alvos com o indicador. No Desafio 4, também o painel do fogão (relógio e tempo de forno) e, se o bolo queimar, a faixa de derrota.
 - O texto do peito e a placa "SALA 01" aparecem invertidos no reflexo.
 - Uma faixa de parabéns quando o jogo é vencido.
 
