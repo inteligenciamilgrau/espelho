@@ -3055,14 +3055,16 @@
     }
     if (desafio !== MODO) {
       const arena = desafio === 'M' || desafio === 'T';
-      if (!arena && !/^[0-9]+$/.test(desafio)) return false;
+      if (!arena && desafio !== 'V' && !/^[0-9]+$/.test(desafio)) return false;   // (V: a vila coletiva, de jogo.js)
       const p = new URLSearchParams();
       p.set('desafio', desafio);
       for (const chave of ['depurar', 'bot']) if (ENDERECO.has(chave)) p.set(chave, ENDERECO.get(chave));
       try {                                      // o recado para a página nova (ver o fim deste arquivo)
         if (arena && deIA) sessionStorage.setItem('quadra.entrada', JSON.stringify({ quem, cmd: cmd || 0, nome: nome || '', modelo: modelo || '' }));
         else sessionStorage.removeItem('quadra.entrada');
-        if (!arena && deIA) sessionStorage.setItem('desafio.quem', JSON.stringify({ quem, nome: nome || '', modelo: modelo || '' }));   // nos desafios 1 a 3, a página nova mostra quem está jogando (ver jogo.js)
+        if (desafio === 'V' && deIA) sessionStorage.setItem('vila.entrada', JSON.stringify({ quem, cmd: cmd || 0, nome: nome || '', modelo: modelo || '' }));   // na vila coletiva, a iA entra na página nova, que responde a este pedido
+        else sessionStorage.removeItem('vila.entrada');
+        if (!arena && desafio !== 'V' && deIA) sessionStorage.setItem('desafio.quem', JSON.stringify({ quem, nome: nome || '', modelo: modelo || '' }));   // nos desafios 1 a 3, a página nova mostra quem está jogando (ver jogo.js)
       } catch (e) { }
       location.search = p.toString();
       return true;

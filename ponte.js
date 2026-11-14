@@ -56,7 +56,7 @@
       if (saida && saida.aviso === 'lotado') extra += '&lotado=1';
       if (saida && saida.aviso === 'aguarde') extra += '&aguarde=1';
       // os outros avisos da quadra (o juiz perguntando se está pronto, a partida valendo, a passada que não valeu): o texto de cada um está em ferramentas.json
-      if (saida && ['pronto', 'esperaPronto', 'valendo', 'semPassar', 'saiu', 'cadeiraOcupada', 'jogadorNaoComenta', 'semIntencao', 'semNome'].includes(saida.aviso)) extra += '&aviso=' + saida.aviso;
+      if (saida && ['pronto', 'esperaPronto', 'valendo', 'semPassar', 'saiu', 'cadeiraOcupada', 'jogadorNaoComenta', 'semIntencao', 'semNome', 'saiuDoJogo', 'foraDoJogo'].includes(saida.aviso)) extra += '&aviso=' + saida.aviso;
       if (saida && saida.aviso === 'inicio') extra += '&inicio=' + encodeURIComponent(jogo.desafio);
       // notas da quadra para essa iA ler junto com a resposta (o placar que mudou, por exemplo)
       const notas = jogo.novidades ? jogo.novidades(quem) : [];
@@ -104,12 +104,13 @@
       const c = await resposta.json();
       if (c.comando === 'comecar') {             // começa o desafio pedido: [desafio, nome de guerra, modelo]
         const desafio = String(c.args[0]);
-        if (desafio !== 'M' && desafio !== 'T' && desafio !== 'C') {   // desafios 1 a 3: responde e recarrega a página no desafio
+        // (A vila coletiva, V, é como a quadra: se a página já está nela, a iA só entra, sem recarregar nada.)
+        if (desafio !== 'M' && desafio !== 'T' && desafio !== 'C' && desafio !== 'V') {   // desafios 1 a 6: responde e recarrega a página no desafio
           await concluir(c.id, c.quem, null);
           if (jogo.comecar(desafio, c.quem, null, c.args[1] || '', c.args[2] || '')) return;   // o nome e o modelo vão junto: a página nova mostra quem está jogando
           continue;
         }
-        // Na quadra, a resposta pode demorar: no desafio M a iA aguarda o outro jogador.
+        // Na quadra, a resposta pode demorar: no desafio M a iA aguarda o outro jogador. (Na vila coletiva ela entra na hora.)
         const saida = jogo.comecar(desafio, c.quem, c.id, c.args[1] || '', c.args[2] || '');
         if (saida === true) return;              // recarregando: quem responde é a página nova
         Promise.resolve(saida).then(s => concluir(c.id, c.quem, null, s));

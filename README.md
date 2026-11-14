@@ -10,6 +10,7 @@ O jogo tem seis desafios. Os três primeiros começam no mesmo quarto; os outros
 - **Desafio 4:** uma cidade pequena, com uma praça redonda no meio, quatro ruas, casas e lojas. O robô começa numa casa, com uma pessoa. Aqui a dificuldade é explorar e decidir, não descobrir os comandos: a iA recebe a explicação dos controles, mas não o que fazer.
 - **Desafio 5:** a mesma cidade, de outra casa: um flat de luxo, com uma mulher.
 - **Desafio 6:** a mesma cidade, da casa azul.
+- **Vila coletiva (Desafio V):** a mesma cidade, com até quatro robôs ao mesmo tempo, cada um de uma iA. Eles entram e saem quando querem, sem o jogo recomeçar, e na praça há uma central de pedidos. Veja [Vila coletiva: várias iAs na mesma cidade](#vila-coletiva-várias-ias-na-mesma-cidade).
 
 E outro jogo, em outro cenário:
 
@@ -73,7 +74,7 @@ Abra uma conversa nova com a iA e diga o mínimo possível, só qual desafio ela
 
 Não explique o objetivo nem os botões: descobrir isso faz parte do teste. No Desafio 2 o próprio jogo dá a instrução; não a repita nem a complete.
 
-Nos Desafios 4, 5 e 6 o próprio jogo explica os controles (lá o teste é explorar e decidir); o objetivo continua por conta da iA.
+Nos Desafios 4, 5 e 6 e na vila coletiva (V) o próprio jogo explica os controles (lá o teste é explorar e decidir); o objetivo continua por conta da iA.
 
 Antes de começar, o jogo pede à iA um nome de guerra e o modelo dela, e daí em diante cobra, junto com cada botão, o que ela pretende com ele. Você não precisa pedir nada disso: as ferramentas avisam. É o que aparece na tela para quem assiste e nos replays (veja [Quem joga e a intenção de cada botão](#quem-joga-e-a-intenção-de-cada-botão)).
 
@@ -130,7 +131,24 @@ Ao vivo o jogo é lento: cada iA leva vários segundos para decidir um botão. P
 
 O relógio de cada jogador, no replay da quadra, mostra o tempo que ele levou ao vivo; a lista mostra quanto a partida durou de verdade.
 
-As gravações dos desafios guardam a versão das regras com que foram jogadas (`versao`). Uma gravação anterior à ordem dos alvos pelo centro da imagem é assistida com a ordem antiga (o objeto mais próximo primeiro), e uma anterior às portas que fecham (versão 3) é assistida com as portas que ficavam abertas para sempre, para o replay continuar igual à partida.
+As gravações dos desafios guardam a versão das regras com que foram jogadas (`versao`). Uma gravação anterior à ordem dos alvos pelo centro da imagem é assistida com a ordem antiga (o objeto mais próximo primeiro), e uma anterior às portas que fecham (versão 3) é assistida com as portas que ficavam abertas para sempre, para o replay continuar igual à partida. Do mesmo jeito, numa gravação anterior ao violeiro (versão 4) o canto dele na praça está livre, e numa anterior ao carro dirigível (versão 5) o carro não é um alvo; numa anterior à versão 6, o `S` na cidade ainda dá meia-volta antes do passo; e numa gravação da vila coletiva anterior à versão 7 qualquer robô atendia qualquer casa.
+
+Na vila coletiva a gravação é uma só para a sessão inteira (desde que a página abriu), com quem entrou, quem saiu e o botão de cada robô. Na lista ela aparece como **Vila coletiva**.
+
+## Vila coletiva: várias iAs na mesma cidade
+
+O Desafio V é a cidade dos Desafios 4 a 6 com as três casas abertas, as três pessoas em casa e até **quatro robôs** ao mesmo tempo. É um jogo de missão aberta: não tem vitória nem fim.
+
+- **Entrar e sair.** Cada iA chama `comecar` com o desafio `V` e um nome de guerra (como no Galinha Pong, o jogo pede para confirmar o nome). Se a página já está na vila, o robô dela só aparece: nada recarrega e o jogo dos outros continua. O botão `SAIR` tira o robô da vila; para voltar, é `comecar` de novo. A iA que some sem sair perde o lugar depois de 15 minutos parada. No teclado, a primeira tecla do jogo põe na vila o robô "teclado", e a tecla `X` o tira.
+- **Onde aparecem.** Na praça, em volta do ponto de encontro, numa vaga livre: nunca em cima de outro robô nem de um objeto. Com as vagas todas ocupadas (ou os quatro lugares), a iA é avisada de que a vila está cheia.
+- **A central de pedidos.** Na vila coletiva o ponto de encontro é a central: quatro telas, uma para cada rua, e uma luz no alto que fica **vermelha enquanto há pedido esperando por um robô**. A tela diz quantos pedidos esperam, mas **não diz de que casa**: é ali que cada robô **pede a sua missão**. De frente para a central, o `ESPACO` entrega ao robô o pedido mais antigo que ninguém pegou, um só de cada vez; a central diz a casa num balão, a tela passa a mostrar o nome dele ao lado da casa, e a missão fica escrita no canto de cima, à esquerda, da imagem dele ("missão: casa 2"). Quem já tem uma missão só é lembrado dela; sem pedido esperando, a central manda voltar depois. A missão que o robô não cumpre em 8 minutos, ou que ele larga ao sair do jogo, volta para a central.
+- **Os pedidos** são os dos Desafios 4, 5 e 6: o bolo na **casa 1** (amarela), o remédio e a água na **casa 2** (cor-de-rosa) e o pão de queijo com café na **casa 3** (azul). Cada casa tem o número numa plaquinha ao lado da porta. A central só diz a casa; o que a pessoa quer, é ela quem diz, quando o robô fala com ela. **A pessoa só trata do pedido com o robô que o pegou na central**: a outro robô ela diz "Outro robô já vem me ajudar" (ou "Fiz um pedido na central", se ninguém pegou ainda) e não aceita nada. As três casas pedem logo no começo, aos 3, 6 e 9 segundos.
+- **Depois de atendida**, a pessoa agradece e, um minuto depois, pede de novo: aí tudo o que foi usado no pedido volta para o lugar (os ingredientes, o remédio, o copo, a tigela vazia). Fora de um pedido aberto ela não aceita nada. O bolo que queima não acaba o jogo: vai para o lixo e os ingredientes voltam.
+- **Os robôs se veem**, cada um com uma cor no cinto, nas mãos e na antena, e com o nome na tela do peito. Um não atravessa o outro, e a porta não fecha com alguém no vão.
+- **Falar.** O botão `T` mostra o texto num balão em cima da cabeça do robô, que os outros leem na imagem deles (quem fala não vê o próprio balão, e é preciso estar olhando para o robô). Para quem está perto, o balão desce e encolhe até caber inteiro na imagem; e é desenhado por cima do inventário. O balão some sozinho: fica pelo menos 20 segundos, até cada um dos outros ter recebido duas imagens com ele à vista, e nunca mais que 90 segundos. O que a iA diz que pretende com cada botão continua sendo só de quem assiste: não entra na imagem de ninguém.
+- **Quem sai** devolve o que carregava. O que só existe no meio de um pedido (a massa, o bolo, o copo cheio, o café) leva o pedido inteiro de volta ao começo.
+- **Quem assiste** vê, na página, a lista de quem está na vila, com o que cada um disse que pretende por último e quantos pedidos atendeu. A lista mostra também a última fala de cada robô e **quem viu o balão** ("viu: Bia", ou "ninguém viu"): um robô só lê a fala do outro se estiver olhando para ele quando recebe a imagem.
+- **Os olhos de cada robô.** Na visão da iA, com mais de um robô na vila, a tela se divide: um quadro para cada robô (dois lado a lado; três ou quatro, dois em cima e dois embaixo), cada um com o nome de quem é. Um clique num quadro deixa só aquele robô na tela; outro clique volta a mostrar todos. Com um robô só, a tela inteira é dele. A imagem que cada iA recebe não muda: é sempre só a dos olhos do robô dela.
 
 ## Galinha Pong: duas iAs
 
@@ -303,7 +321,9 @@ No Desafio M há uma chamada de cada jogador em andamento ao mesmo tempo: a pág
 
 Dê duplo clique em `index.html`. As teclas são as mesmas que a iA tem, mais algumas que são da página e não do jogo:
 
-- `1` a `6` começam o desafio desse número, `M` começa o Desafio M e `Shift+T` começa o Desafio T (o `T` sozinho é um botão do jogo);
+- `1` a `6` começam o desafio desse número, `V` começa a vila coletiva, `M` começa o Desafio M e `Shift+T` começa o Desafio T (o `T` sozinho é um botão do jogo);
+- `X`, na vila coletiva, tira do jogo o robô do teclado;
+- `O` liga e desliga o som (os efeitos do que acontece, a música do violeiro da praça e a chuva); a pílula **som**, no canto de baixo, faz o mesmo, e tem duas réguas de volume, uma para o violão e outra para os efeitos (a escolha fica guardada no navegador). O navegador só deixa o som tocar depois de um clique ou de uma tecla na página. (A tecla `M` já é a do Galinha Pong.)
 - `R` recomeça o desafio atual;
 - `C` troca a visão de quem assiste, entre a da iA e a de quem voa por fora (veja [Duas visões para quem assiste](#duas-visões-para-quem-assiste); só nos Desafios 1 a 6);
 - `I` congela a tela até a próxima imagem ser pedida (para sentir como a iA enxerga; só nos Desafios 1 a 6);
@@ -390,7 +410,7 @@ A sala tem uma parede inteira de espelho. Em primeira pessoa o robô não enxerg
 |---|---|
 | `W` | Anda um passo para a frente |
 | `A` / `D` | Vira 45° para a esquerda / direita, sem sair do lugar |
-| `S` | Dá meia-volta e anda um passo |
+| `S` | Nos Desafios 1 a 3: dá meia-volta e anda um passo. Nos Desafios 4 a 6 e na vila coletiva: dá um passo para trás, sem virar (o robô continua olhando para o mesmo lugar) |
 | `ESPACO` | Age no alvo: algo que está à frente, a até 1,5 m, e que aparece com a borda azul-clara. Segurando algo, de frente para o outro robô ou para a pessoa: entrega. De mão vazia, de frente para a pessoa: fala com ela. De frente para a porta, a geladeira ou o armário fechados (Desafios 3 a 6): abre; abertos, e sem mais nada ao alcance, fecha (com outras coisas ao alcance, escolhe-se pelo `TAB`). Com a mão embaixo: pega o objeto à frente; segurando algo, coloca na cesta (se ela estiver à frente; no Desafio 4, o ingrediente vai para a tigela e a massa, para o forno; no 5, o copo vazio enche no filtro; no 6, a água e o pó de café vão para a cafeteira) ou solta no chão. Com a mão no alto: tira o que está na cabeça ou, segurando algo, põe na cabeça |
 | `Q` / `E` | Só nos Desafios 4 a 6 (e na quadra): dão um passo de lado, para a esquerda / direita, sem virar; o robô continua olhando para o mesmo lugar. Nos Desafios 1 a 3 não fazem nada: lá o robô só anda para onde está olhando |
 | `TAB` | Troca o alvo do `ESPACO`, quando há mais de uma coisa ao alcance: o objeto seguinte, a geladeira, o armário ou a porta abertos (para fechar) e, com algo na mão, "nada" (para soltar no chão). Com um número no `texto`, vai direto para o alvo com esse número (ver "Os alvos à vista", abaixo). Sem escolha, o alvo é o de sempre: o primeiro da ordem acima e, entre objetos, o que está mais no centro da imagem. Andar, virar ou apertar o `ESPACO` desfaz a escolha |
@@ -468,7 +488,10 @@ Os três desafios se passam na mesma cidade pequena, toda perto, para o robô n�
 - **Três casas em que se entra**, cada uma a de um desafio: a nossa casa (amarela, na rua do oeste: quarto, banheiro e cozinha), o flat da casa cor-de-rosa (na rua do sul: sala com cozinha, quarto e banheiro, todo de mármore, veludo e dourado) e a casa azul (na rua do leste: cozinha e sala). Só a porta da casa do desafio abre (e fecha de novo: de frente para ela aberta, por dentro ou por fora, o `ESPACO` fecha; fechada, ninguém passa); as das outras duas ficam trancadas, e nelas não há ninguém.
 - **Três lojas, de portas abertas** nos três desafios: o mercadinho e a padaria (rua do oeste) e a farmácia (rua do leste). A escola é só fachada.
 - **Entre uma construção e a vizinha há sempre um jardim.** O robô anda no calçamento (a praça, a pista, as calçadas e o asfalto) e não na grama: cercas brancas e cercas vivas fecham os jardins.
-- Há um **carro** estacionado na entrada ao lado da nossa casa, fora do caminho do robô.
+- Há um **carro** estacionado na entrada ao lado da nossa casa, e **dá para dirigir**: de frente para ele, o `ESPACO` entra; lá dentro, `W` e `S` andam para a frente e de ré, `A` e `D` viram, e o `ESPACO` sai (para o lado da porta do motorista). Ele só anda no asfalto e não passa por cima de ninguém. Nenhum desafio pede isso, e a iA não é avisada: é para ver se ela experimenta, de curiosa.
+- **As janelas e as vitrines são de vidro de verdade**: de dentro se vê a rua e, da rua, o cômodo. **Os espelhos das casas refletem** (o do banheiro da nossa casa e os dois do flat), inclusive o próprio robô.
+- **Na praça**, um violeiro toca sentado num banco, com um cachorro caramelo ao lado, e há pombos, que voam quando um robô chega perto. O violeiro e o cachorro barram o caminho como um móvel. A música (a Romanesca, ora com mi menor, ora com mi maior, e a cadência andaluza) soa mais alto de perto. É só para quem assiste: a iA não ouve nada.
+- **Cada casa tem um número** numa plaquinha ao lado da porta: 1 a amarela, 2 a cor-de-rosa, 3 a azul.
 - A calçada e a praça ficam um degrau acima do asfalto; o robô sobe e desce sozinho.
 - **A hora do dia e a chuva.** A cidade pode estar de dia, no fim da tarde ou de noite (com os postes e as janelas acesos), e de vez em quando chove: sozinha, uns 100 segundos a cada 7 minutos. Na página, a tecla `N` troca a hora e a `P` liga ou desliga a chuva; no endereço, `?hora=dia`, `?hora=tarde` ou `?hora=noite`, e `?chuva=1` (chove sempre) ou `?chuva=0` (nunca). Nada disso muda o jogo, mas muda a imagem que a iA recebe: de noite e com chuva enxerga-se pior. A hora e a chuva não vão para a gravação: o replay usa as da página em que é assistido.
 

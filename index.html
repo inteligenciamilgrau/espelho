@@ -113,6 +113,13 @@
   body.desafio #vista button:hover { color: #fff; }
   body.desafio #vista button.acesa { background: var(--verde); color: #07130d; }
   body.desafio #vista kbd { min-width: 22px; height: 22px; padding: 0 6px; margin: 0 4px 0 5px; font-size: 11px; }
+  /* o som dos desafios: uma pílula que liga e desliga (tecla O) */
+  body.desafio #som { bottom: 140px; right: 14px; padding: 4px; border-radius: 999px; display: flex; align-items: center; white-space: nowrap; pointer-events: auto; }
+  body.desafio #som button { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 999px; font: 600 12.5px/1 var(--texto); color: #c9d4db; transition: background .15s, color .15s; }
+  body.desafio #som button.acesa { background: var(--verde); color: #07130d; }
+  body.desafio #som kbd { min-width: 22px; height: 22px; padding: 0 6px; margin: 0 4px 0 5px; font-size: 11px; }
+  body.desafio #som label { display: flex; align-items: center; gap: 6px; margin: 0 8px 0 6px; font: 600 11.5px/1 var(--texto); color: #c9d4db; }
+  body.desafio #som input[type=range] { width: 72px; margin: 0; accent-color: var(--verde); cursor: pointer; }
   /* no modo voador: as teclas de quem voa no lugar das do jogo, e o balão do que a iA pretende, em cima da cabeça do robô */
   body.desafio #ajuda .do-voador::before { content: 'voador'; display: block; margin: 0 2px 4px; text-align: center; font: 600 10px/1 var(--titulo); letter-spacing: 1.5px; text-transform: uppercase; color: var(--verde); }
   body.desafio #ajuda .do-voador .dica { margin: 5px auto 0; max-width: 168px; text-align: center; font: 11px/1.4 var(--texto); color: var(--apagado); }
@@ -166,6 +173,9 @@ I R H G</div>
 
 <!-- A visão de quem assiste, nos desafios 1 a 6 (jogo.js): a da iA ou a de quem voa por fora. -->
 <div id="vista" class="painel" hidden><button type="button" tabindex="-1" data-vista="ia" title="O que o robô da iA está vendo">visão da iA</button><button type="button" tabindex="-1" data-vista="voador" title="Uma câmera solta, invisível: W A S D voam, Q e E descem e sobem, Shift corre, Z vai até o robô; um clique prende o mouse, que passa a virar a câmera, e Esc solta">voador</button><kbd>C</kbd></div>
+
+<!-- O som dos desafios (jogo.js): os efeitos, a música do violeiro e a chuva. Um clique, ou a tecla O, liga e desliga; as duas réguas são o volume da música e o dos efeitos. -->
+<div id="som" class="painel" hidden><button type="button" tabindex="-1" title="Liga e desliga o som do jogo: os efeitos, a música do violão e a chuva">som ligado</button><kbd>O</kbd><label title="O volume da música do violeiro da praça">violão <input type="range" min="0" max="100" step="1" tabindex="-1" data-som="musica"></label><label title="O volume dos efeitos: o que acontece no jogo, os bichos e a chuva">efeitos <input type="range" min="0" max="100" step="1" tabindex="-1" data-som="efeitos"></label></div>
 
 <!-- As partidas gravadas, em outra aba (ver gravacao.js e replays.html). Só com o servidor ligado. -->
 <a id="replays" class="painel" href="replays.html" target="_blank" rel="noopener">▶ replays (G)</a>

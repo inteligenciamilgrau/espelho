@@ -30,6 +30,35 @@
   const LINHAS_MAXIMAS = 20000;
   const RITMOS = [0.5, 1, 2, 4];                // as velocidades de quem assiste
 
+  // Nos desafios, voltar a um ponto anterior recarrega a página (o jogo não sabe desfazer um
+  // botão: ver tocador). Para a tela não piscar preta enquanto a página nova monta o cenário, a
+  // página velha deixa guardada uma foto do que estava mostrando, e a nova a põe por cima do
+  // canvas até o jogo chegar ao ponto pedido. (A foto fica só nesta aba, e só até ser usada.)
+  const CHAVE_DA_FOTO = 'gravacao.foto';
+  let foto = null;
+  if (assistindo) try {
+    const guardada = sessionStorage.getItem(CHAVE_DA_FOTO);
+    sessionStorage.removeItem(CHAVE_DA_FOTO);
+    const tela = document.getElementById('tela');
+    if (guardada && guardada.startsWith('data:image/') && tela) {
+      foto = new Image();
+      foto.alt = '';
+      Object.assign(foto.style, { position: 'fixed', left: '0', top: '0', width: '100vw', height: '100vh', pointerEvents: 'none' });
+      foto.src = guardada;
+      tela.after(foto);                         // logo depois do canvas: por cima dele e por baixo dos painéis da página
+      setTimeout(tirarFoto, 6000);              // (se a gravação não carregar, a foto não fica ali para sempre)
+    }
+  } catch (e) { }
+  function tirarFoto() {
+    if (foto) { foto.remove(); foto = null; }
+  }
+  function guardarFoto() {
+    try {
+      const tela = document.getElementById('tela');
+      if (tela) sessionStorage.setItem(CHAVE_DA_FOTO, tela.toDataURL('image/jpeg', 0.85));
+    } catch (e) { }
+  }
+
   // ---------- gravar ----------
   // Começa uma gravação. `resumo()` devolve o que a lista de replays mostra dela (quem jogou,
   // o placar...): é chamado de novo toda vez que a gravação é guardada.
@@ -179,6 +208,7 @@
           const q = new URLSearchParams(location.search);
           q.set('em', String(p)); q.set('ritmo', String(ritmo));
           if (tocando) q.delete('parado'); else q.set('parado', '1');
+          guardarFoto();                        // a página nova mostra esta imagem até chegar ao ponto pedido: sem tela preta no meio
           location.search = q.toString();
           return;
         }
@@ -266,6 +296,7 @@
     // a página foi recarregada para voltar a um ponto da gravação (ver ir)
     const em = Number(ENDERECO.get('em'));
     if (Number.isFinite(em) && em > 0) ir(em); else mostrar();
+    requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(tirarFoto)));   // o jogo já desenhou o ponto pedido: a foto da página anterior sai
     return { passo, soltar, ir, alternar, mudarRitmo, posicao, acabou, total, painel, get tocando() { return tocando; }, get ritmo() { return ritmo; } };
   }
 

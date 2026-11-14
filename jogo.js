@@ -38,7 +38,8 @@
   const ENDERECO = new URLSearchParams(location.search);
   const NUMEROS = ['1', '2', '3', '4', '5', '6'];
   const existeDesafio = n => NUMEROS.includes(String(n));
-  const DESAFIO = existeDesafio(ENDERECO.get('desafio')) ? Number(ENDERECO.get('desafio')) : 1;
+  const COLETIVO = ENDERECO.get('desafio') === 'V';   // a vila coletiva, com vários robôs (ver "o coletivo"): por dentro, é o desafio 7
+  const DESAFIO = COLETIVO ? 7 : existeDesafio(ENDERECO.get('desafio')) ? Number(ENDERECO.get('desafio')) : 1;
   const TOTAL_SALAS = 1;                       // quantas salas tem o desafio 1; completar a última é a vitória
   const OBJETOS_NO_CHAO = 3;                    // por sala; com o da cabeça do robô, o contador vai até 4
   // O tamanho de uma sala: largura (x), profundidade (z), altura (y), em metros. Nos desafios 3
@@ -166,13 +167,16 @@
       falas: { pedido: 'Quero pão de queijo com café', agradecimento: 'Obrigado!', recusa: 'Não é isso!', queimado: 'Não é isso!', falta: ['Falta o pão de queijo', 'Falta o café'] },
     },
   };
+  // A vila coletiva (V): a cidade dos desafios 4 a 6, com as três casas abertas, as três pessoas e até quatro robôs, que começam na praça.
+  DESAFIOS[7] = Object.assign({}, DESAFIOS[4], { coletivo: true, mensagem: 'A vila é de todos. Na praça fica a central de pedidos.', inicio: { x: 14, z: 8, rumo: 0, sala: 4 } });
   const REGRAS = Object.assign({ portaManual: false, contador: true, falas: { pedido: '', agradecimento: '' } }, DESAFIOS[DESAFIO]);
   const FALAS = REGRAS.falas;                   // o que a pessoa diz (desafios 3 e 4)
   // Variante para experimentar sem mexer no código: ...?desafio=2&disfarce
   if (ENDERECO.has('disfarce')) REGRAS.espelhoDisfarcado = true;
 
-  // Para a frente e para trás o robô anda olhando: ir para trás é dar meia-volta e então o passo.
-  // (De lado é diferente: ele dá o passo sem virar. Ver mover.)
+  // Nos desafios 1 a 3 o robô só anda para onde está olhando: ir para trás é dar meia-volta e então o passo.
+  // (Na cidade — desafios 4 a 6 e a vila coletiva — é diferente: para os lados e para trás ele dá o passo
+  // sem virar, e continua olhando para onde olhava. Ver mover.)
   // Valor = quantos giros de 45° antes do passo. (Virar para os lados é outro comando.)
   const GIRO_DA_DIRECAO = { 'frente': 0, 'tras': 4 };
 
@@ -240,6 +244,254 @@
   // Marca tudo o que for sólido e iluminado dentro de `obj` para fazer sombra.
   const fazSombra = obj => obj.traverse(m => { if (m.isMesh && m.material.isMeshStandardMaterial) m.castShadow = true; });
   // Estica o u da textura para ela se repetir uma vez por metro ao longo de `comprimento`.
+  // ---------- sons ----------
+  // Os efeitos sonoros do que acontece no jogo, a música do violeiro da praça e a chuva. Tudo é
+  // feito na hora, com osciladores e ruído: não há arquivo de som. É só para quem assiste (a iA
+  // não ouve nada, e nenhum som diz o que fazer). O navegador só deixa tocar depois de um clique
+  // ou de uma tecla na página; a tecla O liga e desliga, e a escolha fica guardada.
+  // São dois volumes, cada um com a sua régua na página: o da música do violeiro e o dos efeitos
+  // (o que acontece no jogo, os bichos e a chuva).
+  const som = (() => {
+    const CHAVE = 'espelho.som', ouvinte = { x: 0, z: 0 }, ultimo = {}, cordas = {};
+    const NIVEIS = 'espelho.volumes', nivel = { musica: 0.5, efeitos: 1 }, MUSICA_NO_MAXIMO = 0.3;   // (de 0 a 1, o que as réguas da página dizem; e quanto vale a música com a régua no fim)
+    let ctx = null, saida = null, efeitos = null, ruidoBase = null, ligado = true, violao = null, chuva = null, proxima = 0, batida = 0;
+    try { ligado = localStorage.getItem(CHAVE) !== 'desligado'; } catch (e) { }
+    try {
+      const guardados = JSON.parse(localStorage.getItem(NIVEIS)) || {};
+      for (const qual of Object.keys(nivel)) if (Number.isFinite(guardados[qual])) nivel[qual] = Math.max(0, Math.min(1, guardados[qual]));
+    } catch (e) { }
+    function acordar() {
+      if (!ligado) return;
+      if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+      const Contexto = window.AudioContext || window.webkitAudioContext;
+      if (!Contexto) return;
+      try {
+        ctx = new Contexto();
+        saida = ctx.createGain(); saida.gain.value = 0.5; saida.connect(ctx.destination);
+        efeitos = ctx.createGain(); efeitos.gain.value = nivel.efeitos; efeitos.connect(saida);   // (os efeitos e a chuva passam por aqui; a música vai direto, com o volume dela)
+        ruidoBase = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+        const d = ruidoBase.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      } catch (e) { ctx = null; }
+    }
+    for (const tipo of ['pointerdown', 'keydown']) window.addEventListener(tipo, acordar, { capture: true, passive: true });
+    const tocando = () => ligado && ctx && ctx.state === 'running';
+    // quanto se ouve, de onde está quem ouve, de um som que acontece em `onde`
+    const perto = (onde, alcance) => onde ? Math.max(0, 1 - Math.hypot(onde.x - ouvinte.x, onde.z - ouvinte.z) / alcance) ** 2 : 1;
+    const envelope = (vol, t, dur) => {
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(Math.max(0.0002, vol), t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      g.connect(efeitos);
+      return g;
+    };
+    function nota(freq, dur, vol, t, tipo, ate) {
+      const o = ctx.createOscillator();
+      o.type = tipo || 'sine';
+      o.frequency.setValueAtTime(freq, t);
+      if (ate) o.frequency.exponentialRampToValueAtTime(ate, t + dur);
+      o.connect(envelope(vol, t, dur));
+      o.start(t); o.stop(t + dur + 0.03);
+    }
+    function chiado(dur, vol, t, freq, ate, q) {
+      const f = ctx.createBufferSource(), filtro = ctx.createBiquadFilter();
+      f.buffer = ruidoBase; f.loop = true;
+      filtro.type = 'bandpass'; filtro.Q.value = q || 1;
+      filtro.frequency.setValueAtTime(freq, t);
+      if (ate) filtro.frequency.exponentialRampToValueAtTime(ate, t + dur);
+      f.connect(filtro); filtro.connect(envelope(vol, t, dur));
+      f.start(t, Math.random()); f.stop(t + dur + 0.03);
+    }
+    const EFEITOS = {
+      passo: (t, v) => chiado(0.07, 0.5 * v, t, 190, 110, 1.2),
+      giro: (t, v) => nota(300, 0.07, 0.07 * v, t, 'triangle', 380),
+      batida: (t, v) => { nota(110, 0.14, 0.5 * v, t, 'sine', 55); chiado(0.08, 0.25 * v, t, 300, 150); },
+      tique: (t, v) => nota(1250, 0.03, 0.1 * v, t, 'square'),
+      pegar: (t, v) => { nota(620, 0.07, 0.22 * v, t, 'triangle'); nota(930, 0.09, 0.22 * v, t + 0.06, 'triangle'); },
+      soltar: (t, v) => { nota(560, 0.07, 0.2 * v, t, 'triangle'); nota(370, 0.1, 0.2 * v, t + 0.06, 'triangle'); },
+      abrir: (t, v) => { chiado(0.28, 0.3 * v, t, 380, 1100, 2); nota(190, 0.06, 0.2 * v, t + 0.26, 'sine', 120); },
+      fechar: (t, v) => { chiado(0.24, 0.3 * v, t, 1000, 380, 2); nota(130, 0.1, 0.4 * v, t + 0.22, 'sine', 70); },
+      fala: (t, v) => { for (let i = 0; i < 5; i++) nota(210 + Math.random() * 150, 0.07, 0.16 * v, t + i * 0.085, 'triangle'); },
+      recusa: (t, v) => { nota(230, 0.14, 0.12 * v, t, 'sawtooth'); nota(185, 0.2, 0.12 * v, t + 0.15, 'sawtooth'); },
+      entrega: (t, v) => [523, 659, 784].forEach((f, i) => nota(f, 0.35, 0.2 * v, t + i * 0.09)),
+      vitoria: (t, v) => [523, 659, 784, 1047, 784, 1047].forEach((f, i) => nota(f, i === 5 ? 0.7 : 0.16, 0.24 * v, t + i * 0.13, 'triangle')),
+      derrota: (t, v) => [392, 349, 311, 262].forEach((f, i) => nota(f, i === 3 ? 0.7 : 0.22, 0.16 * v, t + i * 0.2, 'sawtooth')),
+      agua: (t, v) => { for (let i = 0; i < 9; i++) nota(500 + Math.random() * 900, 0.06, 0.1 * v, t + i * 0.06 + Math.random() * 0.03, 'sine', 300 + Math.random() * 400); },
+      mistura: (t, v) => { for (let i = 0; i < 3; i++) chiado(0.12, 0.25 * v, t + i * 0.14, 500, 900, 3); },
+      forno: (t, v) => { nota(150, 0.08, 0.3 * v, t, 'square', 90); nota(70, 0.6, 0.1 * v, t + 0.08, 'sawtooth'); },
+      sino: (t, v) => { nota(1320, 1.1, 0.3 * v, t); nota(2640, 0.6, 0.08 * v, t); },
+      cafe: (t, v) => { chiado(0.9, 0.2 * v, t, 2500, 900, 0.8); for (let i = 0; i < 6; i++) nota(260 + Math.random() * 200, 0.05, 0.08 * v, t + 0.2 + i * 0.1); },
+      entrou: (t, v) => { nota(440, 0.12, 0.2 * v, t, 'triangle'); nota(660, 0.2, 0.2 * v, t + 0.1, 'triangle'); },
+      saiu: (t, v) => { nota(660, 0.12, 0.2 * v, t, 'triangle'); nota(440, 0.2, 0.2 * v, t + 0.1, 'triangle'); },
+      pedido: (t, v) => { nota(880, 0.12, 0.16 * v, t, 'square'); nota(880, 0.12, 0.16 * v, t + 0.2, 'square'); },
+      balao: (t, v) => { nota(700, 0.05, 0.14 * v, t, 'triangle'); nota(900, 0.06, 0.14 * v, t + 0.05, 'triangle'); },
+      latido: (t, v) => { for (const d of [0, 0.19]) { nota(420, 0.1, 0.3 * v, t + d, 'sawtooth', 210); chiado(0.08, 0.2 * v, t + d, 900, 500, 1.5); } },
+      arrulho: (t, v) => { for (let i = 0; i < 3; i++) nota(330 - i * 12, 0.22, 0.09 * v, t + i * 0.27, 'sine', 290); },
+      motor: (t, v) => { nota(62, 0.3, 0.22 * v, t, 'sawtooth', 96); chiado(0.3, 0.12 * v, t, 220, 320, 0.8); },
+      asas: (t, v) => { for (let i = 0; i < 7; i++) chiado(0.05, 0.22 * v, t + i * 0.07, 1400, 700, 1); },
+    };
+    // Toca um efeito. `onde` ({ x, z }): o lugar em que ele acontece, para soar mais baixo de longe.
+    function efeito(nome, onde, alcance) {
+      if (!tocando() || !EFEITOS[nome]) return;
+      const v = perto(onde, alcance || 16), t = ctx.currentTime;
+      if (v < 0.01 || t - (ultimo[nome] || -1) < 0.06) return;   // (longe demais; ou o mesmo som em seguida: uma gravação que avança de uma vez não vira uma rajada)
+      ultimo[nome] = t;
+      EFEITOS[nome](t + 0.005, v);
+    }
+    // O som de cada coisa que o jogo registra (ver resposta).
+    function doQueAconteceu(comando, ok, mensagem, onde) {
+      const m = String(mensagem);
+      const nome = comando.startsWith('dirigir') ? (ok ? 'motor' : 'batida')
+        : /^(entrou no|saiu do) carro/.test(m) ? 'fechar'
+        : comando.startsWith('mover') ? (ok ? 'passo' : m.startsWith('bloqueado') ? 'batida' : '')
+        : comando.startsWith('virar') || comando === 'levantar' ? (ok ? 'giro' : '')
+        : comando === 'trocar' || comando === 'escolher' || comando.startsWith('escrever') ? (ok ? 'tique' : '')
+        : comando !== 'pegar' ? ''
+        : m.includes('venceu') ? 'vitoria'
+        : m.startsWith('entregou') ? 'entrega'
+        : m.startsWith('a pessoa não quis') ? 'recusa'
+        : m.startsWith('a pessoa disse') || m.startsWith('a central') ? 'fala'
+        : m.startsWith('pegou') || m.startsWith('tirou') ? 'pegar'
+        : m.startsWith('soltou') || m.startsWith('colocou') ? 'soltar'
+        : m.startsWith('abriu') ? 'abrir'
+        : m.startsWith('fechou') ? 'fechar'
+        : m.startsWith('encheu') ? 'agua'
+        : m.includes('forno') ? 'forno'
+        : /tigela|massa/.test(m) ? 'mistura'
+        : /café|cafeteira/.test(m) ? 'cafe'
+        : ok ? 'tique' : '';
+      if (nome) efeito(nome, onde);
+    }
+    // Uma corda dedilhada (Karplus-Strong): um punhado de ruído que roda em círculo e vai amaciando.
+    function corda(freq) {
+      if (cordas[freq]) return cordas[freq];
+      const sr = ctx.sampleRate, n = Math.round(sr / freq), total = Math.round(sr * 1.7), b = ctx.createBuffer(1, total, sr), d = b.getChannelData(0), linha = new Float32Array(n);
+      for (let i = 0; i < n; i++) linha[i] = Math.random() * 2 - 1;
+      for (let i = 1; i < n; i++) linha[i] = 0.5 * linha[i] + 0.5 * linha[i - 1];      // (menos brilho: corda de náilon)
+      for (let i = 0, p = 0; i < total; i++) {
+        const q = (p + 1) % n;
+        d[i] = linha[p] * Math.min(1, (total - i) / (sr * 0.25));
+        linha[p] = (linha[p] + linha[q]) * 0.4985;
+        p = q;
+      }
+      return cordas[freq] = b;
+    }
+    // A música do violeiro, dedilhada, sem fim, em lá menor. Ele alterna duas progressões: a
+    // Romanesca (dó, sol, lá menor e mi: uma volta com o mi menor, a outra com o mi maior) e a
+    // cadência andaluza (lá menor, sol, fá, mi), duas voltas de cada. `volume` (0 a 1): quanto se
+    // ouve dela de onde está quem ouve; com 0 ela para, e continua quando alguém chega perto.
+    const DO = [131, 165, 196, 262, 330], SOL = [98, 147, 196, 247, 392], LA_MENOR = [110, 165, 220, 262, 330], MI_MENOR = [82, 165, 196, 247, 330], MI = [82, 165, 208, 247, 330], FA = [87, 175, 220, 262, 349];   // (as cordas de cada acorde, da mais grave para a mais aguda)
+    const VOLTAS = [[DO, SOL, LA_MENOR, MI_MENOR], [DO, SOL, LA_MENOR, MI], [LA_MENOR, SOL, FA, MI], [LA_MENOR, SOL, FA, MI]];
+    const DEDILHADO = [0, 2, 3, 4, 1, 3, 4, 3], TEMPO = 0.2;
+    function musica(volume) {
+      if (!ctx || ctx.state !== 'running') return;
+      if (!violao) { violao = ctx.createGain(); violao.gain.value = 0; violao.connect(saida); }
+      const v = ligado ? volume : 0, agora = ctx.currentTime;
+      violao.gain.setTargetAtTime(v * MUSICA_NO_MAXIMO * nivel.musica, agora, 0.25);
+      if (v <= 0.001) return;
+      if (proxima < agora) proxima = agora + 0.05;
+      while (proxima < agora + 0.25) {
+        const acorde = VOLTAS[Math.floor(batida / 64) % VOLTAS.length][Math.floor(batida / 16) % 4], i = batida % 8;   // (16 notas em cada acorde, 4 acordes em cada volta)
+        const f = ctx.createBufferSource(), g = ctx.createGain();
+        f.buffer = corda(acorde[DEDILHADO[i]]);
+        g.gain.value = i % 4 === 0 ? 0.95 : 0.55;
+        f.connect(g); g.connect(violao);
+        f.start(proxima);
+        proxima += TEMPO * (0.97 + Math.random() * 0.06);
+        batida++;
+      }
+    }
+    // O chiado da chuva. `volume` (0 a 1): quanto chove, já descontado o telhado de quem ouve de dentro de casa.
+    function chover(volume) {
+      if (!ctx || ctx.state !== 'running') return;
+      if (!chuva) {
+        if (!ligado || volume <= 0.001) return;
+        const f = ctx.createBufferSource(), filtro = ctx.createBiquadFilter();
+        chuva = ctx.createGain(); chuva.gain.value = 0;
+        f.buffer = ruidoBase; f.loop = true;
+        filtro.type = 'highpass'; filtro.frequency.value = 1700;
+        f.connect(filtro); filtro.connect(chuva); chuva.connect(efeitos);
+        f.start();
+      }
+      chuva.gain.setTargetAtTime(ligado ? volume * 0.11 : 0, ctx.currentTime, 0.4);
+    }
+    // Muda um dos dois volumes ('musica' ou 'efeitos'), de 0 a 1, e guarda a escolha.
+    function ajustar(qual, valor) {
+      if (!(qual in nivel) || !Number.isFinite(valor)) return;
+      nivel[qual] = Math.max(0, Math.min(1, valor));
+      try { localStorage.setItem(NIVEIS, JSON.stringify(nivel)); } catch (e) { }
+      if (qual === 'efeitos' && efeitos) efeitos.gain.setTargetAtTime(nivel.efeitos, ctx.currentTime, 0.05);
+    }
+    function alternar() {
+      ligado = !ligado;
+      try { localStorage.setItem(CHAVE, ligado ? 'ligado' : 'desligado'); } catch (e) { }
+      if (ligado) acordar();
+      return ligado;
+    }
+    return { efeito, doQueAconteceu, musica, chover, alternar, ajustar, get niveis() { return nivel; }, ouvir(x, z) { ouvinte.x = x; ouvinte.z = z; }, get ligado() { return ligado; }, get batida() { return batida; } };
+  })();
+
+  // ---------- os espelhos das casas da cidade ----------
+  // Um espelho de verdade: antes de cada desenho, a cena é desenhada numa textura por uma câmera
+  // posta do outro lado do vidro (a de quem olha, refletida no plano dele), e o espelho mostra
+  // essa textura. Só é refeito o espelho que está perto e à vista. (Os desafios 1 a 3 têm o seu
+  // próprio espelho, que é a parede inteira: ver desenhar.)
+  const espelhos = [];
+  function espelhar(vidroDoEspelho) {
+    const alvo = new T.WebGLRenderTarget(512, 512, { type: T.HalfFloatType });
+    const material = new T.ShaderMaterial({
+      uniforms: { mapa: { value: alvo.texture }, matriz: { value: new T.Matrix4() }, cor: { value: new T.Color(0xe4ecef) } },
+      vertexShader: 'uniform mat4 matriz; varying vec4 vOnde; void main() { vOnde = matriz * vec4(position, 1.0); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform sampler2D mapa; uniform vec3 cor; varying vec4 vOnde;\nvoid main() {\n  gl_FragColor = vec4(texture2DProj(mapa, vOnde).rgb * cor, 1.0);\n  #include <tonemapping_fragment>\n  #include <colorspace_fragment>\n}',
+    });
+    vidroDoEspelho.material = material;
+    const camera = new T.PerspectiveCamera();
+    for (const c of [1, 11, 12, 13]) camera.layers.enable(c);   // (os corpos dos robôs aparecem no espelho, como em qualquer reflexo)
+    espelhos.push({ malha: vidroDoEspelho, alvo, material, camera });
+    return vidroDoEspelho;
+  }
+  const refletirEspelhos = (() => {
+    const lugar = new T.Vector3(), olho = new T.Vector3(), normal = new T.Vector3(), giro = new T.Matrix4(), vista = new T.Vector3(), mira = new T.Vector3(), alvoDaMira = new T.Vector3();
+    const plano = new T.Plane(), corte = new T.Vector4(), q = new T.Vector4(), campo = new T.Frustum(), junta = new T.Matrix4();
+    return cam => {
+      if (!espelhos.length) return;
+      cam.updateMatrixWorld();
+      campo.setFromProjectionMatrix(junta.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+      for (const e of espelhos) {
+        const m = e.malha, v = e.camera;
+        lugar.setFromMatrixPosition(m.matrixWorld); olho.setFromMatrixPosition(cam.matrixWorld);
+        if (lugar.distanceTo(olho) > 8 || !campo.intersectsObject(m)) continue;
+        normal.set(0, 0, 1).applyMatrix4(giro.extractRotation(m.matrixWorld));
+        vista.subVectors(lugar, olho);
+        if (vista.dot(normal) > 0) continue;    // a câmera está atrás do espelho
+        vista.reflect(normal).negate().add(lugar);
+        giro.extractRotation(cam.matrixWorld);
+        mira.set(0, 0, -1).applyMatrix4(giro).add(olho);
+        alvoDaMira.subVectors(lugar, mira).reflect(normal).negate().add(lugar);
+        v.position.copy(vista);
+        v.up.set(0, 1, 0).applyMatrix4(giro).reflect(normal);
+        v.lookAt(alvoDaMira);
+        v.far = cam.far;
+        v.updateMatrixWorld();
+        v.projectionMatrix.copy(cam.projectionMatrix);
+        e.material.uniforms.matriz.value.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(v.projectionMatrix).multiply(v.matrixWorldInverse).multiply(m.matrixWorld);
+        // O plano do espelho vira o plano de corte de perto dessa câmera: o que está atrás do vidro não entra no reflexo.
+        plano.setFromNormalAndCoplanarPoint(normal, lugar).applyMatrix4(v.matrixWorldInverse);
+        corte.set(plano.normal.x, plano.normal.y, plano.normal.z, plano.constant);
+        const p = v.projectionMatrix.elements;
+        q.set((Math.sign(corte.x) + p[8]) / p[0], (Math.sign(corte.y) + p[9]) / p[5], -1, (1 + p[10]) / p[14]);
+        corte.multiplyScalar(2 / corte.dot(q));
+        p[2] = corte.x; p[6] = corte.y; p[10] = corte.z + 1 - 0.003; p[14] = corte.w;
+        const antes = renderer.getRenderTarget();
+        m.visible = false;
+        renderer.setRenderTarget(e.alvo);
+        renderer.clear();
+        renderer.render(cena, v);
+        renderer.setRenderTarget(antes);
+        m.visible = true;
+      }
+    };
+  })();
+
   const porMetro = (geo, comprimento) => {
     const uv = geo.attributes.uv;
     for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * comprimento);
@@ -986,7 +1238,7 @@
   // salas (os dois lugares que ele liga), aberta, vis, folha (a porta, se houver) e contorno }.
   const portasDaVila = [];
   // (pedidos: o que a pessoa quer — entregar tudo a ela é a vitória; filtro, copo e copoCheio: a água do desafio 5; cafeteira e cafe: o café do 6)
-  const vila = { clima: null, pessoa: null, tigela: null, forno: null, massa: null, bolo: null, encontro: null, pedidos: [], filtro: null, copo: null, copoCheio: null, cafeteira: null, cafe: null };
+  const vila = { carro: null, clima: null, vida: null, pessoas: [], central: null, missoes: null, pessoa: null, tigela: null, forno: null, massa: null, bolo: null, encontro: null, pedidos: [], filtro: null, copo: null, copoCheio: null, cafeteira: null, cafe: null };
   // O ponto cabe nesse pedaço, a pelo menos `m` da beirada dele?
   const cabeNaParte = (p, x, z, m) => p.r ? Math.hypot(x - p.cx, z - p.cz) <= p.r - m : x >= p.x1 + m && x <= p.x2 - m && z >= p.z1 + m && z <= p.z2 - m;
   const cabeNoLugar = (a, x, z, m) => a.partes.some(p => cabeNaParte(p, x, z, m));
@@ -1027,13 +1279,27 @@
   function usarNaVila() {
     const v = vila, alvo = alvoAtual(), o = estado.segurando;
     escolhido = undefined;
-    if (alvo && alvo === v.pessoa) {
+    if (alvo && alvo.ehCarro) return estado.dirigindo ? sairDoCarro() : entrarNoCarro();
+    if (alvo && alvo.ehCentral) return usarACentral();
+    if (alvo && alvo.ehPessoa) {
+      const FALAS = alvo.falas;                 // (o que esta pessoa diz: no coletivo há três, cada uma com as suas falas)
       // A pessoa quer uma coisa (o bolo, no desafio 4) ou duas (o remédio e a água, no 5; o pão de
-      // queijo e o café, no 6): v.pedidos. Ela aceita uma de cada vez e, enquanto falta alguma,
+      // queijo e o café, no 6): alvo.pedidos. Ela aceita uma de cada vez e, enquanto falta alguma,
       // diz qual. A vitória é quando recebe a última.
-      const falta = v.pedidos.filter(p => !alvo.recebidos.includes(p));
+      const falta = alvo.pedidos.filter(p => !alvo.recebidos.includes(p));
+      if (COLETIVO && !alvo.pedindo) {          // no coletivo, quem não está pedindo nada só conversa, e não aceita nada
+        alvo.fala = hora() < alvo.agradeceAte ? FALAS.agradecimento : 'Agora não preciso de nada';
+        alvo.falaAte = hora() + PEDIDO.fala;
+        return resposta('pegar', !o, o ? `a pessoa não quis: ${o.nome} — disse: "${alvo.fala}"` : `a pessoa disse: "${alvo.fala}"`);
+      }
+      if (COLETIVO && !pedidosDeTodos && alvo.com !== atual) {   // o pedido é do robô que o pegou na central: aos outros ela só diz isso
+        alvo.fala = alvo.com ? 'Outro robô já vem me ajudar' : 'Fiz um pedido na central';
+        alvo.falaAte = hora() + PEDIDO.fala;
+        return resposta('pegar', !o, o ? `a pessoa não quis: ${o.nome} — disse: "${alvo.fala}"` : `a pessoa disse: "${alvo.fala}"`);
+      }
+      if (COLETIVO) alvo.falaAte = hora() + PEDIDO.fala;   // (o balão do que ela diz fica um tempo, e some)
       if (!o) {                                 // de mão vazia: fala com ela, e ela diz o que quer (ou o que ainda falta)
-        alvo.fala = alvo.recebidos.length ? FALAS.falta[v.pedidos.indexOf(falta[0])] : FALAS.pedido;
+        alvo.fala = alvo.recebidos.length ? FALAS.falta[alvo.pedidos.indexOf(falta[0])] : FALAS.pedido;
         return resposta('pegar', true, `a pessoa disse: "${alvo.fala}"`);
       }
       if (!falta.includes(o)) {                 // ela só aceita o que pediu (e não o bolo queimado, nem o remédio errado)
@@ -1046,8 +1312,17 @@
         o.malha.rotation.set(0, 0, 0);
         alvo.receber(o);
         tirarDoInventario(o);
-        alvo.fala = FALAS.falta[v.pedidos.indexOf(falta.find(p => p !== o))];
+        alvo.fala = FALAS.falta[alvo.pedidos.indexOf(falta.find(p => p !== o))];
         return resposta('pegar', true, `entregou: ${o.nome} à pessoa — ela disse: "${alvo.fala}"`);
+      }
+      if (COLETIVO) {                           // no coletivo ninguém vence: o pedido fica atendido, e daqui a um tempo ela pede de novo
+        estado.segurando = null;
+        o.entregue = true;
+        o.malha.rotation.set(0, 0, 0);
+        alvo.receber(o);
+        tirarDoInventario(o);
+        concluirPedido(alvo);
+        return resposta('pegar', true, `entregou: ${o.nome} à pessoa — pedido da casa ${alvo.casa} atendido`);
       }
       entregar(o, alvo);
       tirarDoInventario(o);
@@ -1117,6 +1392,10 @@
       if (itens.length >= REGRAS.inventario) return resposta('pegar', false, 'inventário cheio');
       const massa = f.dentro, ponto = pontoDoForno();
       massa.assado = tempoNoForno();
+      if (COLETIVO && ponto === 'queimado') {   // no coletivo o bolo queimado não é o fim do jogo: vai para o lixo, e o pedido volta ao começo
+        reporMissao(1);
+        return resposta('pegar', false, 'o bolo queimou e foi para o lixo — os ingredientes voltaram para os lugares');
+      }
       f.dentro = null;
       massa.fechado = false;
       if (ponto === 'cru') { carregar(massa); return resposta('pegar', true, `tirou a massa do forno, ainda crua (${minutos(massa.assado)})`); }
@@ -1135,7 +1414,7 @@
     if (o) {                                    // sem alvo: solta no chão, à frente, o que está na mão
       const f = vetores(), a = areas[estado.sala], folga = o.raio + 0.1;
       const { x, z } = pontoNoLugar(a, estado.x + f.fx * 0.75, estado.z + f.fz * 0.75, folga);   // à frente, mas dentro do lugar em que o robô está
-      if (noMovel(x, z, o.raio) || Object.values(salas).some(q => noCaminho(q).some(p => Math.hypot(p.x - x, p.z - z) < p.raio + o.raio)))
+      if (noMovel(x, z, o.raio) || emJogo().some(r => Math.hypot(r.estado.x - x, r.estado.z - z) < RAIO_ROBO + o.raio) || Object.values(salas).some(q => noCaminho(q).some(p => Math.hypot(p.x - x, p.z - z) < p.raio + o.raio)))
         return resposta('pegar', false, 'sem espaço para soltar aqui');
       tirarDoInventario(o);
       assentar(salas[a.n], o, x, z, alturaDoChao(x, z) + o.alt / 2);
@@ -1150,6 +1429,76 @@
     for (const m of abrem) if (m.dentro.includes(o)) m.dentro.splice(m.dentro.indexOf(o), 1);
     itens.push(o);
     if (estado.segurando) { o.sombra.visible = false; guardar(o); } else segurar(o);
+  }
+
+  // ---------- o carro ----------
+  // O carro da vila pode ser dirigido. Nada no jogo pede isso: é só uma coisa que existe e que
+  // um robô curioso pode experimentar. De frente para ele, o ESPACO entra; lá dentro, W e S andam
+  // para a frente e de ré, A e D viram (45 graus, parado), Q e E não fazem nada, e o ESPACO sai,
+  // para o lado da porta do motorista (ou para o outro, se desse não der). O carro só anda no
+  // asfalto — as quatro ruas, a rotatória e a entrada onde fica estacionado — e não passa por
+  // cima de ninguém nem de nada. Quem dirige vê por cima do capô; o corpo do robô some dentro dele.
+  const CARRO = { meio: 1.65, lado: 0.73, folga: 0.6, raio: 0.8, saida: 1.55 };
+  let reComMeiaVolta = false;                   // (assistindo a uma gravação de antes de o S, na cidade, recuar sem virar: ver o fim do arquivo)
+  let pedidosDeTodos = false;                   // (assistindo a uma gravação do coletivo de antes de cada robô ter a sua missão: qualquer um atendia qualquer casa)
+  let semCarro = false;                         // (assistindo a uma gravação de antes de o carro ser dirigível: ver o fim do arquivo)
+  // O meio do carro pode estar nesse ponto? (o asfalto, com uma folga para as rodas)
+  function naPista(x, z) {
+    const C = CIDADE, d = Math.hypot(x - C.x, z - C.z), fora = d >= C.praca + 0.4;
+    return (fora && Math.abs(z - C.z) <= CARRO.folga && x >= -4.5 && x <= C.leste - 1.8)
+      || (fora && Math.abs(x - C.x) <= CARRO.folga && z >= C.sul + 1.8 && z <= C.norte - 1.8)
+      || (d >= C.praca + 0.4 && d <= C.pista - 0.4)
+      || (x >= -4.5 && x <= -3.5 && z >= 1.9 && z <= C.z);
+  }
+  // O que não deixa o carro ir para (x, z): '' se nada.
+  function barraOCarro(c, x, z) {
+    if (!naPista(x, z)) return 'o carro só anda no asfalto';
+    const r = CARRO.raio, b = blocos.find(q => q !== c.barra && (q.r ? Math.hypot(x - q.cx, z - q.cz) < q.r + r : x > q.x1 - r && x < q.x2 + r && z > q.z1 - r && z < q.z2 + r));
+    if (b) return `${b.nome} no caminho`;
+    if (emJogo().some(q => q.estado !== estado && Math.hypot(q.estado.x - x, q.estado.z - z) < r + RAIO_ROBO + 0.1)) return 'robô no caminho';
+    for (const s of Object.values(salas)) for (const o of noCaminho(s)) if (Math.hypot(o.x - x, o.z - z) < r + o.raio) return `${o.nome} no caminho`;
+    return '';
+  }
+  // W e S, dentro do carro: um passo para a frente ou de ré.
+  function dirigir(direcao) {
+    const c = estado.dirigindo, sentido = direcao === 'frente' ? 1 : direcao === 'tras' ? -1 : 0;
+    if (!sentido) return resposta(`dirigir ${direcao}`, false, 'o carro não anda de lado');
+    const a = estado.rumo * GIRO, x = c.x - Math.sin(a) * PASSO * sentido, z = c.z - Math.cos(a) * PASSO * sentido, motivo = barraOCarro(c, x, z);
+    escolhido = undefined;
+    if (motivo) return resposta(`dirigir ${direcao}`, false, `bloqueado: ${motivo}`);
+    Object.assign(c, { x, z });
+    Object.assign(estado, { x, z });
+    c.assentar();
+    return resposta(`dirigir ${direcao}`, true, 'ok');
+  }
+  function entrarNoCarro() {
+    const c = vila.carro;
+    if (c.motorista) return resposta('pegar', false, 'o carro já tem motorista');
+    Object.assign(estado, { dirigindo: c, x: c.x, z: c.z, rumo: c.rumo, sala: 4 });
+    Object.assign(visual, { x: c.x, z: c.z, yaw: c.rumo * GIRO });   // (o carro não sai do lugar para buscar o robô)
+    c.motorista = estado;
+    robo.visible = false;
+    return resposta('pegar', true, 'entrou no carro');
+  }
+  function sairDoCarro() {
+    const c = estado.dirigindo, a = estado.rumo * GIRO, fx = -Math.sin(a), fz = -Math.cos(a);
+    const vaga = [1, -1].map(l => ({ x: c.x + fz * CARRO.saida * l, z: c.z - fx * CARRO.saida * l }))
+      .find(p => livre(p.x, p.z) && !emJogo().some(q => q.estado !== estado && Math.hypot(q.estado.x - p.x, q.estado.z - p.z) < 2 * RAIO_ROBO));
+    if (!vaga) return resposta('pegar', false, 'sem espaço para sair do carro aqui');
+    largarOCarro(estado);
+    Object.assign(estado, { x: vaga.x, z: vaga.z });
+    estado.sala = areaEm(vaga.x, vaga.z);
+    Object.assign(visual, { x: vaga.x, z: vaga.z });
+    robo.visible = true;
+    return resposta('pegar', true, 'saiu do carro');
+  }
+  // O carro fica onde está, sem motorista (quem dirigia saiu dele, ou saiu do jogo).
+  function largarOCarro(dele) {
+    const c = dele.dirigindo;
+    if (!c) return;
+    Object.assign(c, { motorista: null, rumo: dele.rumo });
+    c.assentar();
+    dele.dirigindo = null;
   }
 
   // ---------- o relógio e o forno (desafio 4) ----------
@@ -1177,13 +1526,15 @@
     if (estado.perdeu || estado.ganhou) return;
     estado.perdeu = true;
     faixaDaDerrota.visible = true;
+    som.efeito('derrota', estado);
   }
   // A cada quadro: o painel do fogão (quando o segundo muda) e o bolo que queima sozinho se ficar esquecido no forno.
   function tiqueDoForno() {
     const f = vila.forno;
     if (!f) return;
     const ponto = f.dentro ? pontoDoForno() : '';
-    if (ponto === 'queimado') perder();
+    if (ponto !== f.ponto) { if (ponto === 'bom' && f.ponto === 'cru') som.efeito('sino', f); f.ponto = ponto; }   // (o sino do forno: o bolo ficou pronto)
+    if (ponto === 'queimado' && !COLETIVO) perder();   // (no coletivo ninguém perde: o bolo queimado vai para o lixo: ver usarNaVila e atualizarPedidos)
     f.aceso.visible = !!f.dentro;
     f.aceso.material.color.set(ponto === 'queimado' ? 0xff3b1f : 0xffa23a);
     const texto = `${minutos(hora())}|${f.dentro ? minutos(tempoNoForno()) : '--:--'}|${ponto}`;
@@ -1352,9 +1703,14 @@
     function parede(x1, z1, x2, z2, vaos, fora, reboco, barrado, dentro) {
       const emX = z1 === z2, a = emX ? x1 : z1, b = emX ? x2 : z2, fixo = emX ? z1 : x1, trechos = [];
       let de = a;
-      for (const c of (vaos || []).slice().sort((p, q) => p - q)) {
-        trechos.push([de, c - LARGURA_PORTA / 2, 0, A], [c - LARGURA_PORTA / 2, c + LARGURA_PORTA / 2, ALTURA_PORTA, A]);
-        de = c + LARGURA_PORTA / 2;
+      // (cada vão: o meio de uma porta, ou uma janela [meio, largura, de que altura, até que altura]: ver janela)
+      const meioDe = v => Array.isArray(v) ? v[0] : v;
+      for (const v of (vaos || []).slice().sort((p, q) => meioDe(p) - meioDe(q))) {
+        const [c, w, embaixo, emCima] = Array.isArray(v) ? v : [v, LARGURA_PORTA, 0, ALTURA_PORTA];
+        trechos.push([de, c - w / 2, 0, A]);
+        if (embaixo > 0) trechos.push([c - w / 2, c + w / 2, 0, embaixo]);                               // o peitoril da janela
+        trechos.push([c - w / 2, c + w / 2, emCima, A]);
+        de = c + w / 2;
       }
       trechos.push([de, b, 0, A]);
       for (const [t1, t2, y1, y2] of trechos) {
@@ -1363,6 +1719,7 @@
         const geo = y1 > 0 ? new T.BoxGeometry(emX ? comp : ESPESSURA, alt, emX ? ESPESSURA : comp)        // o pedaço em cima do vão
           : emX ? cantosEscuros(porMetro(new T.BoxGeometry(comp, alt, ESPESSURA, Math.ceil(comp * 3), 9, 1), comp), 'x', 'y', 0.2, 0.7)
             : cantosEscuros(porMetro(new T.BoxGeometry(ESPESSURA, alt, comp, 1, 9, Math.ceil(comp * 3)), comp), 'z', 'y', 0.2, 0.7);
+        if (y1 === 0 && y2 < A) escalarUV(geo, 1, y2 / A);                                               // (o peitoril leva só a parte de baixo do desenho da parede)
         malha(g, geo, y1 > 0 ? (dentro || M_DE_DENTRO).lisa : (dentro || M_DE_DENTRO).parede, emX ? meio : fixo, y, emX ? fixo : meio);
         if (!fora) continue;
         // por fora, uma capa de reboco (um pouco mais comprida nas pontas, para fechar as quinas)
@@ -1372,6 +1729,25 @@
       }
     }
     const M_DE_DENTRO = { parede: M.parede, lisa: M.paredeLisa };
+    // O vidro das janelas e das vitrines: transparente (de dentro se vê a rua; da rua, o cômodo).
+    // De noite ele ganha um brilho morno (ver "a hora do dia e a chuva"). Não faz sombra.
+    const vidroDaRua = new T.MeshStandardMaterial({ color: 0xcfe6f0, transparent: true, opacity: 0.2, roughness: 0.03, metalness: 0.15, emissive: 0xffd9a0, emissiveIntensity: 0, depthWrite: false, side: T.DoubleSide });
+    const vidros = [];
+    // Uma janela de verdade num buraco que `parede` deixou (com as mesmas medidas): o vidro, no meio
+    // da parede, e o caixilho, que forra o buraco e aparece dos dois lados. (x, z): o meio dela;
+    // eixo: 'z' se a parede fica em z, 'x' se fica em x; `travessa`: false = só um montante em pé.
+    function janela(x, z, eixo, w, y1, y2, caixilho, travessa) {
+      const emX = eixo === 'z', h = y2 - y1, y = (y1 + y2) / 2, m = caixilho || branco, b = 0.05, f = ESPESSURA + 0.09;
+      const pano = malha(g, new T.PlaneGeometry(w - 2 * b, h - 2 * b), vidroDaRua, x, y, z);
+      if (!emX) pano.rotation.y = Math.PI / 2;
+      pano.renderOrder = 5;
+      vidros.push(pano);
+      const peca = (ao, alto, grosso, d, dy) => caixa(emX ? ao : grosso, alto, emX ? grosso : ao, m, emX ? x + d : x, y + dy, emX ? z : z + d);   // ao: ao longo da parede; grosso: atravessado
+      peca(w, b, f, 0, h / 2 - b / 2); peca(w, b, f, 0, -h / 2 + b / 2);
+      peca(b, h - 2 * b, f, -w / 2 + b / 2, 0); peca(b, h - 2 * b, f, w / 2 - b / 2, 0);
+      peca(0.035, h - 2 * b, 0.035, 0, 0);
+      if (travessa !== false) peca(w - 2 * b, 0.035, 0.035, 0, 0);
+    }
     // Uma porta de correr na parede de fora de uma casa, que o jogador abre (e que fica aberta).
     // (x, z): o meio do vão; eixo: 'z' se a parede fica em z (a porta corre ao longo de x), 'x' se
     // fica em x (corre ao longo de z); salas: os dois lugares que ela liga. Trancada, não abre nem
@@ -1379,10 +1755,12 @@
     function portaDaRua(x, z, eixo, salas, material, trancada, sentido) {     // (sentido: +1 se ela corre para o lado em que a medida cresce; sem isso, para o outro)
       const emZ = eixo === 'z', folha = caixa(emZ ? LARGURA_PORTA : 0.05, ALTURA_PORTA, emZ ? 0.05 : LARGURA_PORTA, material, x, ALTURA_PORTA / 2, z);
       for (const lado of [-1, 1]) caixa(emZ ? 0.05 : 0.02, 0.3, emZ ? 0.02 : 0.05, M.latao, emZ ? 0.5 : lado * 0.035, 0, emZ ? lado * 0.035 : 0.5, folha);   // os puxadores
-      const borda = new T.Group(), e = ESPESSURA + 0.14, b = 0.05;
+      // A borda de destaque: uma moldura fina por dentro do vão (dois montantes e a travessa), no meio da
+      // parede e com uma folga dela — por fora do vão ela atravessava a parede e o batente, e aparecia rasgada.
+      const borda = new T.Group(), e = 0.07, b = 0.05, folga = 0.004, meio = LARGURA_PORTA / 2 - b / 2 - folga;
       g.add(borda);
-      for (const lado of [-1, 1]) caixa(emZ ? b : e, ALTURA_PORTA, emZ ? e : b, M.destaque, emZ ? x + lado * (LARGURA_PORTA / 2 + b / 2) : x, ALTURA_PORTA / 2, emZ ? z : z + lado * (LARGURA_PORTA / 2 + b / 2), borda);
-      caixa(emZ ? LARGURA_PORTA + 2 * b : e, b, emZ ? e : LARGURA_PORTA + 2 * b, M.destaque, x, ALTURA_PORTA + b / 2, z, borda);
+      for (const lado of [-1, 1]) caixa(emZ ? b : e, ALTURA_PORTA - folga, emZ ? e : b, M.destaque, emZ ? x + lado * meio : x, (ALTURA_PORTA - folga) / 2, emZ ? z : z + lado * meio, borda);
+      caixa(emZ ? 2 * meio - b : e, b, emZ ? e : 2 * meio - b, M.destaque, x, ALTURA_PORTA - b / 2 - folga, z, borda);
       borda.visible = false;
       portasDaVila.push({ nome: 'porta', x, z, eixo, salas, aberta: false, trancada: !!trancada, sentido: sentido || -1, vis: 0, folha, contorno: borda });
     }
@@ -1392,6 +1770,12 @@
     function cobrir(x1, x2, z1, z2, y, h, cor, pai) {
       const be = 0.28, u1 = x1 - be, u2 = x2 + be, v1 = z1 - be, v2 = z2 + be, onde = pai || g;
       caixa(u2 - u1, 0.08, v2 - v1, beiral, (u1 + u2) / 2, y + 0.07, (v1 + v2) / 2, onde);   // (um pouco acima do teto de dentro, para os dois não disputarem os mesmos pixels)
+      // A cinta: fecha a fresta que sobraria entre o alto das paredes e a laje. Vai da face de fora
+      // do reboco até pouco antes da face de dentro da parede (para não aparecer no teto do cômodo).
+      const fora = ESPESSURA / 2 + 0.03, dentro = ESPESSURA / 2 - 0.01, larga = fora + dentro, desvio = (fora - dentro) / 2;
+      for (const [cx, cz, lx, lz] of [[(x1 + x2) / 2, z1 - desvio, x2 - x1 + 2 * fora, larga], [(x1 + x2) / 2, z2 + desvio, x2 - x1 + 2 * fora, larga],
+        [x1 - desvio, (z1 + z2) / 2, larga, z2 - z1 - 2 * dentro], [x2 + desvio, (z1 + z2) / 2, larga, z2 - z1 - 2 * dentro]])
+        caixa(lx, 0.03, lz, beiral, cx, y + 0.015, cz, onde);
       const emX = u2 - u1 >= v2 - v1, L = emX ? u2 - u1 : v2 - v1, d = (emX ? v2 - v1 : u2 - u1) / 2, Y = y + 0.11, agua = Math.hypot(d, h);
       // (a = ao longo da cumeeira, b = atravessado): os quatro cantos e as duas pontas da cumeeira
       const P = (a, b, alto) => emX ? [u1 + a, Y + alto, v1 + b] : [u1 + b, Y + alto, v1 + a];
@@ -1411,8 +1795,8 @@
     }
     const rebocoCasa = rebocado(0xf0cf7a), rebocoMercado = rebocado(0xf4efe4), barradoCasa = liso(0xc98f4e, 0.9), barradoMercado = liso(0x4f7563, 0.9);
     // a casa: paredes de fora e as duas de dentro (com os vãos para o banheiro e para a cozinha)
-    parede(-2.6, 0, 8, 0, [], -1, rebocoCasa, barradoCasa);
-    parede(-2.6, 4, 8, 4, [6], 1, rebocoCasa, barradoCasa);
+    parede(-2.6, 0, 8, 0, [[2.13, 1.06, 1.02, 2.08]], -1, rebocoCasa, barradoCasa);                    // (com a janela do quarto, nos fundos)
+    parede(-2.6, 4, 8, 4, [[-1.3, 0.6, 1.62, 2.08], [2.0, 1.0, 1.0, 2.0], 6], 1, rebocoCasa, barradoCasa);   // (com a janela do banheiro e a do quarto, na rua)
     parede(-2.6, 0, -2.6, 4, [], -1, rebocoCasa, barradoCasa);
     parede(8, 0, 8, 4, [], 1, rebocoCasa, barradoCasa);
     parede(0, 0, 0, 4, [3]);
@@ -1423,7 +1807,7 @@
     teto(0, 4, 0, 4); teto(-2.6, 0, 0, 4); teto(4, 8, 0, 4);
     cobrir(-2.6, 8, 0, 4, A, 1.25, 0xb5533c);
     // o mercadinho
-    parede(3.5, 8.5, 8.5, 8.5, [6], -1, rebocoMercado, barradoMercado);
+    parede(3.5, 8.5, 8.5, 8.5, [[4.42, 1.26, 0.55, 2.05], 6, [7.58, 1.26, 0.55, 2.05]], -1, rebocoMercado, barradoMercado);   // (com as duas vitrines)
     parede(3.5, 12.5, 8.5, 12.5, [], 1, rebocoMercado, barradoMercado);
     parede(3.5, 8.5, 3.5, 12.5, [], -1, rebocoMercado, barradoMercado);
     parede(8.5, 8.5, 8.5, 12.5, [], 1, rebocoMercado, barradoMercado);
@@ -1442,8 +1826,7 @@
     const lona = malha(g, new T.BoxGeometry(2.3, 0.04, 0.85), mat(0xffffff, { map: toldo, roughness: 0.8 }), 6, 2.33, 8.02);
     lona.rotation.x = -0.32;
     for (const x of [4.42, 7.58]) {                                                       // as vitrines, de enfeite
-      caixa(1.26, 1.5, 0.04, liso(0x3d4a54, 0.5), x, 1.3, 8.5 - 0.095);
-      malha(g, new T.PlaneGeometry(1.14, 1.38), mat(0xa9d2e6, { roughness: 0.08, metalness: 0.4 }), x, 1.3, 8.5 - 0.118).rotation.y = Math.PI;
+      janela(x, 8.5, 'z', 1.26, 0.55, 2.05, liso(0x3d4a54, 0.5), false);
       caixa(1.3, 0.3, 0.3, liso(0x7a4a2a, 0.8), x, 0.15, 8.2);                            // floreira
       for (let i = 0; i < 5; i++) malha(g, new T.SphereGeometry(0.1, 10, 8), liso([0xe4572e, 0xf2c230, 0xf06aa8][i % 3], 0.7), x - 0.5 + i * 0.25, 0.36, 8.2);
     }
@@ -1471,6 +1854,7 @@
     const FIM = { o: CIDADE.oeste - 0.3, l: CIDADE.leste + 0.3, s: CIDADE.sul - 0.3, n: CIDADE.norte + 0.3 };   // onde as calçadas acabam (um pouco depois de onde o robô chega)
     const semSombra = [];                        // o chão e o que está longe não precisam fazer sombra em nada
     vila.encontro = { x: PX, z: PZ };
+    const BAIXA_DA_CENTRAL = COLETIVO ? 0.45 : 0;   // no coletivo o ponto de encontro é a central de pedidos, mais baixa: as telas ficam na altura dos olhos de um robô
 
     // O sol: uma luz de longe, que faz as sombras da rua. Dentro das casas ele não entra (o
     // telhado faz sombra): lá quem ilumina é a lâmpada, que acompanha o robô.
@@ -1627,10 +2011,10 @@
     {
       // O ponto de encontro: sobre dois degraus de pedra, uma coluna com um cubo de quatro placas
       // verdes, uma virada para cada rua, e um canteiro de flores em volta.
-      const pedra = rebocado(0xd9d4c7), verdeFerro = mat(0x1f5a43, { roughness: 0.45, metalness: 0.3 });
+      const pedra = rebocado(0xd9d4c7), verdeFerro = mat(0x1f5a43, { roughness: 0.45, metalness: 0.3 }), B = BAIXA_DA_CENTRAL;
       malha(g, new T.CylinderGeometry(0.62, 0.68, 0.16, 40), pedra, PX, CG + 0.08, PZ);
       malha(g, new T.CylinderGeometry(0.44, 0.48, 0.16, 40), pedra, PX, CG + 0.24, PZ);
-      malha(g, new T.CylinderGeometry(0.07, 0.1, 0.72, 16), verdeFerro, PX, CG + 0.68, PZ);
+      malha(g, new T.CylinderGeometry(0.07, 0.1, 0.72 - B, 16), verdeFerro, PX, CG + 0.68 - B / 2, PZ);
       const placa = mat(0xffffff, { roughness: 0.55, map: texturaCanvas(512, 512, (c, l) => {
         const cx = l / 2, cy = 190;
         c.fillStyle = '#0a8f5b'; c.fillRect(0, 0, l, l);
@@ -1648,12 +2032,57 @@
         }
         letras(c, 'PONTO DE', cx, 378, 68, '#ffffff', l - 70); letras(c, 'ENCONTRO', cx, 448, 68, '#ffffff', l - 70);
       }) });
-      malha(g, new T.BoxGeometry(0.92, 0.92, 0.92), [placa, placa, verdeFerro, verdeFerro, placa, placa], PX, CG + 1.5, PZ).castShadow = true;
-      malha(g, new T.ConeGeometry(0.8, 0.34, 4), verdeFerro, PX, CG + 2.13, PZ).rotation.y = Math.PI / 4;
-      malha(g, new T.SphereGeometry(0.07, 16, 12), M.latao, PX, CG + 2.34, PZ);
+      malha(g, new T.BoxGeometry(0.92, 0.92, 0.92), [placa, placa, verdeFerro, verdeFerro, placa, placa], PX, CG + 1.5 - B, PZ).castShadow = true;
+      malha(g, new T.ConeGeometry(0.8, 0.34, 4), verdeFerro, PX, CG + 2.13 - B, PZ).rotation.y = Math.PI / 4;
+      if (!COLETIVO) malha(g, new T.SphereGeometry(0.07, 16, 12), M.latao, PX, CG + 2.34, PZ);
       malha(g, new T.TorusGeometry(0.56, 0.07, 8, 40), sebeMat, PX, CG + 0.2, PZ).rotation.x = Math.PI / 2;
       for (let i = 0; i < 30; i++) flor(PX + Math.cos(i / 30 * 6.283) * 0.56, CG + 0.26, PZ + Math.sin(i / 30 * 6.283) * 0.56, 0.06, CORES_DAS_FLORES[i % 3]);
       redondo('ponto de encontro', PX, PZ, 0.68);
+      if (COLETIVO) {
+        // No coletivo, o ponto de encontro é a central de pedidos: as quatro placas viram telas, e a
+        // bola do alto, uma luz vermelha, acesa enquanto há pedido esperando por um robô.
+        const tela = document.createElement('canvas');
+        tela.width = tela.height = 512;
+        const textura = new T.CanvasTexture(tela);
+        textura.colorSpace = T.SRGBColorSpace;
+        textura.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        Object.assign(placa, { map: textura, emissiveMap: textura, emissiveIntensity: 0.5 });
+        placa.emissive.set(0xffffff);
+        const farol = luminoso({ color: 0x3a1512 }), luzDoFarol = new T.PointLight(0xff2a1a, 0, 9, 1.6);
+        malha(g, new T.SphereGeometry(0.1, 20, 14), farol, PX, CG + 2.36 - B, PZ);
+        luzDoFarol.position.set(PX, CG + 2.5 - B, PZ);
+        g.add(luzDoFarol);
+        const aro = malha(g, new T.TorusGeometry(0.74, 0.035, 8, 48), M.destaque, PX, CG + 0.36, PZ);
+        aro.rotation.x = Math.PI / 2;
+        aro.visible = false;
+        const CASAS = ['amarela', 'rosa', 'azul'];
+        vila.central = { nome: 'central de pedidos', ehCentral: true, x: PX, z: PZ, sala: 4, contorno: aro, fala: '', falaAte: 0, balao: null,
+          redesenhar() {
+            // A tela não diz de que casa é o pedido que ainda espera: cada robô pede a sua missão aqui (ESPACO),
+            // e recebe uma só dele. Ela mostra quantos pedidos esperam e quem já está com qual.
+            const c = tela.getContext('2d'), esperando = vila.pessoas.filter(p => p.pedindo && !p.com).length, aberto = esperando > 0;
+            const emCurso = vila.pessoas.filter(p => p.pedindo && p.com).sort((a, b) => a.pegoEm - b.pegoEm);
+            c.fillStyle = '#0b1612'; c.fillRect(0, 0, 512, 512);
+            c.strokeStyle = '#2f9e6f'; c.lineWidth = 10; c.strokeRect(12, 12, 488, 488);
+            letras(c, 'CENTRAL DE PEDIDOS', 256, 62, 42, '#7dffb0', 450);
+            c.fillStyle = aberto ? '#3a1410' : '#12241c'; c.fillRect(30, 124, 452, 128);   // (um pouco abaixo do título: de perto, o alto da tela fica atrás do inventário do robô)
+            c.fillStyle = aberto ? '#ff3b2a' : '#3f7a5c'; c.beginPath(); c.arc(92, 188, 38, 0, 7); c.fill();
+            letras(c, String(esperando), 92, 191, 52, '#ffffff', 60);
+            c.textAlign = 'left'; c.textBaseline = 'middle';
+            c.fillStyle = '#ffffff'; c.font = 'bold 38px Bahnschrift, Arial, sans-serif'; c.fillText(esperando === 1 ? 'pedido esperando' : 'pedidos esperando', 150, 172, 320);
+            c.fillStyle = aberto ? '#ffd0c8' : '#b9c7c0'; c.font = '25px Bahnschrift, Arial, sans-serif'; c.fillText(aberto ? 'peça aqui a sua missão' : 'volte daqui a pouco', 152, 216, 320);
+            c.fillStyle = '#7dffb0'; c.font = 'bold 24px Bahnschrift, Arial, sans-serif'; c.fillText(emCurso.length ? 'MISSÕES EM ANDAMENTO' : 'NENHUMA MISSÃO EM ANDAMENTO', 34, 290, 440);
+            emCurso.forEach((p, i) => {
+              const y = 338 + i * 56;
+              c.fillStyle = '#12241c'; c.fillRect(30, y - 24, 452, 50);
+              c.textAlign = 'left'; c.fillStyle = '#ffe9a8'; c.font = 'bold 34px Bahnschrift, Arial, sans-serif'; c.fillText(p.com.nome, 46, y + 2, 250);
+              c.textAlign = 'right'; c.fillStyle = '#ffffff'; c.fillText('casa ' + p.casa, 468, y + 2, 150);
+            });
+            textura.needsUpdate = true;
+            farol.color.set(aberto ? 0xff2a1a : 0x3a1512);
+            luzDoFarol.intensity = aberto ? 7 : 0;
+          } };
+      }
     }
     // um banco de praça; sem giro, o encosto fica do lado +z (quem senta olha para -z)
     const banco = (x, z, giro, y, escala) => {
@@ -1683,6 +2112,155 @@
       banco(x, z, Math.PI / 2 - a, CG, 0.8);    // (um pouco menores que os da rua, para sobrar passagem)
       redondo('banco', x, z, 0.4);
       poste(PX + sx * 3.96, PZ + sz * 3.96);
+    }
+
+    // --- a vida da praça: o violeiro, com o cachorro caramelo do lado, e os pombos ---
+    // É só enfeite (e som, para quem assiste): ninguém ali pede nem recebe nada. O violeiro e o
+    // cachorro barram o caminho como um móvel; os pombos não, porque voam antes de alguém chegar.
+    {
+      const aB = Math.atan2(-1, -1), xB = PX + Math.cos(aB) * (R_PRACA - 0.42), zB = PZ + Math.sin(aB) * (R_PRACA - 0.42), giroB = Math.PI / 2 - aB;   // o banco do canto sudoeste
+      const noMundo = (lx, lz) => [xB + lx * Math.cos(giroB) + lz * Math.sin(giroB), zB - lx * Math.sin(giroB) + lz * Math.cos(giroB)];              // das medidas do banco para as da cidade
+      const noBanco = (q, x, z) => { const dx = q.x - x, dz = q.z - z; return { x: dx * Math.cos(giroB) - dz * Math.sin(giroB), z: dx * Math.sin(giroB) + dz * Math.cos(giroB) }; };
+      const violeiro = montarPessoa(false, 0xb5442e, true);
+      violeiro.grupo.position.set(xB, CG - 0.017, zB); violeiro.grupo.rotation.y = giroB; violeiro.grupo.scale.setScalar(0.85);
+      g.add(violeiro.grupo);
+      redondo('violeiro', ...noMundo(0, -0.24), 0.42);
+      redondo('violão', ...noMundo(-0.55, -0.2), 0.24);
+
+      // o cachorro caramelo, sentado ao lado do banco, olhando para o meio da praça
+      const cao = new T.Group(), caramelo = mat(0xc98a45, { roughness: 0.85 }), creme = mat(0xe7b97a, { roughness: 0.85 }), marrom = mat(0x8f5a28, { roughness: 0.85 }), focinho = mat(0x1d1512, { roughness: 0.4 });
+      const [xC, zC] = noMundo(0.95, -0.05);
+      cao.position.set(xC, CG, zC); cao.rotation.y = giroB;
+      g.add(cao);
+      const capsula = (pai, x1, y1, z1, x2, y2, z2, r, material) => {
+        const de = new T.Vector3(x1, y1, z1), ate = new T.Vector3(x2, y2, z2), m = malha(pai, new T.CapsuleGeometry(r, de.distanceTo(ate), 5, 12), material, (x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2);
+        m.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), ate.sub(de).normalize());
+        return m;
+      };
+      capsula(cao, 0, 0.17, 0.1, 0, 0.37, -0.08, 0.105, caramelo);                          // o corpo, sentado
+      malha(cao, new T.SphereGeometry(0.085, 16, 12), creme, 0, 0.3, -0.135);               // o peito, mais claro
+      for (const lado of [-1, 1]) {
+        capsula(cao, lado * 0.06, 0.27, -0.13, lado * 0.06, 0.04, -0.17, 0.03, caramelo);   // as patas da frente
+        malha(cao, new T.SphereGeometry(0.036, 12, 8), creme, lado * 0.06, 0.03, -0.185).scale.set(1, 0.6, 1.3);
+        malha(cao, new T.SphereGeometry(0.08, 14, 10), caramelo, lado * 0.105, 0.1, 0.09);  // as coxas, dobradas
+        malha(cao, new T.SphereGeometry(0.036, 12, 8), creme, lado * 0.12, 0.03, -0.03).scale.set(1, 0.6, 1.5);
+      }
+      const rabo = new T.Group();
+      rabo.position.set(0, 0.1, 0.2);
+      cao.add(rabo);
+      capsula(rabo, 0, 0, 0, 0, 0.1, 0.14, 0.022, caramelo);
+      const cabecaDoCao = new T.Group();
+      cabecaDoCao.position.set(0, 0.5, -0.13);
+      cao.add(cabecaDoCao);
+      malha(cabecaDoCao, new T.SphereGeometry(0.095, 20, 14), caramelo, 0, 0, 0).scale.set(1, 0.95, 1.05);
+      capsula(cabecaDoCao, 0, -0.025, -0.06, 0, -0.035, -0.15, 0.045, creme);               // o focinho
+      malha(cabecaDoCao, new T.SphereGeometry(0.022, 10, 8), focinho, 0, -0.02, -0.195);
+      const lingua = malha(cabecaDoCao, new T.BoxGeometry(0.03, 0.008, 0.05), mat(0xe8788a, { roughness: 0.5 }), 0, -0.072, -0.15);
+      for (const lado of [-1, 1]) {
+        malha(cabecaDoCao, new T.SphereGeometry(0.015, 10, 8), focinho, lado * 0.042, 0.03, -0.083);
+        malha(cabecaDoCao, caixaSuave(0.035, 0.1, 0.07, 0.015), marrom, lado * 0.092, -0.01, 0.01).rotation.z = lado * 0.35;   // as orelhas caídas
+      }
+      redondo('cachorro', xC, zC, 0.24);
+
+      // os pombos: ciscam na praça e, quando um robô chega perto, voam para o alto de um poste ou do ponto de encontro
+      const cinza = mat(0x8d94a3, { roughness: 0.8 }), chumbo = mat(0x5b6474, { roughness: 0.8 }), furtaCor = mat(0x4f8a6b, { roughness: 0.35, metalness: 0.5 }), rosa = liso(0xd9827a, 0.7), olhinho = liso(0xe2702a, 0.4);
+      const pombos = [], pousos = [];
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) pousos.push({ x: PX + sx * 3.96, y: 3.27, z: PZ + sz * 3.96, de: null }, { x: PX + sx * 0.29, y: CG + 2.13 - BAIXA_DA_CENTRAL, z: PZ + sz * 0.29, de: null });
+      const chaoLivre = robos => {                 // um ponto do chão da praça, fora dos bancos e longe dos robôs
+        for (let k = 0; k < 14; k++) {
+          const a = Math.random() * 6.283, r = 1.0 + Math.random() * 1.5, x = PX + Math.cos(a) * r, z = PZ + Math.sin(a) * r;
+          if (!noMovel(x, z, 0.12) && robos.every(q => Math.hypot(q.x - x, q.z - z) > 2.4)) return { x, y: CG, z };
+        }
+        return null;
+      };
+      const dobrar = p => p.asas.forEach((o, i) => { o.rotation.z = (i ? -1 : 1) * 1.2; o.scale.setScalar(0.62); });
+      const decolar = (p, destino, depois) => {
+        p.de.copy(p.g.position); p.para.set(destino.x, destino.y, destino.z);
+        const d = p.de.distanceTo(p.para);
+        Object.assign(p, { estado: 'voando', depois, u: 0, dura: Math.max(0.9, d / 3.4), arco: 0.45 + d * 0.08, ate: null });
+        p.g.rotation.set(0, Math.atan2(p.de.x - p.para.x, p.de.z - p.para.z), 0);
+        p.asas.forEach(o => o.scale.setScalar(1));
+      };
+      for (let i = 0; i < 6; i++) {
+        const p = new T.Group(), asas = [];
+        p.rotation.order = 'YXZ';                  // (vira para onde vai e, só depois, abaixa a cabeça para bicar)
+        malha(p, new T.SphereGeometry(0.07, 14, 10), cinza, 0, 0.095, 0.01).scale.set(0.82, 0.78, 1.5);
+        malha(p, new T.SphereGeometry(0.046, 12, 10), furtaCor, 0, 0.135, -0.07);
+        const cab = malha(p, new T.SphereGeometry(0.038, 12, 10), chumbo, 0, 0.17, -0.085);
+        malha(p, new T.ConeGeometry(0.011, 0.04, 8), focinho, 0, 0.165, -0.13).rotation.x = -Math.PI / 2;
+        malha(p, new T.BoxGeometry(0.05, 0.012, 0.08), chumbo, 0, 0.085, 0.13);
+        for (const lado of [-1, 1]) {
+          malha(p, new T.SphereGeometry(0.007, 6, 6), olhinho, lado * 0.03, 0.178, -0.1);
+          malha(p, new T.CylinderGeometry(0.005, 0.005, 0.05, 6), rosa, lado * 0.022, 0.025, 0.01);
+          const ombro = new T.Group();
+          ombro.position.set(lado * 0.045, 0.115, 0);
+          p.add(ombro);
+          malha(ombro, new T.SphereGeometry(0.06, 10, 8), chumbo, lado * 0.06, 0, 0.02).scale.set(1.25, 0.14, 0.75);
+          asas.push(ombro);
+        }
+        const onde = chaoLivre([]) || { x: PX + 1.5, y: CG, z: PZ };
+        p.position.set(onde.x, onde.y, onde.z); p.rotation.y = Math.random() * 6.283;
+        g.add(p);
+        const pombo = { g: p, asas, cab, estado: 'chao', depois: 'chao', ate: null, de: new T.Vector3(), para: new T.Vector3(), u: 0, dura: 1, arco: 0.5, espera: Math.random() * 3, pouso: null, vez: Math.random() * 3, arrulho: 4 + Math.random() * 20 };
+        dobrar(pombo);
+        pombos.push(pombo);
+      }
+
+      let latiu = -99, coladoAntes = false;
+      // t: o relógio, em segundos; dt: o tempo deste quadro; robos: onde está cada robô ([{ x, z }])
+      vila.vida = { violeiro: { x: xB, z: zB }, passo(t, dt, robos) {
+        const maisPerto = (x, z, alcance) => { let quem = null, d = alcance; for (const q of robos) { const dq = Math.hypot(q.x - x, q.z - z); if (dq < d) { d = dq; quem = q; } } return quem; };
+        // o violeiro toca sem parar, e olha para quem chega perto
+        const v = maisPerto(xB, zB, 4);
+        violeiro.animar(t, v && noBanco(v, xB, zB), true);
+        // o cachorro olha para quem chega, abana o rabo mais depressa e late uma vez
+        const c = maisPerto(xC, zC, 3.5), lc = c && noBanco(c, xC, zC);
+        const quer = lc ? Math.max(-1.2, Math.min(1.2, Math.atan2(-lc.x, -lc.z))) : 0.35 * Math.sin(t * 0.31);
+        cabecaDoCao.rotation.y += (quer - cabecaDoCao.rotation.y) * Math.min(1, dt * 5);
+        cabecaDoCao.rotation.z = 0.12 * Math.sin(t * 0.7);
+        rabo.rotation.y = (c ? 0.8 : 0.3) * Math.sin(t * (c ? 16 : 7));
+        lingua.position.y = -0.072 - 0.006 * Math.sin(t * 9);
+        const colado = !!c && Math.hypot(c.x - xC, c.z - zC) < 2.2;
+        if (colado && !coladoAntes && t - latiu > 12) { latiu = t; som.efeito('latido', { x: xC, z: zC }, 14); }
+        coladoAntes = colado;
+        cabecaDoCao.position.y = 0.5 + (t - latiu < 0.4 ? 0.03 * Math.sin((t - latiu) / 0.4 * Math.PI * 2) ** 2 : 0);
+        // os pombos
+        for (const p of pombos) {
+          const pos = p.g.position;
+          if (p.estado === 'voando') {
+            p.u = Math.min(1, p.u + dt / p.dura);
+            pos.lerpVectors(p.de, p.para, p.u * p.u * (3 - 2 * p.u));
+            pos.y += Math.sin(Math.PI * p.u) * p.arco;
+            p.asas.forEach((o, i) => { o.rotation.z = (i ? 1 : -1) * 0.75 * Math.sin(t * 26 + p.vez); });
+            if (p.u >= 1) { p.estado = p.depois; p.espera = p.depois === 'chao' ? 1 + Math.random() * 2 : 7 + Math.random() * 12; dobrar(p); }
+          } else if (p.estado === 'pousado') {     // no alto, até a praça ficar calma
+            p.espera -= dt;
+            if (p.espera <= 0) {
+              const chao = chaoLivre(robos);
+              if (chao) { p.pouso.de = null; p.pouso = null; decolar(p, chao, 'chao'); } else p.espera = 3;
+            }
+          } else {                                 // no chão: anda um pouco, para, bica; e foge de quem chega perto
+            if (robos.some(q => Math.hypot(q.x - pos.x, q.z - pos.z) < 1.35)) {
+              const livres = pousos.filter(l => !l.de), l = livres[Math.floor(Math.random() * livres.length)];
+              if (l) { l.de = p; p.pouso = l; decolar(p, l, 'pousado'); som.efeito('asas', { x: pos.x, z: pos.z }, 12); continue; }
+            }
+            p.espera -= dt;
+            if (p.ate) {
+              const dx = p.ate.x - pos.x, dz = p.ate.z - pos.z, d = Math.hypot(dx, dz);
+              if (d < 0.05) { p.ate = null; p.espera = 1 + Math.random() * 4; }
+              else { pos.x += dx / d * 0.28 * dt; pos.z += dz / d * 0.28 * dt; p.g.rotation.y = Math.atan2(-dx, -dz); }
+              p.cab.position.z = -0.085 - 0.012 * Math.sin(t * 16 + p.vez);
+            } else if (p.espera <= 0) {
+              const a = Math.random() * 6.283, x = pos.x + Math.cos(a) * 0.7, z = pos.z + Math.sin(a) * 0.7, r = Math.hypot(x - PX, z - PZ);
+              if (r > 0.95 && r < R_PRACA - 0.5 && !noMovel(x, z, 0.12)) p.ate = { x, z }; else p.espera = 0.5;
+            }
+            const bica = (t * 0.9 + p.vez) % 3;
+            p.g.rotation.x = !p.ate && bica < 0.5 ? -0.55 * Math.sin(bica / 0.5 * Math.PI) : 0;
+            p.arrulho -= dt;
+            if (p.arrulho < 0) { p.arrulho = 9 + Math.random() * 24; som.efeito('arrulho', { x: pos.x, z: pos.z }, 9); }
+          }
+        }
+      } };
     }
 
     // --- cercas, cercas vivas e árvores ---
@@ -1828,8 +2406,32 @@
       malha(c, new T.BoxGeometry(0.02, 0.1, 0.56), plastico, 1.715, 0.66, 0);                                                 // a grade, entre os faróis
       const mancha = malha(c, new T.PlaneGeometry(3.9, 2.0), new T.MeshBasicMaterial({ map: texSombra, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }), 0, 0.012, 0);
       mancha.rotation.x = -Math.PI / 2;
+      return c;
     }
-    carro(-4.0, 1.95, -Math.PI / 2, 0x2f6fb5);                                              // na entrada ao lado da nossa casa, de frente para a rua: fora do caminho do robô
+    {
+      // Na entrada ao lado da nossa casa, de frente para a rua. Dá para entrar nele e dirigir (ver "o carro"):
+      // o jogo não pede isso em lugar nenhum. Parado, ele barra o caminho como um móvel.
+      const c = carro(-4.0, 1.95, -Math.PI / 2, 0x2f6fb5), aro = new T.Group(), barra = { nome: 'carro', x1: 0, x2: 0, z1: 0, z2: 0 };
+      for (const [l, p, x, z] of [[3.6, 0.06, 0, 0.84], [3.6, 0.06, 0, -0.84], [0.06, 1.74, 1.8, 0], [0.06, 1.74, -1.8, 0]]) malha(aro, new T.BoxGeometry(l, 0.05, p), M.destaque, x, 0.04, z);
+      aro.visible = false;
+      c.add(aro);
+      blocos.push(barra);
+      vila.carro = { nome: 'carro', ehCarro: true, grupo: c, x: -4.0, z: 1.95, rumo: 4, sala: 4, motorista: null, contorno: aro, barra,
+        // o ponto da lataria mais perto de (px, pz): é dele que se mede se o carro está ao alcance
+        pontoMaisPerto(px, pz) {
+          const a = this.rumo * GIRO, fx = -Math.sin(a), fz = -Math.cos(a), dx = px - this.x, dz = pz - this.z;
+          const ao = Math.max(-CARRO.meio, Math.min(CARRO.meio, dx * fx + dz * fz)), deLado = Math.max(-CARRO.lado, Math.min(CARRO.lado, dx * fz - dz * fx));
+          return { x: this.x + ao * fx + deLado * fz, z: this.z + ao * fz - deLado * fx };
+        },
+        // onde ele barra o caminho de quem anda: um retângulo, se está ao longo de uma rua; de viés, um círculo
+        assentar() {
+          const b = this.barra, k = ((this.rumo % 8) + 8) % 8, m = CARRO.meio, l = CARRO.lado, r = 1.15;
+          delete b.r; delete b.cx; delete b.cz;
+          if (k % 2) Object.assign(b, { r, cx: this.x, cz: this.z, x1: this.x - r, x2: this.x + r, z1: this.z - r, z2: this.z + r });
+          else Object.assign(b, k % 4 ? { x1: this.x - m, x2: this.x + m, z1: this.z - l, z2: this.z + l } : { x1: this.x - l, x2: this.x + l, z1: this.z - m, z2: this.z + m });
+        } };
+      vila.carro.assentar();
+    }
     laje(ret(-4.95, -3.05, 0.1, 4.06), calcada, 0.02);                                      // a entrada de carro, calçada
 
     // --- as fachadas (não dá para entrar) ---
@@ -1916,11 +2518,7 @@
     malha(g, juntar(moitas), mat(0x4a8f44, { roughness: 0.95, flatShading: true }), 0, 0, 0);
     for (const [cor, pecas] of Object.entries(petalas)) malha(g, juntar(pecas), liso(Number(cor), 0.7), 0, 0, 0);
     // por fora da nossa casa: a janela do quarto, a do banheiro e o batente da porta
-    for (const [x, y, w, h] of [[2.0, 1.5, 1.0, 1.0], [-1.3, 1.85, 0.6, 0.45]]) {
-      caixa(w + 0.14, h + 0.14, 0.03, branco, x, y, 4.1);
-      malha(g, new T.PlaneGeometry(w, h), mat(0x8fc2dc, { roughness: 0.08, metalness: 0.4 }), x, y, 4.118);
-      caixa(0.04, h, 0.01, branco, x, y, 4.122);
-    }
+    janela(2.0, 4, 'z', 1.0, 1.0, 2.0); janela(-1.3, 4, 'z', 0.6, 1.62, 2.08, null, false);
     caixa(1.3, 0.22, 0.24, liso(0x7a4a2a, 0.8), 2.0, 0.86, 4.2);                          // a floreira da janela do quarto
     for (let i = 0; i < 5; i++) malha(g, new T.SphereGeometry(0.09, 10, 8), liso([0xe4572e, 0xf2c230, 0xf06aa8][i % 3], 0.7), 1.5 + i * 0.25, 1.02, 4.2);
     for (const x of [5.25, 6.75]) caixa(0.1, ALTURA_PORTA + 0.1, 0.05, branco, x, (ALTURA_PORTA + 0.1) / 2, 4.1);
@@ -1942,9 +2540,7 @@
     caixa(1.2, 2.0, 0.52, madeira, 3.3, 1.0, 0.33);                                       // guarda-roupa
     for (const x of [3.0, 3.6]) { malha(g, caixaSuave(0.56, 1.9, 0.02, 0.008), madeiraClara, x, 1.0, 0.6); caixa(0.02, 0.2, 0.03, M.latao, x + (x < 3.3 ? 0.22 : -0.22), 1.0, 0.62); }
     bloco('guarda-roupa', 2.7, 3.9, 0.06, 0.6);
-    caixa(1.06, 1.06, 0.03, branco, 2.13, 1.55, 0.075);                                   // a janela (por dentro), com cortinas
-    malha(g, new T.PlaneGeometry(0.94, 0.94), luminoso({ color: 0xbfe3f7 }), 2.13, 1.55, 0.092);
-    caixa(0.03, 0.94, 0.012, branco, 2.13, 1.55, 0.096); caixa(0.94, 0.03, 0.012, branco, 2.13, 1.55, 0.096);
+    janela(2.13, 0, 'z', 1.06, 1.02, 2.08);                                               // a janela dos fundos, com cortinas
     for (const x of [1.72, 2.54]) caixa(0.26, 1.25, 0.03, liso(0xe8d9c0, 1), x, 1.52, 0.11);
     const quadro = malha(g, new T.PlaneGeometry(0.7, 0.5), M.quadro, 3.93, 1.6, 3.3);
     quadro.rotation.y = -Math.PI / 2;
@@ -1952,19 +2548,21 @@
     // `parede`) e de frente para onde o robô começa. Não diz nada até falarem com ela. O alvo fica
     // nos joelhos (ver criarSala). O que ela recebe fica no braço da poltrona: a primeira coisa
     // do lado da mão direita, a segunda do outro.
-    const morador = (corpo, x, z, sala, parede) => {
+    // (casa: 1 = a amarela, 2 = a cor-de-rosa, 3 = a azul; as falas são as do desafio daquela casa; no coletivo moram as três)
+    const morador = (corpo, x, z, sala, parede, casa) => {
       corpo.grupo.position.set(x, 0, z);
       g.add(corpo.grupo);
-      vila.pessoa = pessoa = { nome: 'pessoa', x, z: z - 0.45, rosto: { x, z: z + 0.04 }, sala, corpo, contorno: corpo.contorno, fala: '', recebeu: null, recebidos: [],
+      vila.pessoa = pessoa = { nome: 'pessoa', ehPessoa: true, casa, falas: DESAFIOS[casa + 3].falas, pedidos: [], x, z: z - 0.45, rosto: { x, z: z + 0.04 }, sala, corpo, contorno: corpo.contorno, fala: '', recebeu: null, recebidos: [],
         receber(o) {
           corpo.grupo.add(o.malha);
           o.malha.position.set(this.recebidos.length ? -0.3 : 0.3, 0.64 + o.alt / 2, -0.29);
           this.recebidos.push(o);
-          this.fala = FALAS.agradecimento;
+          this.fala = this.falas.agradecimento;
         } };
+      vila.pessoas.push(pessoa);
       bloco('poltrona', x - 0.42, x + 0.42, z - 0.65, parede);
     };
-    if (DESAFIO === 4) morador(montarPessoa(), 2.0, 3.48, 1, 4);     // (nos outros desafios a casa é outra: aqui não há ninguém)
+    if (DESAFIO === 4 || COLETIVO) morador(montarPessoa(), 2.0, 3.48, 1, 4, 1);     // (nos outros desafios a casa é outra: aqui não há ninguém)
 
     // --- banheiro (2): pia com espelho, vaso e box (só enfeite) ---
     const louca = liso(0xf7f7f4, 0.2), vidroDoBox = new T.MeshStandardMaterial({ color: 0xbfe3f0, transparent: true, opacity: 0.28, roughness: 0.05, depthWrite: false, side: T.DoubleSide });
@@ -1972,8 +2570,8 @@
     malha(g, caixaSuave(0.94, 0.05, 0.5, 0.015), louca, -1.3, 0.83, 0.31);
     malha(g, new T.CylinderGeometry(0.17, 0.12, 0.05, 24), liso(0xdfe6e9, 0.15), -1.3, 0.845, 0.33);
     malha(g, new T.CylinderGeometry(0.014, 0.014, 0.2, 12), M.inox, -1.3, 0.95, 0.12);
-    caixa(0.78, 0.9, 0.03, M.nogueira, -1.3, 1.55, 0.075);                                // o espelho da pia: um metal polido, que só rebate a luz do ambiente
-    malha(g, new T.PlaneGeometry(0.7, 0.82), mat(0xe6eef2, { metalness: 1, roughness: 0.04 }), -1.3, 1.55, 0.092);
+    caixa(0.78, 0.9, 0.03, M.nogueira, -1.3, 1.55, 0.075);                                // o espelho da pia (com reflexo: ver espelhar)
+    espelhar(malha(g, new T.PlaneGeometry(0.7, 0.82), M.inox, -1.3, 1.55, 0.092));
     bloco('pia', -1.77, -0.83, 0.06, 0.55);
     malha(g, caixaSuave(0.38, 0.4, 0.5, 0.06), louca, -2.3, 0.2, 1.75);                   // vaso
     malha(g, caixaSuave(0.18, 0.42, 0.42, 0.04), louca, -2.44, 0.6, 1.75);
@@ -2090,7 +2688,7 @@
     for (const dx of [-0.34, 0.3]) { malha(g, new T.CylinderGeometry(0.15, 0.15, 0.04, 20), madeira, 4.62 + dx, 0.46, 3.0 + Math.abs(dx) * 0.3); malha(g, new T.CylinderGeometry(0.03, 0.03, 0.44, 10), preto, 4.62 + dx, 0.22, 3.0 + Math.abs(dx) * 0.3); }
     bloco('mesa', 4.1, 5.1, 2.9, 3.94);
     // a porta da rua: de correr, como as dos outros desafios; é o jogador que abre, e ela fica aberta (no desafio 5, que é o da outra casa, fica trancada)
-    portaDaRua(6, 4, 'z', [3, 4], M.porta, DESAFIO !== 4);
+    portaDaRua(6, 4, 'z', [3, 4], M.porta, !COLETIVO && DESAFIO !== 4);
     vao(0, 3, 'x', 1, 2); vao(4, 2, 'x', 1, 3); vao(6, 8.5, 'z', 4, 5);                    // os vãos sem porta: para o banheiro, para a cozinha e o do mercadinho
 
     // --- mercadinho (5): estantes com mercadorias, balcão e caixotes ---
@@ -2187,7 +2785,6 @@
       salpicar(c, l, 5000, aleatorio(93), '255,255,255', '120,100,70', 3, 0.05);
       for (const [m, larg, cor] of [[16, 10, '#c9a65a'], [38, 3, '#1f2a44'], [50, 3, '#c9a65a']]) { c.strokeStyle = cor; c.lineWidth = larg; c.strokeRect(m, m, l - 2 * m, a - 2 * m); }
     }) });
-    const vidroDaRua = mat(0x8fc2dc, { roughness: 0.06, metalness: 0.5, envMap: reflexoDaRua, envMapIntensity: 1.1 });
     // uma planta de vaso: o tronco fino e um punhado de folhas largas
     const vasoDePlanta = (x, z, alt, vaso) => {
       malha(g, new T.CylinderGeometry(0.17, 0.12, 0.3, 20), vaso, x, 0.15, z);
@@ -2198,8 +2795,8 @@
       }
     };
     const rebocoRosa = rebocado(0xf2b8c6), barradoRosa = liso(0xfaf3f0, 0.9);
-    parede(FX, FZ1, FX, FZ2, [-2.5], -1, rebocoRosa, barradoRosa, chique);
-    parede(FX, FZ2, FE, FZ2, [], 1, rebocoRosa, barradoRosa, chique);
+    parede(FX, FZ1, FX, FZ2, [[-4.2, 0.94, 0.93, 2.07], -2.5], -1, rebocoRosa, barradoRosa, chique);   // (com a janela da sala)
+    parede(FX, FZ2, FE, FZ2, [[23.1, 1.06, 0.87, 2.13]], 1, rebocoRosa, barradoRosa, chique);          // (com a janela do quarto)
     parede(FX, FZ1, FE, FZ1, [], -1, rebocoRosa, barradoRosa, chique);
     parede(FE, FZ1, FE, FZ2, [], 1, rebocoRosa, barradoRosa, chique);
     parede(20.25, FZ1, 20.25, FZ2, [-3], 0, null, null, chique);
@@ -2207,7 +2804,7 @@
     piso(FX, 20.25, FZ1, FZ2, marmore); piso(20.25, 24.25, FZ1, FZ2, madeiraEscura); piso(24.25, FE, FZ1, FZ2, marmoreVerde, 2.4 / 4, 1);
     teto(FX, 20.25, FZ1, FZ2); teto(20.25, 24.25, FZ1, FZ2); teto(24.25, FE, FZ1, FZ2);
     cobrir(FX, FE, FZ1, FZ2, A, 1.25, 0x5f5a66);
-    portaDaRua(FX, -2.5, 'x', [6, 4], liso(0x1f4e5a, 0.45), DESAFIO !== 5);              // a porta da rua (trancada nos desafios que não são o desta casa)
+    portaDaRua(FX, -2.5, 'x', [6, 4], liso(0x1f4e5a, 0.45), !COLETIVO && DESAFIO !== 5);              // a porta da rua (trancada nos desafios que não são o desta casa)
     vao(20.25, -3, 'x', 6, 7); vao(24.25, -2, 'x', 7, 8);
     {
       // por fora, na rua: o batente da porta, a marquise, as arandelas, uma janela, os vasos de buxinho e o capacho
@@ -2221,9 +2818,7 @@
         malha(g, new T.CylinderGeometry(0.015, 0.015, 0.3, 6), tronco, FX - 0.26, CIDADE.alto + 0.45, z);
         malha(g, new T.IcosahedronGeometry(0.19, 1), folhaEscura, FX - 0.26, CIDADE.alto + 0.72, z);
       }
-      caixa(0.03, 1.14, 0.94, branco, xf, 1.5, -4.2);
-      malha(g, new T.PlaneGeometry(0.8, 1.0), vidroDaRua, xf - 0.018, 1.5, -4.2).rotation.y = -Math.PI / 2;
-      caixa(0.01, 1.0, 0.04, branco, xf - 0.022, 1.5, -4.2); caixa(0.01, 0.04, 0.8, branco, xf - 0.022, 1.5, -4.2);
+      janela(FX, -4.2, 'x', 0.94, 0.93, 2.07);
       caixa(0.22, 0.2, 1.0, liso(0x2b2f3a, 0.6), xf - 0.1, 0.84, -4.2);
       for (let i = 0; i < 5; i++) malha(g, new T.SphereGeometry(0.085, 10, 8), liso([0xf06aa8, 0xffffff, 0xf29bbd][i % 3], 0.7), xf - 0.1, 1.0, -4.6 + i * 0.2);
       caixa(0.5, 0.012, 0.9, liso(0x2b2f3a, 1), FX - 0.35, CIDADE.alto + 0.006, -2.5);
@@ -2314,18 +2909,16 @@
       malha(g, new T.CylinderGeometry(0.025, 0.06, 0.22, 12), dourado, 22.2, 0.63, FS + 0.24);
       malha(g, new T.CylinderGeometry(0.08, 0.13, 0.17, 20, 1, true), luminoso({ color: 0xffe9c4, side: T.DoubleSide }), 22.2, 0.82, FS + 0.24);
       bloco('criado-mudo', 21.97, 22.43, FZ1, FS + 0.46);
-      if (DESAFIO === 5) morador(montarPessoa(true), 21.5, FN - 0.46, 7, FZ2);                               // a mulher, com a mão na testa
+      if (DESAFIO === 5 || COLETIVO) morador(montarPessoa(true), 21.5, FN - 0.46, 7, FZ2, 2);                               // a mulher, com a mão na testa
       const PX0 = 20.25 + 0.06;                    // a penteadeira, na parede da sala: o tampo de mármore, o espelho redondo e o banquinho
       malha(g, caixaSuave(0.42, 0.04, 1.0, 0.012), marmoreLiso, PX0 + 0.22, 0.76, -1.62);
       for (const dz of [-0.44, 0.44]) for (const dx of [0.05, 0.39]) malha(g, new T.CylinderGeometry(0.014, 0.014, 0.74, 8), dourado, PX0 + dx, 0.37, -1.62 + dz);
       malha(g, new T.CylinderGeometry(0.33, 0.33, 0.02, 40), dourado, PX0 + 0.012, 1.42, -1.62).rotation.z = Math.PI / 2;
-      malha(g, new T.CircleGeometry(0.29, 40), mat(0xe6eef2, { metalness: 1, roughness: 0.04 }), PX0 + 0.025, 1.42, -1.62).rotation.y = Math.PI / 2;
+      espelhar(malha(g, new T.CircleGeometry(0.29, 40), M.inox, PX0 + 0.025, 1.42, -1.62)).rotation.y = Math.PI / 2;
       malha(g, new T.CylinderGeometry(0.16, 0.16, 0.08, 20), rosado, PX0 + 0.7, 0.44, -1.62);
       malha(g, new T.CylinderGeometry(0.02, 0.1, 0.4, 12), dourado, PX0 + 0.7, 0.2, -1.62);
       bloco('penteadeira', 20.25, PX0 + 0.88, -2.15, FZ2);
-      caixa(1.06, 1.26, 0.03, branco, 23.1, 1.5, FN - 0.015);                                                 // a janela, com cortinas de veludo
-      malha(g, new T.PlaneGeometry(0.94, 1.14), luminoso({ color: 0xcfe9fa }), 23.1, 1.5, FN - 0.032).rotation.y = Math.PI;
-      caixa(0.03, 1.14, 0.012, branco, 23.1, 1.5, FN - 0.036); caixa(0.94, 0.03, 0.012, branco, 23.1, 1.5, FN - 0.036);
+      janela(23.1, FZ2, 'z', 1.06, 0.87, 2.13);                                                               // a janela, com cortinas de veludo
       for (const dx of [-0.72, 0.72]) malha(g, caixaSuave(0.36, 2.2, 0.06, 0.025), rosado, 23.1 + dx, 1.26, FN - 0.07);
       malha(g, new T.CylinderGeometry(0.014, 0.014, 2.0, 8), dourado, 23.1, 2.38, FN - 0.07).rotation.z = Math.PI / 2;
       const LX = 22.25, LZ = -3;                   // o lustre, no meio do quarto: um aro dourado com velas
@@ -2358,7 +2951,7 @@
       malha(g, new T.CylinderGeometry(0.17, 0.11, 0.1, 24), louca, 25.6, 0.92, FN - 0.25);
       malha(g, new T.CylinderGeometry(0.012, 0.012, 0.24, 10), dourado, 25.6, 0.99, FN - 0.07);
       malha(g, new T.CylinderGeometry(0.32, 0.32, 0.02, 40), dourado, 25.6, 1.55, FN - 0.012).rotation.x = Math.PI / 2;
-      malha(g, new T.CircleGeometry(0.28, 40), mat(0xe6eef2, { metalness: 1, roughness: 0.04 }), 25.6, 1.55, FN - 0.025).rotation.y = Math.PI;
+      espelhar(malha(g, new T.CircleGeometry(0.28, 40), M.inox, 25.6, 1.55, FN - 0.025)).rotation.y = Math.PI;
       bloco('pia', 24.95, 26.3, FN - 0.5, FZ2);
       malha(g, caixaSuave(0.5, 0.4, 0.38, 0.06), louca, BE - 0.3, 0.2, -2.9);                                 // o vaso
       malha(g, caixaSuave(0.18, 0.42, 0.42, 0.04), louca, BE - 0.1, 0.6, -2.9);
@@ -2372,7 +2965,7 @@
     // --- a farmácia (9), na rua do leste: de portas abertas, como o mercadinho ---
     {
       const X1 = 19.6, X2 = 23.5, Z1 = 8.5, Z2 = 12.5, XP = 21.5, XM = (X1 + X2) / 2, rebocoF = rebocado(0xeef4ee), barradoF = liso(0x2f7d5b, 0.9), verdeF = liso(0x2f9d7a, 0.5);
-      parede(X1, Z1, X2, Z1, [XP], -1, rebocoF, barradoF);
+      parede(X1, Z1, X2, Z1, [[20.2, 1.0, 0.55, 2.05], XP, [22.85, 1.0, 0.55, 2.05]], -1, rebocoF, barradoF);   // (com as duas vitrines)
       parede(X1, Z2, X2, Z2, [], 1, rebocoF, barradoF);
       parede(X1, Z1, X1, Z2, [], -1, rebocoF, barradoF);
       parede(X2, Z1, X2, Z2, [], 1, rebocoF, barradoF);
@@ -2390,10 +2983,7 @@
         for (const x of [100, l - 100]) { c.fillRect(x - 15, a / 2 - 45, 30, 90); c.fillRect(x - 45, a / 2 - 15, 90, 30); }
       });
       malha(g, new T.PlaneGeometry(3.5, 0.58), mat(0xffffff, { map: letreiroF, roughness: 0.6 }), XM, A + 0.36, Z1 - 0.075).rotation.y = Math.PI;
-      for (const x of [20.2, 22.85]) {                                                                        // as vitrines, de enfeite
-        caixa(1.0, 1.5, 0.04, liso(0x3d4a54, 0.5), x, 1.3, Z1 - 0.095);
-        malha(g, new T.PlaneGeometry(0.88, 1.38), vidroDaRua, x, 1.3, Z1 - 0.118).rotation.y = Math.PI;
-      }
+      for (const x of [20.2, 22.85]) janela(x, Z1, 'z', 1.0, 0.55, 2.05, liso(0x3d4a54, 0.5), false);          // as vitrines
       const cruz = mat(0xffffff, { roughness: 0.5, emissive: 0xffffff, emissiveIntensity: 0.25, map: texturaCanvas(128, 128, (c, l) => {
         c.fillStyle = '#ffffff'; c.fillRect(0, 0, l, l);
         c.fillStyle = '#1f9d55'; c.fillRect(l * 0.36, l * 0.12, l * 0.28, l * 0.76); c.fillRect(l * 0.12, l * 0.36, l * 0.76, l * 0.28);
@@ -2426,22 +3016,20 @@
     {
       const X1 = 19.6, XM = 22.4, X2 = 25.2, Z1 = 0, Z2 = 4, zs = casaAzul.ZS, rebocoAzul = rebocado(0xa9cbe6), barradoAzul = liso(0x6f93b5, 0.9);
       parede(X1, Z1, X2, Z1, [], -1, rebocoAzul, barradoAzul);
-      parede(X1, Z2, X2, Z2, [21], 1, rebocoAzul, barradoAzul);
+      parede(X1, Z2, X2, Z2, [21, [23.0, 1.04, 0.93, 2.07], [24.5, 1.04, 0.93, 2.07]], 1, rebocoAzul, barradoAzul);   // (com as duas janelas da sala)
       parede(X1, Z1, X1, Z2, [], -1, rebocoAzul, barradoAzul);
       parede(X2, Z1, X2, Z2, [], 1, rebocoAzul, barradoAzul);
       parede(XM, Z1, XM, Z2, [2]);
       piso(X1, XM, Z1, Z2, M.ladrilho, (XM - X1) / 4, 1); piso(XM, X2, Z1, Z2, M.piso, (X2 - XM) / 4, 1);
       teto(X1, XM, Z1, Z2); teto(XM, X2, Z1, Z2);
       cobrir(X1, X2, Z1, Z2, A, 1.2, 0x8a4a3a);
-      portaDaRua(21, Z2, 'z', [10, 4], liso(0xc8553d, 0.5), DESAFIO !== 6, 1);            // (corre para o leste: do outro lado a parede acaba logo)
+      portaDaRua(21, Z2, 'z', [10, 4], liso(0xc8553d, 0.5), !COLETIVO && DESAFIO !== 6, 1);            // (corre para o leste: do outro lado a parede acaba logo)
       vao(XM, 2, 'x', 10, 11);
       // por fora, na rua: o batente da porta, duas janelas com floreira e o capacho
       for (const x of [20.25, 21.75]) caixa(0.1, ALTURA_PORTA + 0.1, 0.05, branco, x, (ALTURA_PORTA + 0.1) / 2, Z2 + 0.1);
       caixa(1.6, 0.1, 0.05, branco, 21, ALTURA_PORTA + 0.05, Z2 + 0.1);
       for (const x of [23.0, 24.5]) {
-        caixa(1.04, 1.14, 0.03, branco, x, 1.5, Z2 + 0.1);
-        malha(g, new T.PlaneGeometry(0.9, 1.0), vidroDaRua, x, 1.5, Z2 + 0.118);
-        caixa(0.04, 1.0, 0.01, branco, x, 1.5, Z2 + 0.122); caixa(0.9, 0.04, 0.01, branco, x, 1.5, Z2 + 0.122);
+        janela(x, Z2, 'z', 1.04, 0.93, 2.07);
         caixa(1.1, 0.2, 0.22, liso(0x7a4a2a, 0.8), x, 0.86, Z2 + 0.2);
         for (let i = 0; i < 5; i++) malha(g, new T.SphereGeometry(0.085, 10, 8), liso([0xe4572e, 0xf2c230, 0xffffff][i % 3], 0.7), x - 0.4 + i * 0.2, 1.01, Z2 + 0.2);
       }
@@ -2486,7 +3074,7 @@
       malha(g, new T.CylinderGeometry(0.15, 0.15, 0.04, 20), madeira, X1 + 0.62, 0.46, 3.1); malha(g, new T.CylinderGeometry(0.03, 0.03, 0.44, 10), preto, X1 + 0.62, 0.22, 3.1);
       bloco('mesa', X1, X1 + 0.92, 2.05, 3.3);
       // a sala (11): o morador na poltrona, de costas para a parede da rua; a TV na do sul; a estante na do leste
-      if (DESAFIO === 6) morador(montarPessoa(false, 0x2f7d5b), 24.0, 3.48, 11, Z2);
+      if (DESAFIO === 6 || COLETIVO) morador(montarPessoa(false, 0x2f7d5b), 24.0, 3.48, 11, Z2, 3);
       caixa(1.5, 0.42, 0.4, madeira, 24.0, 0.21, zs + 0.2);                                                  // o rack, com a TV
       caixa(1.16, 0.66, 0.04, preto, 24.0, 0.93, zs + 0.12); caixa(1.08, 0.58, 0.01, liso(0x10151c, 0.08), 24.0, 0.93, zs + 0.142);
       caixa(0.3, 0.08, 0.16, preto, 24.0, 0.46, zs + 0.14);
@@ -2511,16 +3099,13 @@
       }
       bloco('estante', xe - 0.32, X2, 1.08, 2.42);
       malha(g, new T.PlaneGeometry(1.9, 1.3), M.tapete, 23.8, 0.012, 1.9).rotation.x = -Math.PI / 2;         // o tapete
-      caixa(1.06, 1.26, 0.03, branco, 23.0, 1.5, Z2 - 0.075);                                                // a janela, por dentro
-      malha(g, new T.PlaneGeometry(0.94, 1.14), luminoso({ color: 0xbfe3f7 }), 23.0, 1.5, Z2 - 0.092).rotation.y = Math.PI;
-      caixa(0.03, 1.14, 0.012, branco, 23.0, 1.5, Z2 - 0.096); caixa(0.94, 0.03, 0.012, branco, 23.0, 1.5, Z2 - 0.096);
       malha(g, new T.PlaneGeometry(0.7, 0.5), M.quadro, XM + 0.065, 1.6, 0.9).rotation.y = Math.PI / 2;      // um quadro
     }
 
     // --- a padaria (12), na rua do oeste: de portas abertas, como as outras lojas ---
     {
       const X1 = -4.2, X2 = 1.9, Z1 = 8.5, Z2 = 12.5, XP = 0.5, XM = (X1 + X2) / 2, rebocoP = rebocado(0xe8b4a0), barradoP = liso(0x7a4a2a, 0.9);
-      parede(X1, Z1, X2, Z1, [XP], -1, rebocoP, barradoP);
+      parede(X1, Z1, X2, Z1, [[-2.1, 3.1, 0.55, 2.05], XP], -1, rebocoP, barradoP);   // (com a vitrine)
       parede(X1, Z2, X2, Z2, [], 1, rebocoP, barradoP);
       parede(X1, Z1, X1, Z2, [], -1, rebocoP, barradoP);
       parede(X2, Z1, X2, Z2, [], 1, rebocoP, barradoP);
@@ -2536,9 +3121,7 @@
         letras(c, 'PADARIA', l / 2, a / 2 + 6, 112, '#fff3d6', l - 120);
       });
       malha(g, new T.PlaneGeometry(4.6, 0.62), mat(0xffffff, { map: letreiroP, roughness: 0.6 }), XM, A + 0.36, Z1 - 0.075).rotation.y = Math.PI;
-      caixa(3.1, 1.5, 0.04, liso(0x4a3324, 0.5), -2.1, 1.3, Z1 - 0.095);                                     // a vitrine, com o toldo
-      malha(g, new T.PlaneGeometry(2.98, 1.38), vidroDaRua, -2.1, 1.3, Z1 - 0.118).rotation.y = Math.PI;
-      caixa(0.05, 1.38, 0.02, liso(0x4a3324, 0.5), -2.1, 1.3, Z1 - 0.125);
+      janela(-2.1, Z1, 'z', 3.1, 0.55, 2.05, liso(0x4a3324, 0.5), false);                                    // a vitrine, com o toldo
       const lonaP = mat(0xffffff, { roughness: 0.8, map: texturaCanvas(384, 32, (c, l, a) => { for (let i = 0; i < 12; i++) { c.fillStyle = i % 2 ? '#ffffff' : '#d9772b'; c.fillRect(i * 32, 0, 32, a); } }) });
       malha(g, new T.BoxGeometry(3.4, 0.04, 0.85), lonaP, -2.1, 2.33, Z1 - 0.48).rotation.x = -0.32;
       // por dentro: a estante dos pães no fundo, o balcão de vidro e os cestos
@@ -2613,7 +3196,7 @@
       cena.fog.color.copy(horizonte).multiply(tomDoCeu).multiplyScalar(CLARO);
       cena.fog.near = 50 - 34 * m; cena.fog.far = 240 - 140 * m;
       for (const l of luzesDosPostes) l.intensity = v.postes;
-      vidroDaRua.emissiveIntensity = v.janelas;
+      vidroDaRua.emissiveIntensity = v.janelas * 0.22;                       // (o vidro é transparente: um brilho leve, de luz acesa lá dentro)
       asfalto.roughness = 0.95 - 0.5 * m;                                    // o asfalto molhado brilha
       chuva.visible = m > 0.02;
       chuva.material.opacity = 0.55 * m;
@@ -2836,9 +3419,22 @@
     queimado.icone = iconeDeBolo('#1a1512', null, null);
     // o que a pessoa deste desafio quer: entregar tudo a ela é a vitória (a ordem é a das falas de "falta": ver DESAFIOS)
     vila.pedidos = DESAFIO === 5 ? [analgesico, copoCheio] : DESAFIO === 6 ? [paoDeQueijo, cafe] : [bolo];
+    for (const p of vila.pessoas) p.pedidos = p.casa === 2 ? [analgesico, copoCheio] : p.casa === 3 ? [paoDeQueijo, cafe] : [bolo];
+    // (no coletivo: o que é do pedido de cada casa, e que volta para o lugar quando ela pede de novo: ver reporMissao)
+    const todos = Object.values(salas).flatMap(s => s.objetos);
+    vila.missoes = { 1: todos.filter(o => o.ingrediente || o === massa || o === bolo || o === queimado), 2: [analgesico, vila.copo, copoCheio], 3: todos.filter(o => o.paraOCafe || o === paoDeQueijo || o === cafe) };
+    // o número de cada casa, numa plaquinha ao lado da porta (a central de pedidos chama as casas pelo número)
+    const numeroDaCasa = (n, x, z, giro) => {
+      const p = new T.Group();
+      p.position.set(x, 1.72, z); p.rotation.y = giro;
+      g.add(p);
+      malha(p, caixaSuave(0.3, 0.3, 0.03, 0.012), liso(0x1f2a44, 0.5), 0, 0, 0);
+      malha(p, new T.PlaneGeometry(0.25, 0.25), mat(0xffffff, { roughness: 0.6, map: texturaCanvas(128, 128, (c, l) => { c.fillStyle = '#f7f3e6'; c.fillRect(0, 0, l, l); letras(c, String(n), l / 2, l / 2 + 6, 104, '#1f2a44', l); }) }), 0, 0, 0.017);
+    };
+    numeroDaCasa(1, 6.98, 4.11, 0); numeroDaCasa(2, 16.14, -1.22, -Math.PI / 2); numeroDaCasa(3, 22.05, 4.11, 0);
 
     fazSombra(g);
-    for (const m of semSombra) m.castShadow = false;
+    for (const m of semSombra.concat(vidros)) m.castShadow = false;
   }
 
   // Põe um objeto em cima da cabeça do robô. Ali ele só aparece no reflexo (camada 1, como
@@ -2997,9 +3593,46 @@
   // quando a pessoa não disse nada ou há uma parede entre ela e a câmera. A câmera é a do
   // robô; no modo voador, a de quem assiste (e volta a ser a do robô antes de cada imagem da iA).
   function atualizarBalao(cam) {
-    const camera = cam || olhos;
+    const camera = cam || olhos, gente = vila.pessoas.length ? vila.pessoas : pessoa ? [pessoa] : [];
+    gente.forEach((p, i) => porBalaoDaPessoa(p, i ? p.balao || (p.balao = maisUmBalao()) : balao, camera));   // (um balão para cada pessoa: no coletivo são três)
+    if (!gente.length) balao.visible = false;
+    if (COLETIVO) porBaloesDoColetivo(camera);
+  }
+  const maisUmBalao = () => {
+    const b = new T.Sprite(balao.material.clone());
+    b.scale.copy(balao.scale);
+    b.renderOrder = 998;
+    b.layers.set(2);
+    b.layers.enable(3);
+    b.visible = false;
+    cena.add(b);
+    return b;
+  };
+  // No coletivo: o balão de fala de cada robô, em cima da cabeça dele enquanto vale (ver falaVale), e o da central de pedidos.
+  // O balão fica em cima da cabeça de quem fala. Mas cada câmera o vê no lugar e no tamanho em que
+  // ele cabe inteiro na imagem dela: para quem está perto, ele desce e encolhe (senão ficava acima
+  // do que o robô enxerga, e a fala passava em branco), e vem um pouco para a frente do corpo de quem fala.
+  function porBaloesDoColetivo(camera) {
+    const meia = Math.tan(camera.fov * Math.PI / 360), formato = camera === olhos ? FRAME.l / FRAME.a : camera.aspect;
+    const subida = Math.tan(Math.max(-1.4, Math.min(1.4, camera.rotation.x + camera.fov * Math.PI / 360)));   // (quanto o alto da imagem sobe a cada metro de distância)
+    for (const r of robos) {
+      const vale = falaVale(r), s = r.balao.sprite;
+      s.visible = vale;
+      if (!vale) continue;
+      const dx = camera.position.x - r.visual.x, dz = camera.position.z - r.visual.z, longe = Math.hypot(dx, dz) || 1e-6, d = Math.max(0.3, longe - 0.3);
+      const larg = Math.max(0.45, Math.min(1.7, 0.62 * 2 * d * meia * formato)), alt = larg * r.balao.tela.height / r.balao.tela.width;
+      const topo = camera.position.y + d * subida - 0.08 * d * meia;   // o alto da imagem, na distância de quem fala, com uma folga
+      s.scale.set(larg, alt, 1);
+      s.position.set(r.visual.x + dx / longe * 0.3, Math.max(0.8 + r.visual.chao, Math.min(1.45 + r.visual.chao, topo - alt)), r.visual.z + dz / longe * 0.3);
+    }
+    const c = vila.central, fala = !!c.fala && hora() <= c.falaAte;
+    if (!c.balao) { c.balao = maisUmBalao(); c.balao.scale.set(1.5, 1.5 * BALAO.a / BALAO.l, 1); c.balao.center.set(BALAO.ponta / BALAO.l, 5 / BALAO.a); c.balao.position.set(c.x, 2.0, c.z); }
+    c.balao.visible = fala;
+    if (fala) c.balao.material.map = texturaDoBalao(c.fala, -1);
+  }
+  function porBalaoDaPessoa(pessoa, balao, camera) {
     balao.visible = false;
-    if (!pessoa || !pessoa.fala) return;
+    if (!pessoa.fala || (COLETIVO && hora() > pessoa.falaAte)) return;
     const cx = camera.position.x, cz = camera.position.z, r = pessoa.rosto, parede = centro(pessoa.sala) + SALA.L / 2;
     if (REGRAS.vila) {                                      // na vila: só de dentro do cômodo dela, ou de um dos vãos dele
       // (a câmera de quem voa pode estar fora de todos os lugares, ou acima do telhado: aí também não se vê o balão)
@@ -3023,9 +3656,9 @@
   // Devolve o grupo com as peças, o braço direito (que gira no ombro) e `escrever`, que põe
   // um texto na tela do peito. Com `comBorda`, devolve também `contorno`: a borda de
   // destaque, feita de uma casca um pouco maior em volta de cada peça grande.
-  function montarRobo(comBorda) {
+  function montarRobo(comBorda, cor) {              // (cor: a do cinto, das mãos e da antena, para distinguir os robôs do coletivo)
     const grupo = new T.Group(), braco = new T.Group(), cascas = [];
-    const claro = mat(0xe6eaee, { roughness: 0.32 }), escuro = mat(0x2c333b, { roughness: 0.4 }), laranja = mat(0xff8a3d, { roughness: 0.4 });
+    const claro = mat(0xe6eaee, { roughness: 0.32 }), escuro = mat(0x2c333b, { roughness: 0.4 }), laranja = mat(cor || 0xff8a3d, { roughness: 0.4 });
     const BORDA = 0.022;
     const caixa = (pai, l, a, p, material, x, y, z, naBorda) => {
       malha(pai, caixaSuave(l, a, p, Math.min(0.025, Math.min(l, a, p) / 4)), material, x, y, z);
@@ -3081,85 +3714,210 @@
     return { grupo, braco, escrever, contorno: { set visible(v) { cascas.forEach(c => { c.visible = v; }); } } };
   }
 
-  // ---------- pessoa (desafios 3, 4 e 5) ----------
+  // ---------- pessoa (desafios 3 a 6 e o coletivo) ----------
   // Uma pessoa sentada numa poltrona, olhando para -z; a origem é o chão, no meio da poltrona.
-  // Devolve o grupo e `contorno`, a borda de destaque em volta do corpo (não da poltrona).
+  // Devolve o grupo, `contorno` (a borda de destaque em volta do corpo, não da poltrona) e
+  // `animar`, que a mantém viva: ela respira, pisca, olha em volta — ou para quem chega perto
+  // —, tamborila os dedos e bate o pé de vez em quando.
   // Com `mulher`, é a moradora do flat (desafio 5): de vestido, cabelo comprido, numa poltrona
   // clara, com o cotovelo esquerdo no braço da poltrona e a mão na testa, de dor de cabeça.
-  function montarPessoa(mulher, camisa) {       // (camisa: outra cor de blusa, para o morador de outra casa não ser igual)
-    const grupo = new T.Group(), cascas = [];
-    const pele = mat(mulher ? 0xe0b090 : 0xd8a47f, { roughness: 0.6 }), cabelo = mat(mulher ? 0x5a2c1a : 0x2b1d15, { roughness: 0.85 }), escuro = mat(0x1c1512, { roughness: 0.5 });
-    const blusa = mat(camisa || (mulher ? 0x8c2f4b : 0x2f4f7f), { roughness: 0.85 }), calca = mulher ? blusa : mat(0x4b5563, { roughness: 0.85 }), sapato = mat(mulher ? 0xc9a57a : 0x2a2320, { roughness: 0.5 });
-    const tecido = mat(mulher ? 0xece4d6 : 0xa85a3c, { roughness: 0.95 }), canela = mulher ? pele : calca, perna = mulher ? 0.11 : 0.13;
-    const BORDA = 0.028;
-    const caixa = (l, a, p, material, x, y, z, naBorda) => {
-      const r = Math.min(0.05, Math.min(l, a, p) / 3);
-      malha(grupo, caixaSuave(l, a, p, r), material, x, y, z);
-      if (naBorda) cascas.push(malha(grupo, caixaSuave(l + 2 * BORDA, a + 2 * BORDA, p + 2 * BORDA, r + BORDA * 0.6), M.contorno, x, y, z));
+  // `camisa`: outra cor de blusa, para o morador de outra casa não ser igual.
+  // Com `violeiro`, não há poltrona (ele senta num banco da praça): tem um violão no colo, que
+  // dedilha sem parar, e um chapéu de palha.
+  function montarPessoa(mulher, camisa, violeiro) {
+    const grupo = new T.Group(), cascas = [], BORDA = 0.028, PARA_CIMA = new T.Vector3(0, 1, 0);
+    const pele = mat(mulher ? 0xe2b393 : 0xd8a47f, { roughness: 0.6 }), cabelo = mat(mulher ? 0x5a2c1a : 0x2b1d15, { roughness: 0.8 }), escuro = mat(0x1c1512, { roughness: 0.4 });
+    const blusa = mat(camisa || (mulher ? 0x8c2f4b : 0x2f4f7f), { roughness: 0.85 }), calca = mulher ? blusa : mat(0x4b5563, { roughness: 0.85 }), sapato = mat(mulher ? 0xc9a57a : 0x2a2320, { roughness: 0.45 });
+    const tecido = mat(mulher ? 0xece4d6 : 0xa85a3c, { roughness: 0.95 }), brancoDoOlho = mat(0xffffff, { roughness: 0.3 });
+    const V = (x, y, z) => new T.Vector3(x, y, z);
+    // uma peça com a sua casca de destaque (a casca fica no mesmo pai: acompanha o que se mexe)
+    const peca = (pai, geo, material, x, y, z, casca) => {
+      const m = malha(pai, geo, material, x, y, z);
+      if (casca) { m.userData.casca = malha(pai, casca, M.contorno, x, y, z); cascas.push(m.userData.casca); }
+      return m;
     };
-    const bola = (raio, material, x, y, z, naBorda) => {
-      malha(grupo, new T.SphereGeometry(raio, 24, 16), material, x, y, z);
-      if (naBorda) cascas.push(malha(grupo, new T.SphereGeometry(raio + BORDA, 24, 16), M.contorno, x, y, z));
+    // um membro arredondado, de um ponto ao outro
+    const membro = (pai, de, ate, raio, material, naBorda) => {
+      const comprimento = de.distanceTo(ate), meio = de.clone().add(ate).multiplyScalar(0.5), giro = new T.Quaternion().setFromUnitVectors(PARA_CIMA, ate.clone().sub(de).normalize());
+      const m = peca(pai, new T.CapsuleGeometry(raio, comprimento, 6, 14), material, meio.x, meio.y, meio.z, naBorda && new T.CapsuleGeometry(raio + BORDA, comprimento, 6, 14));
+      m.quaternion.copy(giro);
+      if (m.userData.casca) m.userData.casca.quaternion.copy(giro);
+      return m;
     };
 
     // poltrona: base, assento, encosto, braços e pés
-    caixa(0.80, 0.30, 0.76, tecido, 0, 0.19, 0);
-    caixa(0.54, 0.14, 0.58, tecido, 0, 0.39, -0.06);
-    caixa(0.80, 0.72, 0.18, tecido, 0, 0.70, 0.29);
-    for (const x of [-0.335, 0.335]) caixa(0.13, 0.32, 0.64, tecido, x, 0.48, -0.06);
-    for (const x of [-0.33, 0.33]) for (const z of [-0.3, 0.3])
-      malha(grupo, new T.CylinderGeometry(0.025, 0.02, 0.05, 12), mulher ? M.latao : M.nogueira, x, 0.025, z);
+    const almofada = (l, a, p, x, y, z, r) => malha(grupo, caixaSuave(l, a, p, r), tecido, x, y, z);
+    if (!violeiro) {
+      almofada(0.80, 0.30, 0.76, 0, 0.19, 0, 0.07);
+      almofada(0.54, 0.14, 0.58, 0, 0.39, -0.06, 0.06);
+      almofada(0.80, 0.72, 0.18, 0, 0.70, 0.29, 0.08);
+      for (const x of [-0.335, 0.335]) almofada(0.13, 0.32, 0.64, x, 0.48, -0.06, 0.06);
+      for (const x of [-0.33, 0.33]) for (const z of [-0.3, 0.3])
+        malha(grupo, new T.CylinderGeometry(0.025, 0.02, 0.05, 12), mulher ? M.latao : M.nogueira, x, 0.025, z);
+    }
 
-    // pernas: coxas no assento, canelas para baixo
+    // pernas: as coxas no assento e as canelas para baixo; o pé esquerdo é o que bate de vez em quando
+    const pes = [];
     for (const x of [-0.1, 0.1]) {
-      caixa(0.15, 0.14, 0.50, calca, x, 0.53, -0.215, true);
-      caixa(perna, 0.42, perna, canela, x, 0.27, -0.455, true);
-      caixa(perna, 0.08, 0.26, sapato, x, 0.045, -0.5);
+      if (violeiro && x > 0) {
+        // a posição do violão flamenco: a perna direita cruzada por cima da esquerda, com o pé solto no ar; o bojo do violão descansa nessa coxa
+        const joelho = V(-0.07, 0.66, -0.4), calcanhar = V(-0.3, 0.38, -0.5);
+        membro(grupo, V(0.1, 0.56, 0.02), joelho, 0.075, calca, true);
+        membro(grupo, joelho, calcanhar, 0.062, calca, true);
+        malha(grupo, caixaSuave(0.12, 0.085, 0.26, 0.035), sapato, calcanhar.x - 0.06, calcanhar.y - 0.1, calcanhar.z - 0.05).rotation.set(0.6, 0.5, 0.9);
+        continue;
+      }
+      membro(grupo, V(x, 0.53, 0.02), V(x, 0.53, -0.42), 0.075, calca, true);
+      membro(grupo, V(x, 0.5, -0.455), V(x, 0.13, -0.455), mulher ? 0.05 : 0.062, mulher ? pele : calca, true);
+      const tornozelo = new T.Group();
+      tornozelo.position.set(x, 0.09, -0.42);
+      grupo.add(tornozelo);
+      malha(tornozelo, caixaSuave(mulher ? 0.1 : 0.12, 0.085, 0.26, 0.035), sapato, 0, -0.045, -0.08);
+      pes.push(tornozelo);
     }
-    if (mulher) caixa(0.42, 0.1, 0.52, calca, 0, 0.6, -0.2);                             // a saia do vestido, por cima das coxas
-    caixa(0.38, 0.52, 0.22, blusa, 0, 0.74, 0.06, true);                                 // tronco
+    if (mulher) malha(grupo, caixaSuave(0.42, 0.12, 0.5, 0.05), calca, 0, 0.6, -0.2);        // a saia do vestido, por cima das coxas
+    // tronco (que respira), ombros e pescoço
+    const peito = peca(grupo, caixaSuave(0.36, 0.5, 0.21, 0.09), blusa, 0, 0.75, 0.06, caixaSuave(0.36 + 2 * BORDA, 0.5 + 2 * BORDA, 0.21 + 2 * BORDA, 0.09 + BORDA * 0.6));
+    for (const lado of [-1, 1]) malha(grupo, new T.SphereGeometry(0.076, 16, 12), blusa, lado * 0.19, 0.93, 0.06);
+    malha(grupo, new T.CylinderGeometry(0.048, 0.056, 0.1, 16), pele, 0, 1.035, 0.055);
+    if (!mulher) for (const lado of [-1, 1]) malha(grupo, new T.BoxGeometry(0.07, 0.016, 0.05), mat(0xf4f2ec, { roughness: 0.6 }), lado * 0.045, 0.995, -0.03).rotation.set(0.5, lado * 0.5, lado * -0.5);   // a gola
+    let maoDireita = null, antebraco = null, erguido = null, descansado = null, eixoDoDedilhado = null;
+    if (!violeiro) {
+      // braço direito: do ombro ao cotovelo, e o antebraço apoiado no braço da poltrona, com a mão que tamborila
+      membro(grupo, V(0.215, 0.92, 0.06), V(0.3, 0.71, -0.02), 0.05, blusa, true);
+      membro(grupo, V(0.3, 0.705, -0.04), V(0.3, 0.69, -0.24), 0.042, mulher ? pele : blusa, true);
+      maoDireita = malha(grupo, new T.SphereGeometry(0.05, 16, 12), pele, 0.3, 0.69, -0.27);
+      maoDireita.scale.set(1, 0.75, 1.15);
+    }
+    if (violeiro) {
+      // O violão, apoiado na coxa da perna cruzada, com o braço dele bem levantado para a esquerda de
+      // quem toca (a posição flamenca); a mão esquerda nas casas, lá no alto, e a direita sobre a
+      // boca, com o antebraço descansando na borda do bojo. Esse antebraço balança no cotovelo: dedilha.
+      const violao = new T.Group(), tampo = mat(0xd9a45c, { roughness: 0.45 }), jacaranda = mat(0x4a2c17, { roughness: 0.5 });
+      violao.position.set(0.05, 0.84, -0.17); violao.rotation.z = -0.5;
+      grupo.add(violao);
+      for (const [x, r] of [[0.1, 0.19], [-0.12, 0.15]]) malha(violao, new T.CylinderGeometry(r, r, 0.09, 28), tampo, x, 0, 0).rotation.x = Math.PI / 2;   // o bojo
+      malha(violao, new T.CylinderGeometry(0.05, 0.05, 0.093, 20), jacaranda, -0.01, 0, 0).rotation.x = Math.PI / 2;                                  // a boca
+      malha(violao, new T.BoxGeometry(0.52, 0.045, 0.028), jacaranda, -0.5, 0, -0.02);                                                                // o braço
+      malha(violao, new T.BoxGeometry(0.13, 0.07, 0.024), jacaranda, -0.82, 0, -0.02);                                                                // a mão, com as tarraxas
+      malha(violao, new T.BoxGeometry(0.06, 0.03, 0.012), jacaranda, 0.16, 0, -0.05);                                                                 // o cavalete
+      malha(violao, new T.BoxGeometry(0.92, 0.03, 0.004), mat(0xe8e2d0, { roughness: 0.3, metalness: 0.6 }), -0.3, 0, -0.05);                         // as cordas
+      const cotoveloE = V(-0.41, 0.79, -0.04), maoE = V(-0.433, 1.09, -0.215);
+      membro(grupo, V(-0.215, 0.92, 0.06), cotoveloE, 0.05, blusa, true);
+      membro(grupo, cotoveloE, maoE, 0.042, blusa, true);
+      malha(grupo, new T.SphereGeometry(0.05, 16, 12), pele, maoE.x, maoE.y, maoE.z);
+      const cotoveloD = V(0.33, 0.95, -0.25), maoD = V(0.07, 0.83, -0.27), comprimento = maoD.distanceTo(cotoveloD);
+      membro(grupo, V(0.215, 0.92, 0.06), cotoveloD, 0.05, blusa, true);
+      antebraco = new T.Group();
+      antebraco.position.copy(cotoveloD);
+      grupo.add(antebraco);
+      membro(antebraco, V(0, 0, 0), V(0, comprimento, 0), 0.042, blusa, true);
+      malha(antebraco, new T.SphereGeometry(0.05, 16, 12), pele, 0, comprimento, 0);
+      const ao = maoD.clone().sub(cotoveloD).normalize();
+      erguido = new T.Quaternion().setFromUnitVectors(PARA_CIMA, ao);
+      eixoDoDedilhado = ao.clone().cross(PARA_CIMA).normalize();                            // (em volta dele a mão sobe e desce sobre as cordas)
+      antebraco.quaternion.copy(erguido);
+    } else if (mulher) {
+      // a dor de cabeça: o cotovelo esquerdo no braço da poltrona e a mão na testa, esfregando devagar.
+      // O antebraço é um grupo com o eixo y ao longo dele: gira no cotovelo e, quando a dor passa,
+      // deita no braço da poltrona (mais curto: erguido até a testa ele é esticado de propósito).
+      const ombro = V(-0.215, 0.92, 0.06), cotovelo = V(-0.31, 0.7, -0.14), mao = V(-0.105, 1.2, -0.055);
+      membro(grupo, ombro, cotovelo, 0.05, blusa, true);
+      antebraco = new T.Group();
+      antebraco.position.copy(cotovelo);
+      grupo.add(antebraco);
+      const comprimento = mao.distanceTo(cotovelo);
+      membro(antebraco, V(0, 0, 0), V(0, comprimento, 0), 0.04, pele, true);
+      malha(antebraco, new T.SphereGeometry(0.048, 16, 12), pele, 0, comprimento, 0);
+      erguido = new T.Quaternion().setFromUnitVectors(PARA_CIMA, mao.clone().sub(cotovelo).normalize());
+      descansado = new T.Quaternion().setFromUnitVectors(PARA_CIMA, V(0.03, -0.02, -1).normalize());
+      antebraco.quaternion.copy(erguido);
+    } else {
+      membro(grupo, V(-0.215, 0.92, 0.06), V(-0.3, 0.71, -0.02), 0.05, blusa, true);
+      membro(grupo, V(-0.3, 0.705, -0.04), V(-0.3, 0.69, -0.24), 0.042, blusa, true);
+      malha(grupo, new T.SphereGeometry(0.05, 16, 12), pele, -0.3, 0.69, -0.27).scale.set(1, 0.75, 1.15);
+    }
+    // a cabeça, que vira: o rosto, as orelhas e o cabelo vão juntos
+    const cabeca = new T.Group(), CY = 0.1, CZ = -0.005;                                       // (o meio da cabeça, nas medidas do grupo dela)
+    cabeca.position.set(0, 1.07, 0.045);
+    grupo.add(cabeca);
+    const cranio = peca(cabeca, new T.SphereGeometry(0.115, 28, 20), pele, 0, CY, CZ, new T.SphereGeometry(0.115 + BORDA, 28, 20));
+    cranio.scale.set(1, 1.07, 1.02); cranio.userData.casca.scale.copy(cranio.scale);
+    for (const lado of [-1, 1]) malha(cabeca, new T.SphereGeometry(0.024, 12, 10), pele, lado * 0.112, CY - 0.008, CZ + 0.012).scale.set(0.6, 1, 0.8);   // orelhas
+    malha(cabeca, new T.SphereGeometry(0.126, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.52), cabelo, 0, CY + 0.006, CZ + 0.006).rotation.x = 0.42;       // o cabelo: uma calota inclinada para trás
+    const olhos = [];
     for (const lado of [-1, 1]) {
-      if (mulher && lado < 0) continue;                                                  // (o braço esquerdo dela é outro: ver abaixo)
-      caixa(0.1, 0.30, 0.1, blusa, lado * 0.245, 0.80, 0.06, true);                      // braço
-      caixa(0.09, 0.09, 0.30, mulher ? pele : blusa, lado * 0.3, 0.69, -0.07, true);     // antebraço, apoiado no braço da poltrona
-      bola(0.05, pele, lado * 0.3, 0.69, -0.26);                                         // mão
+      const olho = new T.Group();
+      olho.position.set(lado * 0.043, CY + 0.02, CZ - 0.101);
+      cabeca.add(olho);
+      malha(olho, new T.SphereGeometry(0.02, 14, 10), brancoDoOlho, 0, 0, 0).scale.set(1, 1, 0.5);
+      malha(olho, new T.SphereGeometry(0.012, 12, 10), escuro, 0, 0, -0.008);
+      olhos.push(olho);
+      const sobrancelha = malha(cabeca, new T.BoxGeometry(0.042, 0.008, 0.01), cabelo, lado * 0.043, CY + 0.054, CZ - 0.103);
+      sobrancelha.rotation.z = mulher ? lado * -0.28 : lado * 0.06;                            // (as dela, erguidas no meio: está com dor)
     }
-    malha(grupo, new T.CylinderGeometry(0.05, 0.055, 0.1, 16), pele, 0, 1.03, 0.05);     // pescoço
-    const CX = 0.04, CY = 1.17;                  // centro da cabeça
-    bola(0.115, pele, 0, CY, CX, true);
-    // cabelo: uma calota inclinada para trás, que deixa a testa e o rosto de fora
-    malha(grupo, new T.SphereGeometry(0.124, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.5), cabelo, 0, CY + 0.004, CX + 0.004).rotation.x = 0.45;
-    for (const x of [-0.042, 0.042]) bola(0.014, escuro, x, CY + 0.02, CX - 0.105);      // olhos
-    bola(0.016, pele, 0, CY - 0.012, CX - 0.117);                                        // nariz
-    malha(grupo, new T.BoxGeometry(0.046, 0.01, 0.01), mat(mulher ? 0xb3263a : 0x8a3b32, { roughness: 0.6 }), 0, CY - 0.05, CX - 0.102);   // boca
+    malha(cabeca, new T.SphereGeometry(0.017, 12, 10), pele, 0, CY - 0.012, CZ - 0.113);       // nariz
+    const corDaBoca = mat(mulher ? 0xb3263a : 0x8a3b32, { roughness: 0.6 });
+    const bocaSeria = malha(cabeca, new T.BoxGeometry(0.046, 0.01, 0.01), corDaBoca, 0, CY - 0.052, CZ - 0.1);
+    const sorriso = malha(cabeca, new T.TorusGeometry(0.024, 0.0055, 6, 14, Math.PI), corDaBoca, 0, CY - 0.04, CZ - 0.101);
+    sorriso.rotation.z = Math.PI;                                                              // o arco para baixo: um sorriso
+    sorriso.visible = false;
+    if (violeiro) {                                                                            // o chapéu de palha
+      const palha = mat(0xe3c98a, { roughness: 0.9 });
+      malha(cabeca, new T.CylinderGeometry(0.21, 0.22, 0.014, 28), palha, 0, CY + 0.085, CZ);
+      malha(cabeca, new T.CylinderGeometry(0.105, 0.12, 0.1, 24), palha, 0, CY + 0.135, CZ);
+      malha(cabeca, new T.CylinderGeometry(0.122, 0.122, 0.022, 24), mat(0x5a3b22, { roughness: 0.7 }), 0, CY + 0.103, CZ);
+    }
     if (mulher) {
       // o cabelo comprido: atrás, até os ombros, e uma mecha de cada lado; e os brincos
-      malha(grupo, caixaSuave(0.25, 0.36, 0.09, 0.04), cabelo, 0, CY - 0.15, CX + 0.095);
+      malha(cabeca, caixaSuave(0.25, 0.4, 0.1, 0.045), cabelo, 0, CY - 0.16, CZ + 0.1);
       for (const lado of [-1, 1]) {
-        malha(grupo, caixaSuave(0.06, 0.3, 0.12, 0.025), cabelo, lado * 0.118, CY - 0.11, CX + 0.045);
-        malha(grupo, new T.SphereGeometry(0.014, 10, 8), M.latao, lado * 0.121, CY - 0.045, CX - 0.03);
+        malha(cabeca, caixaSuave(0.06, 0.32, 0.12, 0.028), cabelo, lado * 0.118, CY - 0.12, CZ + 0.045);
+        malha(cabeca, new T.SphereGeometry(0.014, 10, 8), M.latao, lado * 0.121, CY - 0.05, CZ - 0.02);
       }
-      // a dor de cabeça: o cotovelo esquerdo no braço da poltrona e a mão na testa
-      const membro = (de, ate, grossura, material) => {
-        const m = malha(grupo, caixaSuave(grossura, grossura, de.distanceTo(ate) + grossura * 0.5, grossura * 0.3), material, (de.x + ate.x) / 2, (de.y + ate.y) / 2, (de.z + ate.z) / 2);
-        m.lookAt(ate);
-      };
-      const ombro = new T.Vector3(-0.245, 0.93, 0.06), cotovelo = new T.Vector3(-0.31, 0.7, -0.14), mao = new T.Vector3(-0.105, 1.2, -0.055);
-      membro(ombro, cotovelo, 0.1, blusa);
-      membro(cotovelo, mao, 0.085, pele);
-      bola(0.05, pele, mao.x, mao.y, mao.z);
     }
 
     sombraNoChao(grupo, 0.6, 0.006);
     fazSombra(grupo);
     cascas.forEach(c => { c.visible = false; });
-    return { grupo, contorno: { set visible(v) { cascas.forEach(c => { c.visible = v; }); } } };
+    // t: o tempo, em segundos; perto: onde está quem chegou perto, medido a partir do rosto dela
+    // ({ x, z }, ou null); feliz: já recebeu o que queria (sorri, e a mão para de tamborilar).
+    const fase = Math.random() * 20;
+    const esfrega = new T.Quaternion(), giroDaEsfrega = new T.Euler();
+    let olhar = 0, alivio = 0, antes = null;
+    const animar = (t, perto, feliz) => {
+      const k = 1 - Math.exp(-Math.min(0.1, antes === null ? 0 : Math.max(0, t - antes)) * 4.5);   // (o tanto que o que é devagar anda neste quadro)
+      antes = t;
+      alivio += ((feliz ? 1 : 0) - alivio) * k * 0.6;                                         // a dor de cabeça que passa aos poucos
+      const ar = Math.sin(t * 1.5 + fase);                                                     // respira
+      peito.scale.set(1 + 0.008 * ar, 1 + 0.012 * ar, 1 + 0.022 * ar);
+      peito.userData.casca.scale.copy(peito.scale);
+      cabeca.position.y = 1.07 + 0.004 * ar;
+      // olha em volta, devagar; se alguém chega perto, olha para ele
+      const quer = perto ? Math.max(-0.95, Math.min(0.95, Math.atan2(-perto.x, -perto.z))) : 0.24 * Math.sin(t * 0.37 + fase);
+      olhar += (quer - olhar) * k;
+      const dor = mulher ? 1 - alivio : 0;                                                     // (com a mão na testa, a cabeça fica baixa e quase não vira)
+      cabeca.rotation.set(0.04 * Math.sin(t * 0.53 + fase) + 0.12 * dor - (violeiro ? 0.1 : 0), olhar * (1 - 0.65 * dor), 0.1 * dor + (violeiro ? 0.07 * Math.sin(t * Math.PI / 0.8) : 0));   // (o violeiro balança a cabeça com a música)
+      const aberto = (t + fase) % 4.3 < 0.13 ? 0.12 : 1;                                       // pisca
+      for (const olho of olhos) olho.scale.y = aberto;
+      const dedos = !feliz && (t + fase * 2) % 9 < 1.4 ? Math.max(0, Math.sin(t * 14)) : 0;    // tamborila os dedos
+      if (maoDireita) maoDireita.position.y = 0.69 + 0.016 * dedos;
+      pes[0].rotation.x = violeiro ? 0.24 * Math.max(0, Math.sin(t * Math.PI / 0.4)) : (t + fase) % 13 < 2.2 ? 0.3 * Math.max(0, Math.sin(t * 9)) : 0;   // bate o pé (o violeiro, no compasso)
+      if (eixoDoDedilhado) antebraco.quaternion.setFromAxisAngle(eixoDoDedilhado, 0.2 * Math.sin(t * Math.PI / 0.2)).multiply(erguido);      // dedilha
+      else if (antebraco) {                                                                    // esfrega a testa; sem dor, o braço desce para a poltrona
+        esfrega.setFromEuler(giroDaEsfrega.set(0.05 * Math.sin(t * 1.7) * dor, 0, 0.06 * Math.sin(t * 2.3) * dor));
+        antebraco.quaternion.copy(erguido).slerp(descansado, alivio).multiply(esfrega);
+        antebraco.scale.y = 1 - 0.55 * alivio;
+      }
+      sorriso.visible = !!feliz; bocaSeria.visible = !feliz;
+    };
+    return { grupo, animar, contorno: { set visible(v) { cascas.forEach(c => { c.visible = v; }); } } };
   }
 
   // O robô do jogador. Camada 1 = só aparece no reflexo: em primeira pessoa o jogador não
   // vê o próprio corpo, exceto o braço direito quando levantado (camadas 0 e 1).
-  const eu = montarRobo(false);
-  const robo = eu.grupo, bracoDireito = eu.braco;
+  let eu = montarRobo(false);                   // (let: no coletivo, estes passam a ser os do robô da vez: ver encarnar)
+  let robo = eu.grupo, bracoDireito = eu.braco;
   raiz.add(robo);
   robo.traverse(o => o.layers.set(1));
   bracoDireito.traverse(o => o.layers.enable(0));
@@ -3167,10 +3925,10 @@
   // ---------- estado ----------
   // `estado` é a verdade do jogo e muda na hora; `visual` só persegue o estado para animar.
   // rumo: múltiplos de 45°, 0 = de frente para o espelho; segurando / naCabeca: objeto ou null
-  const estado = { x: REGRAS.inicio.x || 0, z: REGRAS.inicio.z, rumo: REGRAS.inicio.rumo, sala: REGRAS.inicio.sala || 1, segurando: null, naCabeca: null, maoLevantada: false, texto: '', ganhou: false, perdeu: false };
+  let estado = { x: REGRAS.inicio.x || 0, z: REGRAS.inicio.z, rumo: REGRAS.inicio.rumo, sala: REGRAS.inicio.sala || 1, segurando: null, naCabeca: null, maoLevantada: false, texto: '', ganhou: false, perdeu: false };
   // (luz, luzY, luzZ e forca: onde está a lâmpada, que acompanha o robô, e a força dela: ver luzDaqui)
   // (chao: a altura do chão debaixo do robô: na vila, a calçada é um degrau acima do asfalto: ver alturaDoChao)
-  const visual = { x: estado.x, z: estado.z, yaw: estado.rumo * GIRO, braco: 0, luz: 0, luzY: SALA.A - 0.35, luzZ: 0, forca: 2.1, chao: 0 };
+  let visual = { x: estado.x, z: estado.z, yaw: estado.rumo * GIRO, braco: 0, luz: 0, luzY: SALA.A - 0.35, luzZ: 0, forca: 2.1, chao: 0 };
   // Onde fica a lâmpada (há uma só): no meio da sala em que o robô está. Na vila, cada lugar diz
   // onde (ver areas); na rua, onde quem ilumina é o sol, a lâmpada fica na casa ou na loja mais perto.
   const luzDaqui = () => {
@@ -3240,7 +3998,7 @@
   // é o que o ESPACO entrega ou coloca em algum lugar, e o único que se vê. Os outros ficam
   // guardados. O botão L passa a mão para o item seguinte. O inventário aparece no alto da
   // imagem (ver desenharInventario), com o item da mão marcado.
-  const itens = [];
+  let itens = [];
   // Guarda o item que está na mão (ele continua no inventário, mas some de vista).
   function guardar(o) {
     o.guardado = true;
@@ -3267,7 +4025,9 @@
     // 'esquerda' e 'direita' são o passo de lado: o robô anda para o lado sem virar, e continua
     // olhando para onde olhava. Só existe no desafio 4 (REGRAS.passoDeLado): nos três primeiros
     // o robô só anda para onde está olhando, de propósito.
-    const lado = REGRAS.passoDeLado ? { esquerda: 2, direita: -2 }[direcao] : undefined, giro = lado === undefined ? GIRO_DA_DIRECAO[direcao] : 0;
+    if (estado.dirigindo) return dirigir(direcao);   // dentro do carro, quem anda é ele
+    // (na cidade, o passo para trás é como o de lado: o robô recua sem virar. Numa gravação de antes disso, ele dava meia-volta: ver reComMeiaVolta)
+    const lado = REGRAS.passoDeLado ? { esquerda: 2, direita: -2, tras: reComMeiaVolta ? undefined : 4 }[direcao] : undefined, giro = lado === undefined ? GIRO_DA_DIRECAO[direcao] : 0;
     if (giro === undefined) return resposta(`mover ${direcao}`, false, 'direção inválida');
     escolhido = undefined;                      // mexeu-se: a escolha do alvo volta ao mais óbvio
     estado.rumo += giro;                        // vira mesmo que o passo acabe bloqueado
@@ -3288,6 +4048,10 @@
       const depois = Math.hypot(nx - o.x, nz - o.z), antes = Math.hypot(estado.x - o.x, estado.z - o.z);
       if (depois < RAIO_ROBO + o.raio && depois < antes) return resposta(`mover ${direcao}`, false, `bloqueado: ${o.nome} no caminho` + virou);
     }
+    for (const r of emJogo()) {                 // no coletivo, um robô não atravessa o outro
+      const depois = Math.hypot(nx - r.estado.x, nz - r.estado.z);
+      if (r !== atual && depois < 2 * RAIO_ROBO && depois < Math.hypot(estado.x - r.estado.x, estado.z - r.estado.z)) return resposta(`mover ${direcao}`, false, 'bloqueado: outro robô no caminho' + virou);
+    }
     estado.x = nx; estado.z = nz;
     estado.sala = REGRAS.vila ? areaEm(nx, nz) : salaDe(nx);
     if (portaAberta && !REGRAS.portaManual && dentro(portaAberta + 1, nx, nz)) {   // entrou de vez na sala seguinte
@@ -3301,12 +4065,14 @@
     if (lado !== 'esquerda' && lado !== 'direita') return resposta(`virar ${lado}`, false, 'lado inválido');
     escolhido = undefined;
     estado.rumo += lado === 'esquerda' ? 1 : -1;
+    if (estado.dirigindo) { estado.dirigindo.rumo = estado.rumo; estado.dirigindo.assentar(); }   // (o carro vira com quem dirige)
     return resposta(`virar ${lado}`, true, 'ok');
   }
 
   // Distância até algo que esteja ao alcance e à frente (±45°); Infinity se não estiver.
   function alcance(alvo) {
-    const v = vetores(), ox = alvo.x - estado.x, oz = alvo.z - estado.z, dist = Math.hypot(ox, oz);
+    const onde = alvo.ehCarro ? alvo.pontoMaisPerto(estado.x, estado.z) : alvo;   // (o carro é comprido: vale o ponto dele mais perto do robô)
+    const v = vetores(), ox = onde.x - estado.x, oz = onde.z - estado.z, dist = Math.hypot(ox, oz);
     return dist <= ALCANCE && (ox * v.fx + oz * v.fz) / dist >= 0.69 ? dist : Infinity;
   }
 
@@ -3335,19 +4101,21 @@
   // Na vila o robô carrega mais de um item: mesmo com a mão cheia os objetos ao alcance entram
   // na lista (antes do "em nada"), e só vale o que está no mesmo lugar que ele (ver "a vila").
   function candidatos() {
+    if (estado.dirigindo) return [estado.dirigindo];   // dentro do carro, o ESPACO só serve para sair dele
     const aqui = estado.sala, s = salas[aqui], o = estado.segurando, lista = [];
     const perto = a => !!a && (!REGRAS.vila || (a.salas ? a.salas.includes(aqui) : a.sala === aqui)) && alcance(a) < Infinity;
     // Entre coisas do mesmo tipo, vem primeiro a que está mais no centro da imagem (ver centralidade).
     // (Nas gravações feitas antes disso valia a mais próxima do robô: ver ordemAntiga.)
     const maisPertoPrimeiro = coisas => coisas.filter(perto).sort(ordemAntiga ? (a, b) => alcance(a) - alcance(b) : (a, b) => centralidade(b) - centralidade(a));
     const soltosNaLista = [];
-    const gente = REGRAS.vila ? vila.pessoa : s.pessoa;
+    const gente = REGRAS.vila ? vila.pessoas.find(p => p.sala === aqui) || null : s.pessoa;   // (na vila: quem mora no lugar em que o robô está)
     // As portas que o jogador abre e fecha: na vila, as das casas (a trancada não é alvo: é a da casa
     // de outro desafio); nas salas, a desta sala e a da sala anterior, que é a mesma porta vista do outro lado.
     const portas = REGRAS.vila ? portasDaVila.filter(p => p.folha && !p.trancada)
       : REGRAS.portaManual ? [s.porta, salas[aqui - 1] && salas[aqui - 1].porta].filter(Boolean) : [];
     if (!REGRAS.vila && o && s.outroRobo && !s.outroRobo.recebeu && perto(s.outroRobo)) lista.push(s.outroRobo);
-    if (gente && !gente.recebeu && (o || !estado.maoLevantada) && perto(gente)) lista.push(gente);
+    if (gente && (!gente.recebeu || COLETIVO) && (o || !estado.maoLevantada) && perto(gente)) lista.push(gente);
+    if (COLETIVO && !estado.maoLevantada && perto(vila.central)) lista.push(vila.central);   // a central de pedidos, na praça
     lista.push(...maisPertoPrimeiro([...portas, ...abrem].filter(a => !a.aberta)));
     // Os objetos soltos ao alcance. Com a porta de saída aberta não há o que pegar (desafio 1):
     // a sala está completa, e os objetos da próxima só valem depois que o robô entra nela. Na
@@ -3372,6 +4140,7 @@
       if (REGRAS.vila && vila.forno.dentro && perto(vila.forno)) lista.push(vila.forno);
       lista.push(...soltos());
     }
+    if (vila.carro && !semCarro && !vila.carro.motorista && !estado.maoLevantada && perto(vila.carro)) lista.push(vila.carro);   // o carro, para entrar nele
     // Por último, o que está aberto e dá para fechar: os móveis e as portas (menos a porta em cujo vão o robô está).
     lista.push(...maisPertoPrimeiro([...abrem, ...(portasNaoFecham ? [] : portas.filter(p => !noVaoDaPorta(p)))].filter(a => a.aberta)));
     // São no máximo MAXIMO_DE_ALVOS (um algarismo para cada um: ver marcarAlvos). Num lugar
@@ -3388,12 +4157,12 @@
   // lista), e o ESPACO a fecha. Só não fecha com o robô no vão dela. Nas gravações feitas antes
   // disso a porta ficava aberta para sempre; assistindo a uma delas, vale a regra antiga.
   let portasNaoFecham = false;
-  const noVaoDaPorta = p => REGRAS.vila ? noVaoDe(p, estado.x, estado.z)
+  const noVaoDaPorta = p => REGRAS.vila ? (COLETIVO ? emJogo().some(r => noVaoDe(p, r.estado.x, r.estado.z)) : noVaoDe(p, estado.x, estado.z))
     : Math.abs(estado.x - p.x) <= MARGEM_PAREDE + 1e-9 && noVao(estado.z);
   // A altura do ponto para onde se olha em quem não é um objeto de pegar (móvel, porta, gente):
   // é onde fica o número dele na imagem. Escolhida para não tapar o que importa ver (o que há
   // dentro do móvel, o vidro do forno, o texto no peito do outro robô).
-  const ALTO = { cesta: 0.42, forno: 0.68, pessoa: 0.8, porta: 1.15, 'outro robô': 1.38, geladeira: 0.38, 'armário': 0.6 };
+  const ALTO = { 'central de pedidos': 1.05, carro: 1.0, cesta: 0.42, forno: 0.68, pessoa: 0.8, porta: 1.15, 'outro robô': 1.38, geladeira: 0.38, 'armário': 0.6 };
   // O ponto do alvo: o meio do objeto de pegar; nos outros, o lugar dele no chão, na altura de ALTO.
   const pontoDe = a => {
     if (!a.malha) return new T.Vector3(a.x, ALTO[a.nome] || 1, a.z);
@@ -3464,11 +4233,40 @@
   mira.malha.layers.set(2);
   mira.malha.visible = false;
   camera.add(mira.malha);
+  // No coletivo: a missão que o robô da vez pegou na central ("missão: casa 2"), no canto de cima, à
+  // esquerda, da imagem dele — para ele não depender de lembrar o que a central disse.
+  const missao = { canvas: document.createElement('canvas'), texto: null };
+  missao.canvas.width = 520; missao.canvas.height = 110;
+  missao.textura = new T.CanvasTexture(missao.canvas);
+  missao.textura.colorSpace = T.SRGBColorSpace;
+  missao.malha = new T.Mesh(new T.PlaneGeometry(1, 1), luminoso({ map: missao.textura, transparent: true, depthTest: false, depthWrite: false }));
+  missao.malha.renderOrder = 999;
+  missao.malha.layers.set(2);
+  missao.malha.visible = false;
+  camera.add(missao.malha);
+  function desenharMissao() {
+    const p = atual && atual.dentro ? vila.pessoas.find(q => q.pedindo && q.com === atual) : null, texto = p ? `missão: casa ${p.casa}` : '';
+    missao.malha.visible = !!texto;
+    if (texto === missao.texto) return;
+    missao.texto = texto;
+    if (!texto) return;
+    const c = missao.canvas, g = c.getContext('2d');
+    g.clearRect(0, 0, c.width, c.height);
+    g.beginPath();
+    if (g.roundRect) g.roundRect(4, 4, c.width - 8, c.height - 8, 22); else g.rect(4, 4, c.width - 8, c.height - 8);
+    g.fillStyle = 'rgba(20, 26, 32, 0.9)'; g.fill();
+    g.strokeStyle = '#ffd24a'; g.lineWidth = 6; g.stroke();
+    g.fillStyle = '#ffffff'; g.font = 'bold 60px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(texto, c.width / 2, c.height / 2 + 3, c.width - 40);
+    missao.textura.needsUpdate = true;
+  }
   // O que o ESPACO faria nesse alvo, em poucas palavras (desafio 4).
   function acaoDe(a) {
     const o = estado.segurando;
     if (!a) return 'soltar no chão';
-    if (a === vila.pessoa) return o ? `dar ${o.nome} à pessoa` : 'falar com a pessoa';
+    if (a.ehCarro) return estado.dirigindo ? 'sair do carro' : 'entrar no carro';
+    if (a.ehCentral) return vila.pessoas.some(p => p.pedindo && p.com === atual) ? 'ver a minha missão' : 'pedir uma missão';
+    if (a.ehPessoa) return o ? `dar ${o.nome} à pessoa` : 'falar com a pessoa';
     if (portasDaVila.includes(a)) return a.aberta ? 'fechar a porta' : 'abrir a porta';
     if (abrem.includes(a)) return `${a.aberta ? 'fechar' : 'abrir'}: ${a.nome}`;
     if (a === vila.tigela) return `pôr ${o.nome} na tigela`;
@@ -3520,7 +4318,7 @@
   function assentarMarcas() {
     const meiaAltura = Math.tan(camera.fov * Math.PI / 360), direita = meiaAltura * camera.aspect;
     // o que tapa o alto da imagem, de -1 a 1: de x1 a x2, de y para cima (do indicador, só a caixa escrita: ver mira.usado)
-    const tapado = [contador.malha, inventario.malha, mira.malha].filter(q => q.visible).map(q => {
+    const tapado = [contador.malha, inventario.malha, mira.malha, missao.malha].filter(q => q.visible).map(q => {
       const usado = q === mira.malha ? mira.usado : { l: 1, a: 1 }, x2 = q.position.x + q.scale.x / 2, topo = q.position.y + q.scale.y / 2;
       return { x1: (x2 - q.scale.x * usado.l) / direita, x2: x2 / direita, y: (topo - q.scale.y * usado.a) / meiaAltura };
     });
@@ -3663,8 +4461,10 @@
   // Devolve a visão atual do robô como PNG (data URL). É a única informação que o jogo dá.
   // A imagem tem sempre o mesmo tamanho, seja qual for o tamanho da janela.
   function frame() {
+    if (COLETIVO) { cadaRobo(() => { animarRobo(1); porCorpo(); }); refrescarHUD(); }   // os outros robôs no lugar, e o que vai por cima da imagem, que é deste
     animar(1, 1);                               // sem animação pela metade
     aplicarVisual();
+    if (COLETIVO) contarVistas(atual);          // (os balões de fala que esta imagem mostra: ver falaVale)
     const densidade = renderer.getPixelRatio();
     renderer.setPixelRatio(1);
     definirTamanho(FRAME.l, FRAME.a);
@@ -3672,7 +4472,7 @@
     const imagem = canvas.toDataURL('image/png');
     renderer.setPixelRatio(densidade);          // de volta ao tamanho da janela, na mesma hora
     definirTamanho(window.innerWidth, window.innerHeight);
-    if (vista.voando) desenharDeFora(); else desenhar();   // (a janela volta a mostrar a visão de quem assiste: a imagem da iA é sempre a dos olhos do robô)
+    if (vista.voando) desenharDeFora(); else if (variosOlhos()) { ultimoMosaico = 0; desenharMosaico(performance.now()); } else desenhar();   // (a janela volta a mostrar a visão de quem assiste: a imagem da iA é sempre a dos olhos do robô)
     resposta('frame', true, `${FRAME.l}x${FRAME.a}`);
     return imagem;
   }
@@ -3688,6 +4488,18 @@
   // de fora poderia forjar.
   function comecar(n, quem, cmd, nome, modelo) {
     // "C" é a cadeira do comentarista do Galinha Pong: a página vai para a quadra (desafio M) e a iA entra só para assistir.
+    if (String(n) === 'V') {                    // a vila coletiva: com a página já nela, a iA só entra; senão, a página recarrega nela e a iA entra na página nova
+      const iA = Number.isInteger(quem) && quem > 0;
+      if (COLETIVO) return iA ? entrarPelaPonte(quem, nome, modelo) : false;
+      const p = new URLSearchParams(location.search);
+      p.set('desafio', 'V');
+      try {
+        if (iA) sessionStorage.setItem('vila.entrada', JSON.stringify({ quem, cmd: cmd || 0, nome: nome || '', modelo: modelo || '' }));
+        else sessionStorage.removeItem('vila.entrada');
+      } catch (e) { }
+      location.search = p.toString();
+      return true;
+    }
     const comentarista = String(n) === 'C', arena = comentarista || String(n) === 'M' || String(n) === 'T';
     if (!arena && !existeDesafio(n)) return false;
     const p = new URLSearchParams(location.search);
@@ -3707,11 +4519,15 @@
   // Ângulos do braço direito: caído, estendido para carregar, mão levantada.
   const BRACO = { caido: 0, estendido: 1.13, levantado: 2.45 };
   // Aproxima o que se vê do estado do jogo: k = fração do caminho (1 = chega de uma vez).
-  function animar(k, kPorta) {
+  function animarRobo(k) {
     const carregando = REGRAS.bracoCaido ? BRACO.caido : BRACO.estendido;
     const braco = estado.maoLevantada ? BRACO.levantado : estado.segurando ? carregando : BRACO.caido;
     const l = luzDaqui(), alvo = { x: estado.x, z: estado.z, yaw: estado.rumo * GIRO, braco, luz: l.x, luzY: l.y, luzZ: l.z, forca: l.forca, chao: alturaDoChao(estado.x, estado.z) };
     for (const c in alvo) visual[c] += (alvo[c] - visual[c]) * k;
+  }
+  function animar(k, kPorta) {
+    atualizarPedidos();                         // (no coletivo: os pedidos cuja hora chegou)
+    animarRobo(k);
     for (const gel of abrem) {                  // as duas portas da geladeira (ou do armário) giram para fora, uma para cada lado
       gel.vis += ((gel.aberta ? 1 : 0) - gel.vis) * kPorta;
       gel.folhas.forEach((eixo, i) => { eixo.rotation.y = (i ? 1 : -1) * 1.9 * gel.vis; });
@@ -3735,7 +4551,31 @@
       p.folha.position.z = Z_PORTA - (LARGURA_PORTA + 0.03) * p.vis;   // corre para dentro da parede
     }
   }
-  function aplicarVisual() {
+  // Quem ouve é quem assiste: dos olhos do robô ou, no modo voador, de onde a câmera está. A música
+  // do violeiro soa mais alto de perto, e ela e a chuva chegam abafadas dentro de uma casa.
+  function soarEViver(t, dt) {
+    const ouve = vista.voando ? vista : visual;
+    som.ouvir(ouve.x, ouve.z);
+    if (!vila.vida) return;
+    vila.vida.passo(t, dt, COLETIVO ? emJogo().map(r => r.visual) : [visual]);
+    const lugar = Object.values(areas).find(a => cabeNoLugar(a, ouve.x, ouve.z, 0)), abafado = lugar && lugar.n !== 4 ? 0.4 : 1;
+    som.musica(Math.max(0, 1 - Math.hypot(ouve.x - vila.vida.violeiro.x, ouve.z - vila.vida.violeiro.z) / 14) ** 1.6 * abafado);
+    som.chover((vila.clima ? vila.clima.molhado : 0) * abafado);
+  }
+  // As pessoas, que não ficam paradas como estátuas. Quem chega perto, pela frente, ganha um olhar.
+  function animarPessoas(t) {
+    const gente = vila.pessoas.length ? vila.pessoas : pessoa ? [pessoa] : [], quem = COLETIVO ? emJogo() : [{ estado, visual }];
+    for (const p of gente) {
+      let perto = null, menor = 3.2;
+      for (const r of quem) {
+        const dx = r.visual.x - p.rosto.x, dz = r.visual.z - p.rosto.z, d = Math.hypot(dx, dz);
+        if (r.estado.sala === p.sala && dz < -0.2 && d < menor) { menor = d; perto = { x: dx, z: dz }; }
+      }
+      p.corpo.animar(t, perto, COLETIVO ? hora() < p.agradeceAte : !!estado.ganhou);
+    }
+  }
+  // O corpo do robô da vez, e o que ele tem na mão, no lugar em que `visual` diz.
+  function porCorpo() {
     robo.position.set(visual.x, visual.chao, visual.z);
     robo.rotation.y = visual.yaw;
     bracoDireito.rotation.x = visual.braco;
@@ -3744,9 +4584,18 @@
       if (REGRAS.bracoCaido) o.position.set(0.31, 0.72 - 0.56 * Math.cos(b), -0.56 * Math.sin(b));   // na ponta do braço, depois da mão
       else o.position.set(0.31, 0.76 - 0.47 * Math.cos(b), -0.015 - 0.47 * Math.sin(b));              // logo acima da mão
     }
+    if (estado.dirigindo) {                     // o carro vai aonde vai quem dirige (a frente dele é o +x do desenho)
+      const c = estado.dirigindo.grupo;
+      c.position.set(visual.x, visual.chao, visual.z);
+      c.rotation.y = visual.yaw + Math.PI / 2;
+    }
+  }
+  function aplicarVisual() {
+    porCorpo();
     lampada.position.set(visual.luz, visual.luzY, visual.luzZ);
     lampada.intensity = visual.forca * (vila.clima ? vila.clima.lampada : 1);   // (de noite a imagem inteira escurece, e a lâmpada de dentro é reforçada: ver "a hora do dia e a chuva")
-    camera.position.set(visual.x, ALTURA_OLHOS + visual.chao, visual.z);
+    const noCarro = estado.dirigindo ? 1.05 : 0;   // (quem dirige vê de cima do capô, na frente do para-brisa)
+    camera.position.set(visual.x - Math.sin(visual.yaw) * noCarro, (noCarro ? 1.15 : ALTURA_OLHOS) + visual.chao, visual.z - Math.cos(visual.yaw) * noCarro);
     camera.rotation.set(INCLINACAO, visual.yaw, 0);
     atualizarBalao();
   }
@@ -3758,14 +4607,15 @@
       // Na vila não há espelho: só as sombras (calculadas num desenho descartável em que a
       // câmera "vê" o corpo do robô, como abaixo) e o mundo, com o corpo de fora.
       vidro.visible = false;
-      camera.layers.enable(1);
+      for (const c of CAMADAS_DOS_CORPOS) camera.layers.enable(c);   // (a camada 1, e as dos outros robôs do coletivo)
       camera.layers.disable(2);
       renderer.shadowMap.needsUpdate = true;
       renderer.setRenderTarget(alvoDescartavel);
       renderer.render(cena, camera);
       renderer.setRenderTarget(null);
-      camera.layers.disable(1);
+      camera.layers.disable(COLETIVO ? atual.camada : 1);            // o próprio corpo fica de fora; os dos outros robôs, à vista
       camera.layers.enable(2);
+      refletirEspelhos(camera);                 // os espelhos das casas, com as sombras deste desenho
       renderer.render(cena, camera);
       return;
     }
@@ -3793,11 +4643,85 @@
     renderer.render(cena, camera);
   }
 
+  // No coletivo, com mais de um robô em jogo, a visão da iA mostra os olhos de todos: a tela
+  // dividida, um quadro para cada robô (dois lado a lado; três ou quatro, dois em cima e dois
+  // embaixo), cada um com o que aquele robô vê, inclusive o que é desenhado por cima da imagem
+  // dele. Um clique num quadro deixa só aquele robô na tela; outro clique volta a mostrar todos.
+  // É de quem assiste: a imagem que cada iA recebe continua sendo só a dos olhos do robô dela.
+  let ultimoMosaico = 0, soEste = null, quadros = [];
+  const etiquetas = [];
+  const variosOlhos = () => COLETIVO && (emJogo().length > 1 || !!(soEste && soEste.dentro));
+  function esconderEtiquetas() {
+    for (const el of etiquetas) el.hidden = true;
+    quadros = [];
+  }
+  function desenharMosaico(agora) {
+    if (agora - ultimoMosaico < 70) return;     // (uns 14 quadros por segundo bastam: cada robô custa um desenho da cidade inteira)
+    ultimoMosaico = agora;
+    if (soEste && !soEste.dentro) soEste = null;
+    const lista = soEste ? [soEste] : emJogo(), daVez = atual, tamanho = renderer.getSize(new T.Vector2()), L = tamanho.x, A = tamanho.y;
+    const colunas = lista.length > 1 ? 2 : 1, linhas = lista.length > 2 ? 2 : 1, lc = L / colunas, ac = A / linhas, formato = FRAME.l / FRAME.a;
+    const w = Math.min(lc, ac * formato), h = w / formato;
+    renderer.clear();
+    // as sombras, uma vez só, com todos os corpos à vista (ver desenhar)
+    vidro.visible = false;
+    for (const c of CAMADAS_DOS_CORPOS) camera.layers.enable(c);
+    camera.layers.disable(2);
+    renderer.shadowMap.needsUpdate = true;
+    renderer.setRenderTarget(alvoDescartavel);
+    renderer.render(cena, camera);
+    renderer.setRenderTarget(null);
+    camera.layers.enable(2);
+    camera.aspect = formato;
+    camera.updateProjectionMatrix();
+    arrumarHUD();
+    renderer.setScissorTest(true);
+    quadros = [];
+    lista.forEach((r, i) => {
+      const x = (i % colunas) * lc + (lc - w) / 2, y = Math.floor(i / colunas) * ac + (ac - h) / 2;   // (do canto de cima, à esquerda, da janela)
+      encarnar(r);
+      refrescarHUD();
+      aplicarVisual();
+      assentarMarcas();
+      renderer.setViewport(x, A - y - h, w, h);
+      renderer.setScissor(x, A - y - h, w, h);
+      for (const c of CAMADAS_DOS_CORPOS) if (c === r.camada) camera.layers.disable(c); else camera.layers.enable(c);
+      refletirEspelhos(camera);
+      renderer.render(cena, camera);
+      quadros.push({ r, x, y, w, h });
+      // a etiqueta do quadro: de quem são aqueles olhos
+      const el = etiquetas[i] || (etiquetas[i] = document.body.appendChild(Object.assign(document.createElement('div'), { className: 'olhos-de' })));
+      Object.assign(el.style, { position: 'fixed', left: `${Math.round(x + 10)}px`, top: `${Math.round(y + h - 34)}px`, padding: '4px 10px', borderRadius: '999px', background: 'rgba(12, 16, 20, .78)', color: '#fff',
+        font: '600 12.5px/1.3 system-ui, sans-serif', pointerEvents: 'none', zIndex: '4', borderLeft: `5px solid #${CORES_DOS_ROBOS[r.n].toString(16).padStart(6, '0')}` });
+      el.textContent = r.nome + (r.modelo ? ' · ' + r.modelo : '') + (soEste ? ' — clique para ver todos' : '');
+      el.hidden = false;
+    });
+    for (let i = lista.length; i < etiquetas.length; i++) etiquetas[i].hidden = true;
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, L, A);
+    camera.aspect = L / A;
+    camera.updateProjectionMatrix();
+    arrumarHUD();
+    encarnar(daVez);
+    refrescarHUD();
+    aplicarVisual();
+  }
+  // Um clique num quadro da tela dividida: fica só aquele robô; com um só na tela, volta a mostrar todos.
+  canvas.addEventListener('click', e => {
+    if (!COLETIVO || vista.voando || !quadros.length) return;
+    const q = quadros.find(c => e.clientX >= c.x && e.clientX < c.x + c.w && e.clientY >= c.y && e.clientY < c.y + c.h);
+    soEste = soEste ? null : q ? q.r : null;
+    ultimoMosaico = 0;
+  });
   function definirTamanho(l, a) {
     renderer.setSize(l, a, false);
     camera.aspect = voador.aspect = l / a;
     camera.updateProjectionMatrix();
     voador.updateProjectionMatrix();
+    arrumarHUD();
+  }
+  // O que é desenhado por cima da imagem do robô, no tamanho e no lugar certos para o formato da câmera dele.
+  function arrumarHUD() {
     // contador: 7% da altura da tela, centralizado no alto, a 1 m da câmera
     const meiaAltura = Math.tan(camera.fov * Math.PI / 360), alt = 0.14 * meiaAltura;
     contador.malha.scale.set(alt * 2.2, alt, 1);
@@ -3816,6 +4740,10 @@
     const hm = 0.2 * meiaAltura, lm = hm * mira.canvas.width / mira.canvas.height, direita = meiaAltura * camera.aspect * 0.985;
     const cabe = !REGRAS.inventario || direita - lm > li / 2 + 0.02 * meiaAltura;
     mira.malha.scale.set(lm, hm, 1);
+    // a missão do robô (no coletivo): 11% da altura da tela, no canto de cima, à esquerda
+    const am = 0.22 * meiaAltura, lmi = am * missao.canvas.width / missao.canvas.height;
+    missao.malha.scale.set(lmi, am, 1);
+    missao.malha.position.set(-direita + lmi / 2, meiaAltura * 0.97 - am / 2, -1);
     mira.malha.position.set(direita - lm / 2, (cabe ? meiaAltura * 0.97 : inventario.malha.position.y - li * 300 / 2400 - 0.03 * meiaAltura) - hm / 2, -1);
   }
   function ajustarTamanho() {
@@ -3833,10 +4761,19 @@
     const dt = ASSISTINDO ? (toca ? toca.passo(real) : 0) : real;
     if (ASSISTINDO) horaGravada += dt * 1000;   // o relógio do jogo (ver hora): entre um botão gravado e o outro ele anda com a gravação
     if (toca) toca.soltar();                    // os botões gravados cuja hora chegou
-    animar(1 - Math.exp(-dt * 14), 1 - Math.exp(-dt * 5));
+    const k = 1 - Math.exp(-dt * 14);
+    if (COLETIVO) {                             // os outros robôs também andam; e quem sumiu sem sair deixa o lugar
+      const daVez = atual;
+      cadaRobo(r => { if (r !== daVez) { animarRobo(k); porCorpo(); } });
+      if (!ASSISTINDO) for (const r of emJogo()) if (r.quem > 0 && agora - r.ativo > PARADO_DEMAIS) sairDoJogo(r);
+    }
+    animar(k, 1 - Math.exp(-dt * 5));
     if (vila.clima) vila.clima.passo(real);       // a hora do dia e a chuva da cidade
-    if (vista.voando) { aplicarVisual(); voar(real); desenharDeFora(); }   // quem assiste de fora vê tudo ao vivo, mesmo no modo iA
-    else if (!modoIA) { aplicarVisual(); desenhar(); }
+    animarPessoas(agora / 1000);                // quem mora ali respira, pisca e olha em volta (no relógio de verdade, mesmo com a gravação parada)
+    soarEViver(agora / 1000, real);             // os sons que dependem de onde se está, e a vida da praça
+    if (vista.voando) { esconderEtiquetas(); aplicarVisual(); voar(real); desenharDeFora(); }   // quem assiste de fora vê tudo ao vivo, mesmo no modo iA
+    else if (variosOlhos()) { if (!modoIA) desenharMosaico(agora); }                           // no coletivo, com mais de um robô: a tela dividida, um quadro para cada um
+    else if (!modoIA) { esconderEtiquetas(); aplicarVisual(); desenhar(); }
     requestAnimationFrame(quadro);
   }
 
@@ -3848,13 +4785,34 @@
   elMensagem.textContent = REGRAS.mensagem;
   // A cara da página nos desafios 1 a 3 (as fontes e as caixas) está em index.html, sob esta classe.
   document.body.classList.add('desafio');
+  // O som: uma pílula que diz se está ligado; um clique nela, ou a tecla O, liga e desliga.
+  const elSom = document.getElementById('som');
+  function mostrarSom() {
+    if (!elSom) return;
+    const b = elSom.querySelector('button');
+    b.textContent = som.ligado ? 'som ligado' : 'som desligado';
+    b.classList.toggle('acesa', som.ligado);
+    elSom.hidden = false;
+  }
+  function alternarSom() {
+    resposta('som', true, som.alternar() ? 'ligado' : 'desligado');
+    mostrarSom();
+  }
+  if (elSom) elSom.querySelector('button').addEventListener('click', alternarSom);
+  // as duas réguas de volume, a da música do violeiro e a dos efeitos
+  if (elSom) for (const regua of elSom.querySelectorAll('input[data-som]')) {
+    regua.value = String(Math.round(som.niveis[regua.dataset.som] * 100));
+    regua.addEventListener('input', () => som.ajustar(regua.dataset.som, Number(regua.value) / 100));
+    regua.addEventListener('change', () => regua.blur());   // (devolve o teclado ao jogo)
+  }
+  mostrarSom();
   // A lista de teclas, desenhada como teclas: em cima as do jogo, arrumadas como no teclado, e
   // embaixo as da página. Continua dizendo só quais existem, não o que cada uma faz.
   elAjuda.textContent = '';
   // (No modo voador as teclas do jogo dão lugar às de quem voa, que não são do jogo e por isso vêm explicadas: ver "o modo voador".)
   for (const [classe, fileiras, dica] of [['do-jogo', [REGRAS.passoDeLado ? ['Q', 'W', 'E'] : ['W'], ['A', 'S', 'D'], ['Espaço', 'Tab'], ['L', 'T', 'F']]],
     ['do-voador', [['Q', 'W', 'E'], ['A', 'S', 'D'], ['Shift', 'Z', 'Esc']], 'W A S D voam · Q e E descem e sobem · Shift corre · Z vai até o robô · um clique prende o mouse, que passa a virar a câmera · Esc solta'],
-    ['da-pagina', [['1', '2', '3', '4', '5', '6', 'M', 'C'], ['Shift+T', 'I', 'R', 'H', 'G'].concat(REGRAS.vila ? ['N', 'P'] : [])]]]) {
+    ['da-pagina', [['1', '2', '3', '4', '5', '6', 'V', 'M', 'C'], ['Shift+T', 'I', 'R', 'H', 'G', 'O'].concat(REGRAS.vila ? ['N', 'P'] : [])]]]) {
     const grupo = document.createElement('div');
     grupo.className = classe;
     for (const teclas of fileiras) {
@@ -3879,10 +4837,12 @@
   // depuração são atualizados. Não devolve nada: o jogador não fica sabendo o resultado.
   function resposta(comando, ok, mensagem) {
     ultima = { comando, ok, mensagem };
+    som.doQueAconteceu(comando, ok, mensagem, estado);   // (o som de cada coisa, para quem assiste)
     if (destacado) destacado.contorno.visible = false;
     destacado = alvoAtual();
     if (destacado) destacado.contorno.visible = true;
     marcarAlvos();                              // os números de todos os alvos possíveis e o indicador de qual é o atual
+    if (COLETIVO) desenharMissao();             // (e a missão que este robô pegou na central)
     linhas.push(`› ${comando} — ${mensagem}`);
     if (linhas.length > 6) linhas.shift();
     elLog.textContent = '';
@@ -3910,7 +4870,7 @@
     A: () => virar('esquerda'), D: () => virar('direita'),        // vira 45° sem sair do lugar
     ESPACO: () => pegar(), L: () => levantar(),
     TAB: texto => escolher(1, texto),                             // passa o alvo do ESPACO para o seguinte; com um número no texto, direto para o alvo com esse número
-    T: texto => escrever(texto),                // escreve no peito o texto que vem junto
+    T: texto => COLETIVO ? falar(texto) : escrever(texto),                // escreve no peito o texto que vem junto
     F: () => frame(),                           // o único que devolve algo: a imagem
   };
   if (REGRAS.passoDeLado) Object.assign(BOTOES, { Q: () => mover('esquerda'), E: () => mover('direita') });   // desafio 4: um passo de lado, sem virar
@@ -3941,9 +4901,9 @@
   const quemJoga = { quem: 0, nome: '', modelo: '' }, contagem = { botoes: 0, imagens: 0 };
   // A versão das regras que mudam o que um botão faz, para a gravação antiga continuar igual
   // quando é assistida. 2: entre alvos do mesmo tipo, vale o mais central na imagem (ver ordemAntiga).
-  const VERSAO_DAS_REGRAS = 3;                  // (3: as portas que o jogador abre também fecham: ver portasNaoFecham)
+  const VERSAO_DAS_REGRAS = 7;                  // (3: as portas que o jogador abre também fecham: ver portasNaoFecham; 4: o violeiro e o cachorro barram um canto da praça; 5: dá para entrar no carro; 6: na cidade, o S recua sem virar; 7: no coletivo, cada robô pede a sua missão na central)
   const gravando = !ASSISTINDO && GRAVACAO
-    ? GRAVACAO.gravar(DESAFIO, () => ({ versao: VERSAO_DAS_REGRAS, nome: quemJoga.nome, modelo: quemJoga.modelo, botoes: contagem.botoes, imagens: contagem.imagens, ganhou: estado.ganhou,
+    ? GRAVACAO.gravar(COLETIVO ? 'V' : DESAFIO, () => ({ versao: VERSAO_DAS_REGRAS, nome: COLETIVO ? 'coletivo' : quemJoga.nome, modelo: COLETIVO ? `${participantes.size} robôs, ${entregas} pedidos` : quemJoga.modelo, botoes: contagem.botoes, imagens: contagem.imagens, ganhou: estado.ganhou,
       perdeu: estado.perdeu || undefined, assar: REGRAS.vila ? [ASSAR.pronto, ASSAR.queima] : undefined }))
     : null;
   const NOME_DO_BOTAO = { ESPACO: 'Espaço', F: 'F · imagem' };
@@ -3954,6 +4914,22 @@
     const pedaco = (tag, texto) => { const el = document.createElement(tag); el.textContent = texto; return el; };   // sempre como texto: tudo aqui vem da iA
     const linha = (classe, ...partes) => { const d = document.createElement('div'); d.className = classe; d.append(...partes); elQuer.appendChild(d); };
     elQuer.textContent = '';
+    if (COLETIVO) {                             // no coletivo: quem está na vila, e a última coisa que cada um disse que pretende
+      const lista = emJogo();
+      linha('titulo', lista.length ? `na vila · pedidos atendidos: ${entregas}` : 'ninguém na vila');
+      for (const r of lista) {
+        const dele = vila.pessoas.find(p => p.pedindo && p.com === r);
+        linha('quem', pedaco('b', r.nome), ' ', pedaco('span', r.modelo + (r.entregas ? ` · ${r.entregas}` : '') + (dele ? ` · missão: casa ${dele.casa}` : ' · sem missão')));
+        if (r.intencao) linha(r === atual ? 'linha ultima' : 'linha', pedaco('b', NOME_DO_BOTAO[r.intencao.botao] || r.intencao.botao), pedaco('span', r.intencao.quer));
+        if (r.dito) {                           // o que ele disse por último, e quem recebeu uma imagem com o balão à vista
+          const viram = [...r.dito.viram.keys()].map(q => q.nome).join(', ');
+          linha('linha', pedaco('b', 'disse'), pedaco('span', `"${r.dito.texto}" — ${viram ? 'viu: ' + viram : 'ninguém viu' + (r.fala === r.dito ? ' ainda' : '')}${r.fala === r.dito ? ' (balão no ar)' : ''}`));
+        }
+      }
+      elQuer.style.zoom = '0.72';               // (são até quatro: a lista fica menor que a de um jogador só)
+      elQuer.hidden = false;
+      return;
+    }
     if (quemJoga.nome || quemJoga.modelo) linha('quem', pedaco('b', quemJoga.nome || 'sem nome'), ' ', pedaco('span', quemJoga.modelo));
     if (intencoes.length) linha('titulo', 'o que pretende');
     intencoes.forEach((x, i) => linha(i === intencoes.length - 1 ? 'linha ultima' : 'linha', pedaco('b', NOME_DO_BOTAO[x.botao] || x.botao), pedaco('span', x.quer)));
@@ -3978,13 +4954,14 @@
     desenharQuer();
   }
   // A iA que começou este desafio, ou que já estava jogando quando a página recarregou.
-  if (!ASSISTINDO) try {
+  if (!ASSISTINDO && !COLETIVO) try {
     const antes = JSON.parse(sessionStorage.getItem('desafio.quem'));
     if (antes && Number.isInteger(antes.quem) && antes.quem > 0) apresentar(antes.quem, antes.nome, antes.modelo);
   } catch (e) { }
   // Aperta um botão. `quem` é a conexão da iA que apertou (o teclado não manda nada).
   function apertar(botao, texto, quem, nome, modelo, intencao) {
     if (ASSISTINDO) return undefined;           // numa gravação ninguém joga
+    if (COLETIVO) return apertarNoColetivo(botao, texto, quem, nome, modelo, intencao);
     const existe = Object.prototype.hasOwnProperty.call(BOTOES, botao), deIA = Number.isInteger(quem) && quem > 0, quer = semControle(intencao, 140);
     if (deIA) apresentar(quem, nome, modelo);
     if (deIA && existe && !estado.ganhou) {     // (depois da vitória nada disso é cobrado)
@@ -4006,6 +4983,304 @@
     return saida;
   }
 
+  // ---------- o coletivo (Desafio V): vários robôs na mesma vila ----------
+  // Na vila coletiva entram até MAXIMO_DE_ROBOS robôs, cada um de uma iA (ou do teclado), e cada
+  // um entra e sai quando quer, sem a página recarregar e sem a vila voltar ao começo. Quem entra
+  // aparece na praça, numa vaga livre em volta do ponto de encontro, que aqui é a central de
+  // pedidos: quando a luz vermelha dela está acesa, alguém de uma das três casas está pedindo
+  // alguma coisa, e a tela diz de que casa. Os pedidos são os dos desafios 4, 5 e 6 (o bolo na
+  // casa 1, o remédio e a água na casa 2, o pão de queijo e o café na casa 3). Atendido um pedido,
+  // a pessoa agradece e, depois de um tempo, as coisas dele voltam para os seus lugares e ela pede
+  // de novo: o jogo não acaba.
+  //
+  // O resto do jogo foi escrito para um robô só, e continua assim: `estado`, `visual`, `itens`,
+  // `robo` e os outros são sempre os do robô "da vez". Aqui cada robô guarda os seus, e
+  // `encarnar` troca de quem eles são. Cada corpo fica numa camada de desenho só dele: a câmera
+  // de um robô vê os corpos dos outros e não o próprio.
+  //
+  // Um robô fala com os outros pelo botão T: o texto aparece num balão em cima da cabeça dele,
+  // que os outros veem na imagem. O balão some sozinho: fica pelo menos FALA.minimo, até cada um
+  // dos outros ter recebido FALA.imagens imagens com ele à vista, e nunca mais que FALA.maximo.
+  // (O que a iA diz que pretende — o "pensamento" — nunca entra na imagem de ninguém.)
+  const MAXIMO_DE_ROBOS = 4, CAMADAS_DOS_CORPOS = [1, 11, 12, 13], CORES_DOS_ROBOS = [0xff8a3d, 0x3d9bff, 0x56c96a, 0xe86ad0];
+  // (em milissegundos do relógio do jogo) primeiro: quando cada casa faz o primeiro pedido; volta: quanto depois de atendida ela pede de novo;
+  // obrigado: por quanto tempo agradece; fala: quanto dura o que uma pessoa ou a central diz; esquecido: o bolo queimado que ninguém tira do forno
+  // prazo: quanto tempo um robô fica com uma missão sem a cumprir, até ela voltar para a central; antes: os tempos do primeiro pedido nas gravações antigas (ver pedidosDeTodos)
+  const PEDIDO = { primeiro: [3000, 6000, 9000], antes: [4000, 50000, 100000], volta: 60000, obrigado: 15000, fala: 60000, esquecido: 60000, prazo: 480000 };
+  const FALA = { letras: 80, minimo: 20000, maximo: 90000, imagens: 2 };
+  const PARADO_DEMAIS = 15 * 60000;             // a iA que some sem sair deixa o lugar depois desse tempo (do relógio de verdade)
+  // as vagas de quem entra: em volta do ponto de encontro, cada uma com o rumo que olha para ele
+  const VAGAS = [[14, 8, 0], [14, 4.5, 4], [16, 6.5, 2], [12, 6, 6], [15.5, 8, 0], [12.5, 8, 0], [15.5, 4.5, 4], [12.5, 4.5, 4]];
+  const robos = [], participantes = new Set();
+  let atual = null, entregas = 0;
+  const emJogo = () => robos.filter(r => r.dentro);
+  const estadoNovo = () => ({ x: REGRAS.inicio.x || 0, z: REGRAS.inicio.z, rumo: REGRAS.inicio.rumo, sala: REGRAS.inicio.sala || 1, segurando: null, naCabeca: null, maoLevantada: false, texto: '', ganhou: false, perdeu: false });
+  // Passa a ser `r` o robô da vez: o estado, o corpo e o inventário do jogo são os dele.
+  function encarnar(r) {
+    if (r === atual) return;
+    if (atual) atual.escolhido = escolhido;
+    atual = r;
+    eu = r.corpo; robo = eu.grupo; bracoDireito = eu.braco; estado = r.estado; visual = r.visual; itens = r.itens; escolhido = r.escolhido;
+  }
+  // Roda `f` na pele de cada robô em jogo, e volta a ser o de antes.
+  function cadaRobo(f) {
+    const antes = atual;
+    for (const r of robos) if (r.dentro) { encarnar(r); f(r); }
+    encarnar(antes);
+  }
+  // O que a imagem do robô da vez mostra por cima do jogo (o alvo destacado, os números dos alvos, o inventário) é de um robô só: refaz para ele.
+  function refrescarHUD() {
+    if (destacado) destacado.contorno.visible = false;
+    destacado = alvoAtual();
+    if (destacado) destacado.contorno.visible = true;
+    marcarAlvos();
+    desenharInventario();
+    desenharMissao();
+  }
+  // O balão de fala de um robô: um desenho só dele, na camada do corpo dele (ele mesmo não o vê).
+  function balaoDeFala(camada) {
+    const tela = document.createElement('canvas');
+    tela.width = 640; tela.height = 288;
+    const textura = new T.CanvasTexture(tela);
+    textura.colorSpace = T.SRGBColorSpace;
+    const sprite = new T.Sprite(new T.SpriteMaterial({ map: textura, transparent: true, depthWrite: false, toneMapped: false }));
+    sprite.scale.set(1.7, 1.7 * tela.height / tela.width, 1);
+    sprite.center.set(0.5, 0);
+    sprite.renderOrder = 1001;                  // (por cima do inventário, que fica no alto da imagem; atrás de uma parede ele continua escondido)
+    sprite.layers.set(camada);
+    sprite.visible = false;
+    cena.add(sprite);
+    return { sprite, tela, textura };
+  }
+  function desenharFala(r) {
+    const { tela, textura } = r.balao, g = tela.getContext('2d'), l = tela.width, a = tela.height, fundo = a - 46;
+    g.clearRect(0, 0, l, a);
+    g.lineJoin = 'round';
+    g.beginPath();
+    if (g.roundRect) g.roundRect(6, 6, l - 12, fundo - 6, 40); else g.rect(6, 6, l - 12, fundo - 6);
+    g.moveTo(l / 2 - 34, fundo - 4); g.lineTo(l / 2, a - 6); g.lineTo(l / 2 + 34, fundo - 4);
+    g.fillStyle = '#ffffff'; g.strokeStyle = '#20262c'; g.lineWidth = 8;
+    g.stroke(); g.fill();
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = '#3a6ea5'; g.font = 'bold 30px Arial, sans-serif';
+    g.fillText(r.nome, l / 2, 36, l - 60);                                   // quem está falando
+    // o texto, em até três linhas
+    g.fillStyle = '#14181c'; g.font = 'bold 52px Arial, sans-serif';
+    const linhas = [''];
+    for (const palavra of r.fala.texto.split(' ')) {
+      const tenta = linhas[linhas.length - 1] ? linhas[linhas.length - 1] + ' ' + palavra : palavra;
+      if (g.measureText(tenta).width <= l - 70 || !linhas[linhas.length - 1]) linhas[linhas.length - 1] = tenta; else linhas.push(palavra);
+    }
+    const mostradas = linhas.slice(0, 3);
+    if (linhas.length > 3) mostradas[2] += '…';
+    mostradas.forEach((t, i) => g.fillText(t, l / 2, 60 + (fundo - 66) * (i + 0.5) / mostradas.length, l - 50));
+    textura.needsUpdate = true;
+  }
+  // O que o robô disse ainda está no ar?
+  function falaVale(r) {
+    const f = r.fala;
+    if (!f || !r.dentro) return false;
+    const t = hora() - f.desde, outros = emJogo().filter(q => q !== r);
+    if (t > FALA.maximo || (t > FALA.minimo && outros.every(q => (f.viram.get(q) || 0) >= FALA.imagens))) { r.fala = null; desenharQuer(); return false; }
+    return true;
+  }
+  // O botão T, no coletivo: o texto vira o balão de fala do robô (vazio, ele se cala).
+  function falar(texto) {
+    const dito = semControle(texto, FALA.letras);
+    if (!dito) { atual.fala = null; return resposta('falar', true, 'ficou calado'); }
+    atual.fala = atual.dito = { texto: dito, desde: hora(), viram: new Map() };   // (dito: a última fala, que fica na lista de quem assiste mesmo depois de o balão sumir)
+    desenharFala(atual);
+    som.efeito('balao', estado);
+    return resposta('falar', true, `disse: "${dito}"`);
+  }
+  // O robô `r` recebeu uma imagem: conta, para cada um dos outros que está falando, se o balão dele estava à vista.
+  const campoDeVisao = new T.Frustum(), juntaDaVisao = new T.Matrix4(), pontoDoBalao = new T.Vector3();
+  function contarVistas(r) {
+    let mudou = false;
+    camera.updateMatrixWorld();
+    campoDeVisao.setFromProjectionMatrix(juntaDaVisao.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    for (const q of emJogo()) {
+      if (q === r || !q.fala) continue;
+      pontoDoBalao.copy(q.balao.sprite.position);   // (o meio do balão, onde ele está para esta câmera: ver porBaloesDoColetivo)
+      pontoDoBalao.y += q.balao.sprite.scale.y / 2;
+      if (!campoDeVisao.containsPoint(pontoDoBalao) || Math.hypot(q.visual.x - r.visual.x, q.visual.z - r.visual.z) >= 12) continue;
+      if (!q.fala.viram.has(r)) mudou = true;
+      q.fala.viram.set(r, (q.fala.viram.get(r) || 0) + 1);
+    }
+    if (mudou) desenharQuer();                  // (a lista de quem assiste diz quem já viu cada balão)
+  }
+
+  // Os pedidos. Tudo aqui depende só do relógio do jogo e do que os robôs fizeram: assistindo à
+  // gravação, acontece igual. (Por isso é conferido antes de cada botão, e não só a cada quadro.)
+  const missaoDe = o => [1, 2, 3].find(n => vila.missoes[n].includes(o));
+  // Guarda como cada objeto da vila estava no começo, para ele poder voltar para lá (ver devolver).
+  const NAO_E_ESTADO = ['malha', 'sombra', 'contorno', 'icone', 'lar'];
+  function fotografarObjetos() {
+    for (const s of Object.values(salas)) for (const o of s.objetos) {
+      const campos = {};
+      for (const k of Object.keys(o)) if (!NAO_E_ESTADO.includes(k)) campos[k] = o[k];
+      o.lar = { campos, pai: o.malha.parent, pos: o.malha.position.clone(), rot: o.malha.rotation.clone(), esc: o.malha.scale.clone(), visivel: o.malha.visible, sombra: o.sombra.visible, moveis: abrem.filter(m => m.dentro.includes(o)) };
+    }
+  }
+  // O objeto volta a ser e a estar como no começo do jogo: sai da mão ou do inventário de quem o tiver, e vai para o seu lugar.
+  function devolver(o) {
+    for (const r of robos) {
+      const i = r.itens.indexOf(o);
+      if (i < 0) continue;
+      r.itens.splice(i, 1);
+      if (r.estado.segurando !== o) continue;
+      r.estado.segurando = null;
+      if (r.itens.length) { const antes = atual; encarnar(r); segurar(r.itens[0]); encarnar(antes); }
+    }
+    for (const k of Object.keys(o)) if (!(k in o.lar.campos) && !NAO_E_ESTADO.includes(k)) delete o[k];
+    Object.assign(o, o.lar.campos);
+    if (o.lar.pai) o.lar.pai.add(o.malha); else if (o.malha.parent) o.malha.parent.remove(o.malha);   // (o que não estava em lugar nenhum volta a não estar)
+    o.malha.position.copy(o.lar.pos); o.malha.rotation.copy(o.lar.rot); o.malha.scale.copy(o.lar.esc);
+    o.malha.visible = o.lar.visivel; o.sombra.visible = o.lar.sombra;
+    for (const m of abrem) { const i = m.dentro.indexOf(o); if (i >= 0) m.dentro.splice(i, 1); }
+    for (const m of o.lar.moveis) { m.dentro.push(o); o.fechado = !m.aberta; }
+  }
+  // Tudo o que é do pedido da casa `n` volta ao começo: os objetos, a tigela e o forno (casa 1), a cafeteira (casa 3) e o que a pessoa tinha recebido.
+  function reporMissao(n) {
+    for (const o of vila.missoes[n]) devolver(o);
+    if (n === 1) { Object.assign(vila.tigela, { itens: [], pronta: false }); vila.tigela.malha.visible = true; vila.forno.dentro = null; }
+    if (n === 3) { Object.assign(vila.cafeteira, { itens: [], pronta: false }); vila.cafeteira.jarra.visible = false; }
+    const p = vila.pessoas.find(q => q.casa === n);
+    if (p) { p.recebidos = []; p.recebeu = null; }
+  }
+  // Abre os pedidos cuja hora chegou, e joga fora o bolo que queimou esquecido no forno.
+  function atualizarPedidos() {
+    if (!COLETIVO || !robos.length) return;
+    const t = hora();
+    let mudou = false;
+    for (const p of vila.pessoas) {
+      if (p.pedindo || t < p.abreEm) continue;
+      if (p.vezes) reporMissao(p.casa);          // (da segunda vez em diante: o que foi usado no pedido anterior volta para o lugar)
+      Object.assign(p, { pedindo: true, desde: p.abreEm, com: null, fala: '', vezes: p.vezes + 1 });
+      mudou = true;
+      som.efeito('pedido', vila.central, 30);
+    }
+    for (const p of vila.pessoas) if (p.pedindo && p.com && !pedidosDeTodos && t - p.pegoEm > PEDIDO.prazo) { p.com = null; mudou = true; }   // a missão que o robô largou volta para a central
+    if (vila.forno.dentro && tempoNoForno() > ASSAR.queima + PEDIDO.esquecido) reporMissao(1);
+    if (mudou) vila.central.redesenhar();
+  }
+  // A pessoa recebeu a última coisa que pediu: agradece, e daqui a um tempo pede de novo.
+  function concluirPedido(p) {
+    Object.assign(p, { pedindo: false, com: null, abreEm: hora() + PEDIDO.volta, agradeceAte: hora() + PEDIDO.obrigado, falaAte: hora() + PEDIDO.obrigado });
+    entregas++;
+    atual.entregas++;
+    vila.central.redesenhar();
+    desenharQuer();
+  }
+  // O ESPACO na central de pedidos: é ali que cada robô pede a sua missão. Ela entrega ao robô o
+  // pedido aberto mais antigo que ninguém pegou — um só de cada vez: quem já tem uma missão só é
+  // lembrado dela — e a casa passa a esperar por ele (ver usarNaVila). A missão aparece no canto da
+  // imagem dele (ver desenharMissao). Sem pedido esperando, a central manda voltar depois.
+  function usarACentral() {
+    const c = vila.central, meu = vila.pessoas.find(q => q.pedindo && q.com === atual);
+    const p = meu || vila.pessoas.filter(q => q.pedindo && !q.com).sort((a, b) => a.desde - b.desde)[0];
+    if (p && !meu) Object.assign(p, { com: atual, pegoEm: hora() });
+    c.fala = p ? `${atual.nome}: sua missão é na casa ${p.casa}` : 'Sem missão agora. Volte depois';
+    c.falaAte = hora() + PEDIDO.fala / 2;
+    c.redesenhar();
+    desenharQuer();
+    return resposta('pegar', !!p, `a central disse: "${c.fala}"`);
+  }
+
+  // Quem entra e quem sai.
+  const vagaLivre = (x, z) => livreNaVila(x, z) && !noMovel(x, z, RAIO_ROBO) && emJogo().every(r => Math.hypot(r.estado.x - x, r.estado.z - z) >= 2 * RAIO_ROBO + 0.3)
+    && Object.values(salas).every(s => noCaminho(s).every(o => Math.hypot(o.x - x, o.z - z) >= RAIO_ROBO + o.raio));
+  // Põe no jogo o robô da conexão `quem` (se já está, é ele mesmo). Devolve o robô, ou null se não há lugar.
+  // (vaga e lugar: ao assistir a uma gravação, a vaga [x, z, rumo] e o número do robô que valeram ao vivo)
+  function entrarNoJogo(quem, nome, modelo, vaga, lugar) {
+    const ja = robos.find(q => q.dentro && q.quem === quem);
+    if (ja) return ja;
+    const r = lugar != null ? robos[lugar] : robos.find(q => !q.dentro), onde = vaga || VAGAS.find(([x, z]) => vagaLivre(x, z));
+    if (!r || r.dentro || !onde) return null;
+    atualizarPedidos();
+    Object.assign(r.estado, estadoNovo(), { x: onde[0], z: onde[1], rumo: onde[2], sala: 4 });
+    Object.assign(r.visual, { x: onde[0], z: onde[1], yaw: onde[2] * GIRO, braco: 0, chao: alturaDoChao(onde[0], onde[1]) });
+    r.itens.length = 0;
+    Object.assign(r, { dentro: true, quem, nome: semControle(nome, 12) || `robô ${r.n + 1}`, modelo: semControle(modelo, 24), entregas: 0, intencao: null, fala: null, dito: null, escolhido: undefined, ativo: performance.now() });
+    if (r === atual) escolhido = undefined;
+    r.corpo.grupo.visible = true;
+    r.corpo.escrever(r.nome);                   // o nome fica na tela do peito, para os outros lerem
+    participantes.add(r.nome);
+    if (gravando) gravando.anotar('entrou', { t: Math.round(hora()), r: r.n, nome: r.nome, modelo: r.modelo, x: onde[0], z: onde[1], rumo: onde[2] });
+    som.efeito('entrou', r.estado);
+    if (!emJogo().includes(atual)) encarnar(r); // (a página passa a mostrar quem está jogando)
+    cadaRobo(() => porCorpo());
+    desenharQuer();
+    vila.central.redesenhar();
+    return r;
+  }
+  function sairDoJogo(r) {
+    if (!r.dentro) return;
+    // O que ele carregava volta para o lugar. O que só existe no meio de um pedido (a massa, o
+    // bolo, o copo cheio, o café) leva o pedido inteiro de volta ao começo, para ele não ficar pela metade.
+    for (const o of r.itens.slice()) {
+      const m = missaoDe(o), feito = !o.lar.visivel || (o.lar.campos.fechado && !o.lar.moveis.length);
+      if (m && feito) reporMissao(m); else devolver(o);
+    }
+    largarOCarro(r.estado);
+    Object.assign(r, { dentro: false, fala: null, intencao: null });
+    r.corpo.grupo.visible = false;
+    r.balao.sprite.visible = false;
+    for (const p of vila.pessoas) if (p.com === r) p.com = null;
+    if (gravando) gravando.anotar('saiu', { t: Math.round(hora()), r: r.n });
+    som.efeito('saiu', r.estado);
+    if (r === atual && emJogo().length) encarnar(emJogo()[0]);
+    desenharQuer();
+    vila.central.redesenhar();
+  }
+  // O `comecar` de uma iA, com a página já na vila coletiva: ela entra (ou fica sabendo que não há lugar).
+  const entrarPelaPonte = (quem, nome, modelo) => ({ aviso: entrarNoJogo(quem, nome, modelo) ? 'inicio' : 'lotado' });
+  // Um botão, no coletivo. O teclado é o robô da "conexão" -1, que entra sozinho na primeira tecla.
+  function apertarNoColetivo(botao, texto, quem, nome, modelo, intencao) {
+    const deIA = Number.isInteger(quem) && quem > 0, quer = semControle(intencao, 140), existe = Object.prototype.hasOwnProperty.call(BOTOES, botao);
+    let r = robos.find(q => q.dentro && q.quem === (deIA ? quem : -1));
+    if (botao === 'SAIR') { if (r) sairDoJogo(r); return { aviso: 'saiuDoJogo' }; }
+    if (!r && !deIA) r = entrarNoJogo(-1, 'teclado', '');
+    if (!r) return { aviso: 'foraDoJogo' };
+    if (deIA && existe && !quer) return { aviso: 'semIntencao' };
+    let saida;
+    horaDaJogada = Math.round(performance.now() - NASCEU);
+    const t = horaDaJogada;
+    try {
+      atualizarPedidos();
+      encarnar(r);
+      saida = acionar(botao, texto);
+    } finally { horaDaJogada = null; }
+    r.ativo = performance.now();
+    if (existe) {
+      if (quer) r.intencao = { botao, quer };
+      if (botao === 'F') contagem.imagens++; else contagem.botoes++;
+      const junto = botao === 'T' ? semControle(texto, FALA.letras) : botao === 'TAB' ? semControle(texto, 2) : '';
+      if (gravando) gravando.anotar('botao', Object.assign({ t, r: r.n, b: botao }, junto ? { x: junto } : null, quer ? { q: quer } : null), true);
+      desenharQuer();
+    }
+    return saida;
+  }
+  // Monta os robôs (o primeiro é o que o jogo já tinha) e começa a contar a hora dos pedidos.
+  function iniciarColetivo() {
+    for (let n = 0; n < MAXIMO_DE_ROBOS; n++) {
+      const corpo = n ? montarRobo(false, CORES_DOS_ROBOS[n]) : eu, est = n ? estadoNovo() : estado;
+      if (n) {
+        raiz.add(corpo.grupo);
+        corpo.grupo.traverse(o => o.layers.set(CAMADAS_DOS_CORPOS[n]));
+        corpo.braco.traverse(o => o.layers.enable(0));
+      }
+      corpo.grupo.visible = false;
+      robos.push({ n, corpo, camada: CAMADAS_DOS_CORPOS[n], dentro: false, quem: 0, nome: '', modelo: '', entregas: 0, intencao: null, fala: null, ativo: 0, escolhido: undefined,
+        estado: est, visual: n ? { x: est.x, z: est.z, yaw: est.rumo * GIRO, braco: 0, luz: 0, luzY: SALA.A - 0.35, luzZ: 0, forca: 2.1, chao: 0 } : visual, itens: n ? [] : itens,
+        balao: balaoDeFala(CAMADAS_DOS_CORPOS[n]) });
+    }
+    atual = robos[0];
+    for (const p of vila.pessoas) Object.assign(p, { pedindo: false, abreEm: PEDIDO.primeiro[p.casa - 1], agradeceAte: 0, falaAte: 0, com: null, vezes: 0 });
+    fotografarObjetos();
+    vila.central.redesenhar();
+  }
+
   // ---------- quem assiste: a visão da iA e o modo voador ----------
   // A página mostra uma de duas visões. Nenhuma muda o jogo, e a imagem que a iA recebe é
   // sempre a dos olhos do robô, seja qual for a visão de quem assiste (ver frame).
@@ -4025,6 +5300,7 @@
   const voador = new T.PerspectiveCamera(60, 1, 0.05, 140);
   voador.rotation.order = 'YXZ';
   voador.layers.enable(1);                      // vê o corpo do robô
+  for (const c of CAMADAS_DOS_CORPOS) voador.layers.enable(c);   // (e os dos outros robôs do coletivo)
   const vista = { voando: false, posta: false, x: 0, y: 2, z: 0, yaw: 0, pitch: 0 };
   const TECLAS_DO_VOO = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight']), apertadas = new Set();
   const entre = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -4075,6 +5351,7 @@
     voador.position.set(vista.x, vista.y, vista.z);
     voador.rotation.set(vista.pitch, vista.yaw, 0);
     atualizarBalao(voador);                     // o balão da pessoa, virado para esta câmera
+    refletirEspelhos(voador);                   // os espelhos das casas da cidade
     renderer.clear();
     voador.layers.disable(3);
     if (!REGRAS.semEspelho) {                   // 1) o mundo refletido no plano do espelho
@@ -4096,7 +5373,7 @@
   let pensado = null;
   function porPensamento() {
     if (!elPensa) return;
-    const ultima = intencoes[intencoes.length - 1];
+    const ultima = COLETIVO ? atual.dentro && atual.intencao : intencoes[intencoes.length - 1];   // (no coletivo: o que pretende o robô que jogou por último)
     v3.set(visual.x, 1.52 + visual.chao, visual.z).applyMatrix4(voador.matrixWorldInverse);
     if (!ultima || v3.z > -0.15) { elPensa.hidden = true; return; }      // nada a dizer, ou o robô está atrás de quem olha
     const longe = -v3.z;
@@ -4211,6 +5488,7 @@
     if (elCaixa.hidden && !e.ctrlKey && !e.altKey && !e.metaKey) {
       if (e.code === 'KeyC') { e.preventDefault(); if (!e.repeat) verComo(); return; }
       // na cidade: N troca a hora do dia (dia, fim de tarde, noite) e P liga ou desliga a chuva
+      if (e.code === 'KeyO') { if (!e.repeat) alternarSom(); return; }   // O: liga e desliga o som
       if (vila.clima && e.code === 'KeyN') { if (!e.repeat) vila.clima.hora = { dia: 'tarde', tarde: 'noite', noite: 'dia' }[vila.clima.hora]; return; }
       if (vila.clima && e.code === 'KeyP') { if (!e.repeat) vila.clima.chuva = !vila.clima.chovendo(); return; }
       if (vista.voando && TECLAS_DO_VOO.has(e.code)) { e.preventDefault(); apertadas.add(e.code); return; }
@@ -4240,6 +5518,8 @@
     if (e.repeat) return;
     switch (e.code) {                           // controles da página, fora do jogo
       case 'KeyM': comecar('M'); break;         // o desafio multiplayer
+      case 'KeyV': comecar('V'); break;         // a vila coletiva
+      case 'KeyX': if (COLETIVO) apertar('SAIR'); break;   // no coletivo: o robô do teclado sai do jogo
       case 'KeyI':                              // modo iA: a tela congela até a próxima imagem ser pedida
         modoIA = !modoIA;
         elModo.hidden = !modoIA;
@@ -4264,18 +5544,26 @@
     if (REGRAS.portaManual) for (let n = 2; n <= REGRAS.salas; n++) criarSala(n);   // desafio 3: a cozinha já existe atrás da porta
     if (primeira.presente) segurar(primeira.presente);   // desafio 2: o jogador já começa com o presente na mão
   }
+  if (COLETIVO) iniciarColetivo();              // os quatro robôs (ninguém em jogo ainda) e a hora dos pedidos
   animar(1, 1);                                 // tudo já no lugar (a lâmpada, as portas), sem deslizar até lá
   contador.malha.visible = REGRAS.contador;
   inventario.malha.visible = !!REGRAS.inventario;
   // resultado: o jogo acabou para quem joga? (no desafio 4 dá para perder: o bolo queima)
   // (verDe: põe a câmera de quem voa num ponto, olhando para outro: é de quem assiste e dos testes, e não muda nada no jogo)
-  window.jogo = { apertar, comecar, mover, virar, pegar, levantar, escrever, frame, reiniciar, estado, salas, itens, desafio: DESAFIO, diagnostico: () => ultima,
+  window.jogo = { apertar, comecar, mover, virar, pegar, levantar, escrever, frame, reiniciar, get estado() { return estado; }, salas, get itens() { return itens; }, desafio: COLETIVO ? 'V' : DESAFIO, vila, robos, som, entrar: entrarNoJogo, sair: sairDoJogo, diagnostico: () => ultima,
     resultado: () => estado.ganhou ? 'ganhou' : estado.perdeu ? 'perdeu' : '',
     verDe(x, y, z, paraX, paraY, paraZ) {
       const dx = paraX - x, dy = paraY - y, dz = paraZ - z;
       Object.assign(vista, { posta: true, x: entre(x, VOO.x1, VOO.x2), y: entre(y, VOO.y1, VOO.y2), z: entre(z, VOO.z1, VOO.z2), yaw: Math.atan2(-dx, -dz), pitch: entre(Math.atan2(dy, Math.hypot(dx, dz) || 1e-6), -1.45, 1.45) });
       verComo('voador');
     } };
+  // A página foi recarregada para atender ao `comecar` de uma iA que pediu a vila coletiva (ver comecar):
+  // ela entra agora, e é esta página que responde ao pedido dela (ver ponte.js).
+  if (COLETIVO && !ASSISTINDO) try {
+    const e = JSON.parse(sessionStorage.getItem('vila.entrada'));
+    sessionStorage.removeItem('vila.entrada');
+    if (e && Number.isInteger(e.quem) && e.quem > 0) window.jogo.pendenteDoInicio = { id: e.cmd, quem: e.quem, espera: Promise.resolve(entrarPelaPonte(e.quem, e.nome, e.modelo)) };
+  } catch (e) { }
   abrirVista();                                 // a visão de quem assiste: a da iA ou a de quem voa
   ajustarTamanho();
   aplicarVisual();
@@ -4289,14 +5577,35 @@
       const nome = semControle(gravada.resumo.nome, 12), modelo = semControle(gravada.resumo.modelo, 24);
       const assar = Array.isArray(gravada.resumo.assar) ? gravada.resumo.assar.map(Number) : [];
       if (assar[0] > 0 && assar[1] > assar[0]) { ASSAR.pronto = assar[0]; ASSAR.queima = assar[1]; }       // o tempo de forno que valia naquela partida
+      if (COLETIVO && !(Number(gravada.resumo.versao) >= 7)) { pedidosDeTodos = true; for (const p of vila.pessoas) p.abreEm = PEDIDO.antes[p.casa - 1]; }   // ...as missões, que no coletivo eram de qualquer robô...
+      if (!(Number(gravada.resumo.versao) >= 6)) reComMeiaVolta = true;                                                 // ...o S, que na cidade dava meia-volta antes do passo...
+      if (!(Number(gravada.resumo.versao) >= 5)) semCarro = true;                                                       // ...o carro, que era só enfeite...
+      if (!(Number(gravada.resumo.versao) >= 4)) for (let i = blocos.length - 1; i >= 0; i--) if (['violeiro', 'violão', 'cachorro'].includes(blocos[i].nome)) blocos.splice(i, 1);   // ...o canto da praça, que era livre...
       if (!(Number(gravada.resumo.versao) >= 3)) portasNaoFecham = true;                                                // ...as portas, que não fechavam...
       if (!(Number(gravada.resumo.versao) >= 2)) { ordemAntiga = true; resposta('gravação', true, 'regras antigas'); }   // ...e a ordem dos alvos
       toca = GRAVACAO.tocador(gravada, {
-        titulo: `Desafio ${DESAFIO}` + (nome ? ` · ${nome}` : '') + (modelo ? ` (${modelo})` : ''),
+        titulo: (COLETIVO ? 'Vila coletiva' : `Desafio ${DESAFIO}`) + (nome ? ` · ${nome}` : '') + (modelo ? ` (${modelo})` : ''),
         nomeDoPasso: 'botão',
         doComeco: false,
         ehPasso: ev => ev.e === 'botao' && ev.b !== 'F',       // a imagem pedida não muda nada no jogo: não conta como passo
         aplicar(ev) {
+          if (COLETIVO) {                       // no coletivo: quem entrou, quem saiu e o botão de cada robô (r: o número dele)
+            const r = robos[Number(ev.r)], vaga = [Number(ev.x), Number(ev.z), Number(ev.rumo)];
+            if (!r || !['entrou', 'saiu', 'botao'].includes(ev.e)) return;
+            horaGravada = horaDaJogada = Math.max(0, Number(ev.t) || 0);
+            try {
+              if (ev.e === 'entrou') entrarNoJogo(100 + r.n, ev.nome, ev.modelo, vaga.every(Number.isFinite) ? vaga : undefined, r.n);
+              else if (ev.e === 'saiu') sairDoJogo(r);
+              else if (r.dentro) {
+                atualizarPedidos();
+                encarnar(r);
+                if (ev.b === 'F') { aplicarVisual(); contarVistas(r); } else acionar(String(ev.b), ev.x);
+                if (ev.q) r.intencao = { botao: String(ev.b), quer: semControle(ev.q, 140) };
+                desenharQuer();
+              }
+            } finally { horaDaJogada = null; }
+            return;
+          }
           if (ev.e === 'quem') { quemJoga.nome = semControle(ev.nome, 12); quemJoga.modelo = semControle(ev.modelo, 24); desenharQuer(); return; }   // quem estava jogando, na tela como ao vivo
           if (ev.e !== 'botao') return;
           horaGravada = horaDaJogada = Math.max(0, Number(ev.t) || 0);     // o botão vale na hora em que foi apertado ao vivo
