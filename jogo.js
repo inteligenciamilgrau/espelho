@@ -326,7 +326,10 @@
       balao: (t, v) => { nota(700, 0.05, 0.14 * v, t, 'triangle'); nota(900, 0.06, 0.14 * v, t + 0.05, 'triangle'); },
       latido: (t, v) => { for (const d of [0, 0.19]) { nota(420, 0.1, 0.3 * v, t + d, 'sawtooth', 210); chiado(0.08, 0.2 * v, t + d, 900, 500, 1.5); } },
       arrulho: (t, v) => { for (let i = 0; i < 3; i++) nota(330 - i * 12, 0.22, 0.09 * v, t + i * 0.27, 'sine', 290); },
+      buzina: (t, v) => { for (const d of [0, 0.22]) { nota(440, 0.16, 0.2 * v, t + d, 'square'); nota(554, 0.16, 0.16 * v, t + d, 'square'); } },
       motor: (t, v) => { nota(62, 0.3, 0.22 * v, t, 'sawtooth', 96); chiado(0.3, 0.12 * v, t, 220, 320, 0.8); },
+      cancela: (t, v) => { nota(150, 0.42, 0.1 * v, t, 'sawtooth', 250); nota(990, 0.05, 0.1 * v, t + 0.44, 'square'); },          // o motorzinho que levanta o braço, e o clique lá em cima
+      cancelaFecha: (t, v) => { nota(250, 0.42, 0.1 * v, t, 'sawtooth', 150); nota(120, 0.08, 0.3 * v, t + 0.44, 'sine', 70); },   // ...e o que o desce, e a batida no apoio
       asas: (t, v) => { for (let i = 0; i < 7; i++) chiado(0.05, 0.22 * v, t + i * 0.07, 1400, 700, 1); },
     };
     // Toca um efeito. `onde` ({ x, z }): o lugar em que ele acontece, para soar mais baixo de longe.
@@ -342,6 +345,9 @@
       const m = String(mensagem);
       const nome = comando.startsWith('dirigir') ? (ok ? 'motor' : 'batida')
         : /^(entrou no|saiu do) carro/.test(m) ? 'fechar'
+        : m.startsWith('o carro vai sozinho') ? 'motor'
+        : m.startsWith('chamou o carro') ? 'pedido'
+        : m.startsWith('ligou a chave') ? 'sino'
         : comando.startsWith('mover') ? (ok ? 'passo' : m.startsWith('bloqueado') ? 'batida' : '')
         : comando.startsWith('virar') || comando === 'levantar' ? (ok ? 'giro' : '')
         : comando === 'trocar' || comando === 'escolher' || comando.startsWith('escrever') ? (ok ? 'tique' : '')
@@ -421,13 +427,30 @@
       try { localStorage.setItem(NIVEIS, JSON.stringify(nivel)); } catch (e) { }
       if (qual === 'efeitos' && efeitos) efeitos.gain.setTargetAtTime(nivel.efeitos, ctx.currentTime, 0.05);
     }
+    // Um som de fundo que não para (a cachoeira, a água da usina, o motor do carro): um chiado filtrado, no
+    // volume dado (de 0 a 1: quanto se ouve dele de onde está quem ouve). Vai com os efeitos.
+    const FUNDOS = { cachoeira: { tipo: 'bandpass', freq: 850, q: 0.35, ganho: 0.55 }, usina: { tipo: 'lowpass', freq: 300, q: 0.7, ganho: 0.6 }, motor: { tipo: 'lowpass', freq: 150, q: 3, ganho: 0.55 } }, fundos = {};
+    function fundo(nome, volume) {
+      if (!ctx || ctx.state !== 'running' || !FUNDOS[nome]) return;
+      if (!fundos[nome]) {
+        if (!ligado || volume <= 0.001) return;
+        const fonte = ctx.createBufferSource(), filtro = ctx.createBiquadFilter(), g = ctx.createGain();
+        fonte.buffer = ruidoBase; fonte.loop = true;
+        filtro.type = FUNDOS[nome].tipo; filtro.frequency.value = FUNDOS[nome].freq; filtro.Q.value = FUNDOS[nome].q;
+        g.gain.value = 0;
+        fonte.connect(filtro); filtro.connect(g); g.connect(efeitos);
+        fonte.start(0, Math.random());
+        fundos[nome] = g;
+      }
+      fundos[nome].gain.setTargetAtTime(ligado ? volume * FUNDOS[nome].ganho : 0, ctx.currentTime, 0.3);
+    }
     function alternar() {
       ligado = !ligado;
       try { localStorage.setItem(CHAVE, ligado ? 'ligado' : 'desligado'); } catch (e) { }
       if (ligado) acordar();
       return ligado;
     }
-    return { efeito, doQueAconteceu, musica, chover, alternar, ajustar, get niveis() { return nivel; }, ouvir(x, z) { ouvinte.x = x; ouvinte.z = z; }, get ligado() { return ligado; }, get batida() { return batida; } };
+    return { efeito, doQueAconteceu, musica, chover, fundo, alternar, ajustar, get niveis() { return nivel; }, ouvir(x, z) { ouvinte.x = x; ouvinte.z = z; }, get ligado() { return ligado; }, get batida() { return batida; } };
   })();
 
   // ---------- os espelhos das casas da cidade ----------
@@ -954,12 +977,14 @@
       porta = { folha, luz, aberta: false, vis: 0 };
       if (REGRAS.portaManual) {
         // Quem abre é o jogador: a porta passa a ser um alvo do ESPACO (nome, lugar e borda de
-        // destaque, como os objetos). A borda é uma moldura em volta do vão, dos dois lados da parede.
-        const borda = new T.Group(), e = ESPESSURA + 0.07, b = 0.05;
+        // destaque, como os objetos). A borda é uma moldura fina por dentro do vão (dois montantes e a
+        // travessa), no meio da parede e com uma folga dela, como a das portas da cidade (ver
+        // portaDaRua). Em volta do vão, por fora, os lados dela ficavam no mesmo plano do batente: com a
+        // porta aberta, o batente inteiro aparecia azul, e rasgado, porque as duas superfícies disputavam os mesmos pixels.
+        const borda = new T.Group(), e = 0.07, b = 0.05, folga = 0.004, meio = LARGURA_PORTA / 2 - b / 2 - folga;
         w.add(borda);
-        malha(borda, new T.BoxGeometry(e, ALTURA_PORTA, b), M.destaque, 0, ALTURA_PORTA / 2, z1 - b / 2);
-        malha(borda, new T.BoxGeometry(e, ALTURA_PORTA, b), M.destaque, 0, ALTURA_PORTA / 2, z2 + b / 2);
-        malha(borda, new T.BoxGeometry(e, b, LARGURA_PORTA + 2 * b), M.destaque, 0, ALTURA_PORTA + b / 2, Z_PORTA);
+        for (const lado of [-1, 1]) malha(borda, new T.BoxGeometry(e, ALTURA_PORTA - folga, b), M.destaque, 0, (ALTURA_PORTA - folga) / 2, Z_PORTA + lado * meio);
+        malha(borda, new T.BoxGeometry(e, b, 2 * meio - b), M.destaque, 0, ALTURA_PORTA - b / 2 - folga, Z_PORTA);
         borda.visible = false;
         Object.assign(porta, { nome: 'porta', x: cx + L / 2, z: Z_PORTA, contorno: borda });
       }
@@ -1238,7 +1263,7 @@
   // salas (os dois lugares que ele liga), aberta, vis, folha (a porta, se houver) e contorno }.
   const portasDaVila = [];
   // (pedidos: o que a pessoa quer — entregar tudo a ela é a vitória; filtro, copo e copoCheio: a água do desafio 5; cafeteira e cafe: o café do 6)
-  const vila = { carro: null, clima: null, vida: null, pessoas: [], central: null, missoes: null, pessoa: null, tigela: null, forno: null, massa: null, bolo: null, encontro: null, pedidos: [], filtro: null, copo: null, copoCheio: null, cafeteira: null, cafe: null };
+  const vila = { diario: [], pontos: [], cancelas: [], chave: null, bica: null, jarro: null, jarroCheio: null, carro: null, aguas: { caem: [], espumas: [], nevoas: [], parada: null }, focarSol: null, clima: null, vida: null, pessoas: [], central: null, missoes: null, pessoa: null, tigela: null, forno: null, massa: null, bolo: null, encontro: null, pedidos: [], filtro: null, copo: null, copoCheio: null, cafeteira: null, cafe: null };
   // O ponto cabe nesse pedaço, a pelo menos `m` da beirada dele?
   const cabeNaParte = (p, x, z, m) => p.r ? Math.hypot(x - p.cx, z - p.cz) <= p.r - m : x >= p.x1 + m && x <= p.x2 - m && z >= p.z1 + m && z <= p.z2 - m;
   const cabeNoLugar = (a, x, z, m) => a.partes.some(p => cabeNaParte(p, x, z, m));
@@ -1279,6 +1304,25 @@
   function usarNaVila() {
     const v = vila, alvo = alvoAtual(), o = estado.segurando;
     escolhido = undefined;
+    if (estado.dirigindo && estado.dirigindo.viagem) return resposta('pegar', false, 'o carro está andando');
+    if (alvo && alvo.ehDestino) return viajar(alvo);
+    if (alvo && alvo.ehPonto) return chamarCarro(alvo);
+    if (alvo && alvo === v.chave) {             // a chave geral da vila, na hidrelétrica: só se liga (quem a desliga é a falta de luz: ver o rodízio dos pedidos)
+      if (alvo.ligada) return resposta('pegar', false, 'a chave geral já está ligada');
+      alvo.ligada = true;
+      alvo.mostrar();
+      return resposta('pegar', true, 'ligou a chave geral: a luz da vila voltou');
+    }
+    if (alvo && alvo === v.bica) {              // o garrafão vazio da mão sai da bica cheio de água da cachoeira (é outro objeto, como o copo no filtro)
+      const cheio = v.jarroCheio;
+      robo.remove(o.malha);
+      o.entregue = true;
+      itens[itens.indexOf(o)] = cheio;
+      estado.segurando = null;
+      cheio.fechado = false;
+      segurar(cheio);
+      return resposta('pegar', true, 'encheu o garrafão na bica');
+    }
     if (alvo && alvo.ehCarro) return estado.dirigindo ? sairDoCarro() : entrarNoCarro();
     if (alvo && alvo.ehCentral) return usarACentral();
     if (alvo && alvo.ehPessoa) {
@@ -1298,6 +1342,12 @@
         return resposta('pegar', !o, o ? `a pessoa não quis: ${o.nome} — disse: "${alvo.fala}"` : `a pessoa disse: "${alvo.fala}"`);
       }
       if (COLETIVO) alvo.falaAte = hora() + PEDIDO.fala;   // (o balão do que ela diz fica um tempo, e some)
+      if (COLETIVO && alvo.tarefa) {            // o pedido que não é de trazer coisa nenhuma (a casa sem luz): está atendido quando a tarefa está feita e o robô volta para contar
+        if (!alvo.tarefa()) { alvo.fala = FALAS.pedido; return resposta('pegar', true, `a pessoa disse: "${alvo.fala}"`); }
+        concluirPedido(alvo);
+        alvo.fala = FALAS.agradecimento;
+        return resposta('pegar', true, `a pessoa disse: "${alvo.fala}" — pedido da casa ${alvo.casa} atendido`);
+      }
       if (!o) {                                 // de mão vazia: fala com ela, e ela diz o que quer (ou o que ainda falta)
         alvo.fala = alvo.recebidos.length ? FALAS.falta[alvo.pedidos.indexOf(falta[0])] : FALAS.pedido;
         return resposta('pegar', true, `a pessoa disse: "${alvo.fala}"`);
@@ -1432,17 +1482,171 @@
   }
 
   // ---------- o carro ----------
-  // O carro da vila pode ser dirigido. Nada no jogo pede isso: é só uma coisa que existe e que
-  // um robô curioso pode experimentar. De frente para ele, o ESPACO entra; lá dentro, W e S andam
-  // para a frente e de ré, A e D viram (45 graus, parado), Q e E não fazem nada, e o ESPACO sai,
-  // para o lado da porta do motorista (ou para o outro, se desse não der). O carro só anda no
-  // asfalto — as quatro ruas, a rotatória e a entrada onde fica estacionado — e não passa por
-  // cima de ninguém nem de nada. Quem dirige vê por cima do capô; o corpo do robô some dentro dele.
-  const CARRO = { meio: 1.65, lado: 0.73, folga: 0.6, raio: 0.8, saida: 1.55 };
+  // O carro da vila anda sozinho. Nada no jogo pede que se use: é uma coisa que existe e que um
+  // robô curioso pode experimentar. De frente para ele, o ESPACO entra. Lá dentro a imagem mostra
+  // um mapa com os destinos — a praça, a hidrelétrica e a cachoeira —, e cada um é um alvo do
+  // ESPACO (o TAB troca; o último alvo é sair do carro). Escolhido o destino, o carro vai até lá
+  // pelas ruas, sem ninguém dirigir: dá a volta na rotatória, pega a estrada e para no ponto de
+  // parada, de onde o robô desce a pé. Os botões de andar e de virar não fazem nada ali dentro.
+  //
+  // A viagem leva tempo, do relógio do jogo: onde o carro está a cada instante depende só da
+  // rota e da hora (ver atualizarCarro) — assistindo à gravação, a viagem é a mesma. Enquanto
+  // ele anda não se desce nem se escolhe outro destino. Com um robô a pé na frente, o carro para
+  // e espera (e buzina); parado, ele barra o caminho como um móvel. Em cada ponto de parada há um
+  // "ponto do carro", um totem com um botão: o ESPACO nele chama o carro, que vem vazio de onde estiver.
+  // Quem vai nele vê de dentro, do banco da frente, pelo para-brisa (ver aplicarVisual); os vidros são
+  // transparentes, e de fora vê-se a cabeça do robô lá dentro (ver porCorpo).
+  //
+  // (Nas gravações de antes da versão 8 o carro era dirigido à mão — W e S, A e D —, só no
+  // asfalto da cidade: ver carroManual, naPista e dirigir.)
+  // (passo: metros por segundo, na viagem; banco: quanto o robô fica acima do chão, sentado lá dentro — a cabeça na altura das
+  // janelas, o resto dentro da lataria; assento: onde fica o corpo dele, em metros para a frente do meio do carro; olho: e os olhos)
+  const CARRO = { meio: 1.65, lado: 0.73, folga: 0.6, raio: 0.8, saida: 1.55, descida: 1.14, passo: 11, banco: 0.14, assento: -0.03, olho: 0.15 };
   let reComMeiaVolta = false;                   // (assistindo a uma gravação de antes de o S, na cidade, recuar sem virar: ver o fim do arquivo)
   let pedidosDeTodos = false;                   // (assistindo a uma gravação do coletivo de antes de cada robô ter a sua missão: qualquer um atendia qualquer casa)
-  let semCarro = false;                         // (assistindo a uma gravação de antes de o carro ser dirigível: ver o fim do arquivo)
-  // O meio do carro pode estar nesse ponto? (o asfalto, com uma folga para as rodas)
+  let semCarro = false;                         // (assistindo a uma gravação de antes de o carro ser um alvo: ver o fim do arquivo)
+  let prazoFixo = false;                        // (assistindo a uma gravação do coletivo da versão 7: a missão tinha um prazo fixo, de 8 minutos)
+  let carroManual = false;
+  let carroNaoPara = false;                     // (assistindo a uma gravação da versão 8: o carro em viagem não parava para ninguém)
+  let semRodizio = false;                       // (assistindo a uma gravação do coletivo de antes da versão 9: cada casa só tinha o pedido dela)                      // (assistindo a uma gravação de antes de o carro andar sozinho)
+  // Os pontos de parada. angulo: em que ponto da rotatória fica a boca da estrada de cada um (o
+  // carro roda no sentido em que o ângulo cresce, e em todo ponto de parada a esquerda dele é o
+  // lado de fora, onde o robô desce); x, z e rumo: onde e como o carro fica parado.
+  const R_DA_PISTA = (CIDADE.praca + CIDADE.pista) / 2, QUARTO = Math.PI / 2;
+  const DESTINOS = [
+    { id: 'praca', nome: 'praça', sala: 4, angulo: 3 * QUARTO / 2, x: CIDADE.x + R_DA_PISTA * Math.cos(3 * QUARTO / 2), z: CIDADE.z + R_DA_PISTA * Math.sin(3 * QUARTO / 2), rumo: 1, desceADireita: true },   // (na praça desce-se para dentro dela, que é a direita do carro)
+    { id: 'usina', nome: 'hidrelétrica', sala: 13, angulo: QUARTO, x: CIDADE.x, z: 90, rumo: 2, retorno: { x: CIDADE.x, z: 84, r: 6, entra: 3 * QUARTO } },
+    { id: 'cachoeira', nome: 'cachoeira', sala: 14, angulo: 0, x: 106, z: CIDADE.z, rumo: 4, retorno: { x: 100, z: CIDADE.z, r: 6, entra: 2 * QUARTO } },
+  ];
+  for (const d of DESTINOS) Object.assign(d, { ehDestino: true, contorno: { visible: false } });
+  // Um arco de círculo, do ângulo `de` ao `ate` (de < ate), em pontos a menos de um metro um do outro.
+  const arco = (cx, cz, r, de, ate) => {
+    const n = Math.max(2, Math.ceil((ate - de) * r / 0.8)), pontos = [];
+    for (let i = 0; i <= n; i++) { const a = de + (ate - de) * i / n; pontos.push([cx + r * Math.cos(a), cz + r * Math.sin(a)]); }
+    return pontos;
+  };
+  // A rota de um lugar ao outro: sai do ponto de parada, vai até a rotatória, roda nela até a boca
+  // da outra estrada e segue até o ponto de parada de lá. `de`: 'garagem' ou o id de um destino.
+  function rotaDoCarro(de, ate) {
+    const C = CIDADE, FOLGA = 0.42, origem = DESTINOS.find(d => d.id === de), destino = DESTINOS.find(d => d.id === ate), pontos = [];
+    const boca = a => [C.x + (R_DA_PISTA + 1.7) * Math.cos(a), C.z + (R_DA_PISTA + 1.7) * Math.sin(a)];   // onde a estrada desse ângulo encontra a rotatória
+    let sai;                                                                                             // o ângulo em que o carro entra na rotatória
+    if (!origem) { pontos.push([-4, 1.95], [-4, 5.2], [-2.6, C.z], boca(Math.PI)); sai = Math.PI; }      // da garagem: sai da entrada de carro e segue a rua do oeste
+    else if (origem.retorno) {                                                                           // de um passeio: o resto da volta do retorno, e a estrada de volta
+      const r = origem.retorno, para = r.entra - Math.PI;                                                // (o ângulo, no retorno, em que o carro fica parado: do outro lado da boca)
+      pontos.push(...arco(r.x, r.z, r.r, para, r.entra - FOLGA));
+      pontos.push([r.x + (r.r + 1.7) * Math.cos(r.entra), r.z + (r.r + 1.7) * Math.sin(r.entra)], boca(origem.angulo));
+      sai = origem.angulo;
+    } else { pontos.push([origem.x, origem.z]); sai = origem.angulo; }                                   // da praça: já está na rotatória
+    let chega = destino.angulo;
+    while (chega <= sai + 1e-6) chega += 2 * Math.PI;
+    pontos.push(...arco(C.x, C.z, R_DA_PISTA, sai + (origem && !origem.retorno ? 0 : FOLGA), chega - (destino.retorno ? FOLGA : 0)));
+    if (destino.retorno) {                                                                               // a estrada até o retorno, e meia volta nele até o ponto de parada
+      const r = destino.retorno;
+      pontos.push(boca(destino.angulo), [r.x + (r.r + 1.7) * Math.cos(r.entra), r.z + (r.r + 1.7) * Math.sin(r.entra)]);
+      pontos.push(...arco(r.x, r.z, r.r, r.entra + FOLGA, r.entra + 2 * QUARTO));
+    }
+    // arredonda as quinas (duas passadas, cortando cada canto) e mede o caminho
+    let linha = pontos;
+    for (let vez = 0; vez < 2; vez++) {
+      const nova = [linha[0]];
+      for (let i = 0; i + 1 < linha.length; i++) {
+        const [ax, az] = linha[i], [bx, bz] = linha[i + 1];
+        nova.push([ax * 0.75 + bx * 0.25, az * 0.75 + bz * 0.25], [ax * 0.25 + bx * 0.75, az * 0.25 + bz * 0.75]);
+      }
+      nova.push(linha[linha.length - 1]);
+      linha = nova;
+    }
+    const soma = [0];
+    for (let i = 1; i < linha.length; i++) soma.push(soma[i - 1] + Math.hypot(linha[i][0] - linha[i - 1][0], linha[i][1] - linha[i - 1][1]));
+    return { pontos: linha, soma, total: soma[soma.length - 1] };
+  }
+  // Onde fica o ponto que está a `s` metros do começo da rota.
+  function pontoDaRota(v, s) {
+    const d = Math.max(0, Math.min(v.total, s));
+    let i = v.ultimo || 1;
+    while (i > 1 && v.soma[i - 1] > d) i--;
+    while (i < v.soma.length - 1 && v.soma[i] < d) i++;
+    v.ultimo = i;
+    const u = (d - v.soma[i - 1]) / Math.max(1e-9, v.soma[i] - v.soma[i - 1]), a = v.pontos[i - 1], b = v.pontos[i];
+    return { x: a[0] + (b[0] - a[0]) * u, z: a[1] + (b[1] - a[1]) * u };
+  }
+  // A viagem tem o seu relógio (`tau`), que só anda quando o carro anda: ele sai e chega devagar, e
+  // PARA se houver um robô a pé na frente (ver atualizarCarro). Onde ele está, com `tau` milissegundos de viagem:
+  const caminhoAndado = (v, tau) => { const u = Math.max(0, Math.min(1, tau / v.dura)); return v.total * u * u * (3 - 2 * u); };
+  function poseDoCarro(v, tau) {
+    const s = caminhoAndado(v, tau), aqui = pontoDaRota(v, s), atras = pontoDaRota(v, s - 1.1), adiante = pontoDaRota(v, s + 1.1);
+    let yaw = Math.atan2(-(adiante.x - atras.x), -(adiante.z - atras.z));
+    while (yaw - v.yaw > Math.PI) yaw -= 2 * Math.PI;                  // (sem dar a volta ao passar de 180 graus)
+    while (v.yaw - yaw > Math.PI) yaw += 2 * Math.PI;
+    v.yaw = yaw;
+    return { x: aqui.x, z: aqui.z, yaw, chegou: tau >= v.dura };
+  }
+  // O carro sai para um destino: com quem está nele (ver viajar) ou vazio, chamado de um ponto (ver chamarCarro).
+  function partir(c, destino, chamou) {
+    const rota = rotaDoCarro(c.onde, destino.id);
+    c.viagem = Object.assign(rota, { desde: hora(), ultima: hora(), tau: 0, dura: Math.round((rota.total / CARRO.passo + 1.6) * 1000), destino, yaw: c.rumo * GIRO, ultimo: 1, parado: false, chamou: chamou || null });
+    c.onde = destino.id;
+  }
+  // O ESPACO num destino, dentro do carro parado: a viagem começa.
+  function viajar(destino) {
+    partir(estado.dirigindo, destino);
+    escolhido = undefined;
+    return resposta('pegar', true, `o carro vai sozinho para: ${destino.nome}`);
+  }
+  // O ESPACO num ponto do carro (há um em cada ponto de parada: na praça, na hidrelétrica e na
+  // cachoeira): chama o carro, que vem vazio de onde estiver, como um carro de aplicativo.
+  function chamarCarro(ponto) {
+    const c = vila.carro, d = ponto.destino;
+    escolhido = undefined;
+    if (c.viagem) return resposta('pegar', false, c.viagem.destino === d ? 'o carro já está vindo' : 'o carro está em viagem: tente daqui a pouco');
+    if (c.motorista) return resposta('pegar', false, 'o carro está ocupado');
+    if (c.onde === d.id) return resposta('pegar', false, 'o carro já está aqui');
+    partir(c, d, estado);
+    return resposta('pegar', true, 'chamou o carro: ele está vindo');
+  }
+  // Põe o carro onde ele está agora, na viagem; e, chegando, no ponto de parada. Depende só do
+  // relógio do jogo e de onde os robôs estão (que só muda a cada botão): por isso é conferido antes
+  // de cada botão e a cada quadro, e assistindo à gravação a viagem é a mesma.
+  // O carro para se tiver robô na frente: de 25 em 25 cm do caminho adiante, confere se há um robô a
+  // pé a menos de 1,1 m dali; havendo, ele vai só até 2,4 m antes desse ponto, e espera (e buzina).
+  let buzinou = 0;
+  function atualizarCarro() {
+    const c = vila.carro;
+    if (!c || !c.viagem) return;
+    const v = c.viagem, agora = hora(), dono = c.motorista, d = v.destino, PASSO_DA_ROTA = 0.25, FRENTE = 2.4;
+    let tau = Math.min(v.dura, v.tau + Math.max(0, agora - v.ultima));
+    v.ultima = agora;
+    const aPe = carroNaoPara ? [] : (COLETIVO ? emJogo().map(r => r.estado) : [estado]).filter(e => e.dirigindo !== c);
+    const de = caminhoAndado(v, v.tau), ate = caminhoAndado(v, tau);
+    v.parado = false;
+    for (let k = Math.ceil((de + 0.9) / PASSO_DA_ROTA); aPe.length && k * PASSO_DA_ROTA <= ate + FRENTE && k * PASSO_DA_ROTA <= v.total; k++) {
+      const p = pontoDaRota(v, k * PASSO_DA_ROTA);
+      if (!aPe.some(e => Math.hypot(e.x - p.x, e.z - p.z) < 1.1)) continue;
+      const limite = Math.max(de, k * PASSO_DA_ROTA - FRENTE);          // até onde dá para ir sem chegar no robô
+      if (limite < ate) {                                               // (acha a hora da viagem em que o carro está nesse ponto)
+        let a = v.tau, b = tau;
+        for (let i = 0; i < 32; i++) { const m = (a + b) / 2; if (caminhoAndado(v, m) <= limite) a = m; else b = m; }
+        tau = a;
+        v.parado = true;
+      }
+      break;
+    }
+    v.tau = tau;
+    const p = poseDoCarro(v, tau);
+    Object.assign(c, { x: p.x, z: p.z, yaw: p.yaw });
+    if (p.chegou) {
+      const rumo = d.rumo + 8 * Math.round((p.yaw / GIRO - d.rumo) / 8);   // (o mesmo rumo do ponto de parada, sem o carro girar de volta)
+      Object.assign(c, { x: d.x, z: d.z, rumo, yaw: rumo * GIRO, viagem: null, sala: d.sala });   // (sala: o lugar em que ele está parado, para ser alvo de quem está ali)
+      if (dono) Object.assign(dono, { rumo, sala: d.sala });
+    }
+    if (dono) Object.assign(dono, { x: c.x, z: c.z });
+    else { c.grupo.position.set(c.x, 0, c.z); c.grupo.rotation.y = c.yaw + Math.PI / 2; }   // (vazio — chamado de um ponto, ou quem ia nele saiu do jogo no caminho —, o carro segue sozinho)
+    c.assentar();
+    if (v.parado && performance.now() - buzinou > 5000) { buzinou = performance.now(); som.efeito('buzina', c, 30); }
+    if ((p.chegou || v.parado !== v.avisado) && (dono === estado || v.chamou === estado)) { v.avisado = v.parado; marcarAlvos(); desenharMissao(); desenharMapa(); }   // (o selo e o mapa de quem vai nele, ou de quem o chamou)
+  }
+  // O meio do carro pode estar nesse ponto? (dirigido à mão: o asfalto da cidade, com uma folga para as rodas)
   function naPista(x, z) {
     const C = CIDADE, d = Math.hypot(x - C.x, z - C.z), fora = d >= C.praca + 0.4;
     return (fora && Math.abs(z - C.z) <= CARRO.folga && x >= -4.5 && x <= C.leste - 1.8)
@@ -1450,16 +1654,16 @@
       || (d >= C.praca + 0.4 && d <= C.pista - 0.4)
       || (x >= -4.5 && x <= -3.5 && z >= 1.9 && z <= C.z);
   }
-  // O que não deixa o carro ir para (x, z): '' se nada.
+  // O que não deixa o carro, dirigido à mão, ir para (x, z): '' se nada.
   function barraOCarro(c, x, z) {
     if (!naPista(x, z)) return 'o carro só anda no asfalto';
-    const r = CARRO.raio, b = blocos.find(q => q !== c.barra && (q.r ? Math.hypot(x - q.cx, z - q.cz) < q.r + r : x > q.x1 - r && x < q.x2 + r && z > q.z1 - r && z < q.z2 + r));
+    const r = CARRO.raio, b = blocos.find(q => !c.barras.includes(q) && (q.r ? Math.hypot(x - q.cx, z - q.cz) < q.r + r : x > q.x1 - r && x < q.x2 + r && z > q.z1 - r && z < q.z2 + r));
     if (b) return `${b.nome} no caminho`;
     if (emJogo().some(q => q.estado !== estado && Math.hypot(q.estado.x - x, q.estado.z - z) < r + RAIO_ROBO + 0.1)) return 'robô no caminho';
     for (const s of Object.values(salas)) for (const o of noCaminho(s)) if (Math.hypot(o.x - x, o.z - z) < r + o.raio) return `${o.nome} no caminho`;
     return '';
   }
-  // W e S, dentro do carro: um passo para a frente ou de ré.
+  // W e S, dentro do carro dirigido à mão: um passo para a frente ou de ré.
   function dirigir(direcao) {
     const c = estado.dirigindo, sentido = direcao === 'frente' ? 1 : direcao === 'tras' ? -1 : 0;
     if (!sentido) return resposta(`dirigir ${direcao}`, false, 'o carro não anda de lado');
@@ -1474,31 +1678,82 @@
   function entrarNoCarro() {
     const c = vila.carro;
     if (c.motorista) return resposta('pegar', false, 'o carro já tem motorista');
-    Object.assign(estado, { dirigindo: c, x: c.x, z: c.z, rumo: c.rumo, sala: 4 });
+    Object.assign(estado, { dirigindo: c, x: c.x, z: c.z, rumo: c.rumo });
     Object.assign(visual, { x: c.x, z: c.z, yaw: c.rumo * GIRO });   // (o carro não sai do lugar para buscar o robô)
-    c.motorista = estado;
-    robo.visible = false;
+    c.motorista = estado;                       // (o corpo dele vai sentado lá dentro, à vista pelos vidros: ver porCorpo)
     return resposta('pegar', true, 'entrou no carro');
   }
   function sairDoCarro() {
     const c = estado.dirigindo, a = estado.rumo * GIRO, fx = -Math.sin(a), fz = -Math.cos(a);
-    const vaga = [1, -1].map(l => ({ x: c.x + fz * CARRO.saida * l, z: c.z - fx * CARRO.saida * l }))
+    if (c.viagem) return resposta('pegar', false, 'o carro está andando');
+    // ao lado da porta do motorista (a esquerda de quem vai nele) ou, se não der, do outro lado; por último, atrás ou na frente do carro
+    const lado = carroManual ? CARRO.saida : CARRO.descida, ponta = CARRO.meio + 0.75;
+    const mao = (DESTINOS.find(d => d.id === c.onde) || {}).desceADireita ? -1 : 1;   // (o lado de descer, no ponto de parada em que o carro está)
+    const vagas = [[fz * lado * mao, -fx * lado * mao], [-fz * lado * mao, fx * lado * mao]].concat(carroManual ? [] : [[-fx * ponta, -fz * ponta], [fx * ponta, fz * ponta]]);
+    const vaga = vagas.map(([dx, dz]) => ({ x: c.x + dx, z: c.z + dz }))
       .find(p => livre(p.x, p.z) && !emJogo().some(q => q.estado !== estado && Math.hypot(q.estado.x - p.x, q.estado.z - p.z) < 2 * RAIO_ROBO));
     if (!vaga) return resposta('pegar', false, 'sem espaço para sair do carro aqui');
     largarOCarro(estado);
     Object.assign(estado, { x: vaga.x, z: vaga.z });
     estado.sala = areaEm(vaga.x, vaga.z);
     Object.assign(visual, { x: vaga.x, z: vaga.z });
-    robo.visible = true;
     return resposta('pegar', true, 'saiu do carro');
   }
-  // O carro fica onde está, sem motorista (quem dirigia saiu dele, ou saiu do jogo).
+  // O carro fica onde está, sem ninguém (quem ia nele desceu, ou saiu do jogo).
   function largarOCarro(dele) {
     const c = dele.dirigindo;
     if (!c) return;
-    Object.assign(c, { motorista: null, rumo: dele.rumo });
+    c.motorista = null;
+    if (!c.viagem) Object.assign(c, { rumo: dele.rumo, yaw: dele.rumo * GIRO });
     c.assentar();
     dele.dirigindo = null;
+  }
+  // As cancelas das duas estradas ficam fechadas. Cada uma abre um pouco antes de o carro passar por
+  // ela, e fecha depois que ele passou. É só o que se vê (e se ouve): a pé não se passa delas de jeito
+  // nenhum, e o carro não espera por elas. O braço acompanha o relógio da viagem: assistindo à
+  // gravação, abre e fecha nas mesmas horas.
+  //   aberta: o ângulo do braço em pé (quase a prumo: mais deitado, ele passaria na frente da placa da estrada, que fica logo atrás);
+  //   antes: abre quando falta esse tempo, em milissegundos, para o carro chegar; depois: fecha quando a traseira dele está a esses metros;
+  //   giro: radianos por segundo, subindo e descendo
+  const CANCELA = { aberta: 1.5, antes: 1400, depois: 1.2, giro: 3.4 };
+  function animarCancelas(dt) {
+    const v = vila.carro && vila.carro.viagem;
+    for (const k of vila.cancelas) {
+      let abrir = false;
+      if (v) {
+        if (!v.cancelas) v.cancelas = new Map();
+        if (!v.cancelas.has(k)) {                 // a quantos metros do começo da rota fica esta cancela (null: a rota não passa por ela)
+          let onde = null;
+          for (let i = 1; i < v.pontos.length && onde === null; i++) {
+            const [ax, az] = v.pontos[i - 1], [bx, bz] = v.pontos[i], lx = bx - ax, lz = bz - az;
+            const u = Math.max(0, Math.min(1, ((k.x - ax) * lx + (k.z - az) * lz) / Math.max(1e-9, lx * lx + lz * lz)));
+            if (Math.hypot(ax + lx * u - k.x, az + lz * u - k.z) < 1) onde = v.soma[i - 1] + (v.soma[i] - v.soma[i - 1]) * u;
+          }
+          v.cancelas.set(k, onde);
+        }
+        const onde = v.cancelas.get(k);
+        abrir = onde !== null && caminhoAndado(v, v.tau + CANCELA.antes) >= onde - CARRO.meio && caminhoAndado(v, v.tau) <= onde + CARRO.meio + CANCELA.depois;
+      }
+      if (abrir !== k.abrindo) { k.abrindo = abrir; som.efeito(abrir ? 'cancela' : 'cancelaFecha', k, 26); }
+      const falta = (abrir ? CANCELA.aberta : 0) - k.aberta;
+      if (!falta) continue;
+      k.aberta += Math.max(-CANCELA.giro * dt, Math.min(CANCELA.giro * dt, falta));
+      k.eixo.rotation.z = k.aberta;
+    }
+  }
+  // As águas dos passeios, que correm (o lago, o rio e o poço, devagar; o vertedouro e a cachoeira, caindo), a espuma e a névoa.
+  function animarAguas(t, dt) {
+    const a = vila.aguas;
+    if (!a.parada) return;
+    a.parada.offset.set(t * 0.012 % 1, t * 0.02 % 1);
+    for (const q of a.caem) q.textura.offset.y = (q.textura.offset.y + q.quanto * dt) % 1;
+    a.espumas.forEach((m, i) => { const s = 1 + 0.28 * Math.sin(t * 5.3 + i * 1.7); m.scale.set(s, 0.55 + 0.2 * Math.sin(t * 6.1 + i), s); });
+    for (const n of a.nevoas) {
+      const u = (t * 0.16 + n.vez) % 1;
+      n.sprite.position.set(127.2 - u * 3.2, 0.8 + u * 5.5, n.z + Math.sin(u * 6 + n.vez * 9) * 0.5);
+      n.sprite.scale.setScalar(2.2 + u * 4.5);
+      n.sprite.material.opacity = 0.55 * Math.sin(u * Math.PI);
+    }
   }
 
   // ---------- o relógio e o forno (desafio 4) ----------
@@ -1860,8 +2115,19 @@
     // telhado faz sombra): lá quem ilumina é a lâmpada, que acompanha o robô.
     const SOL = new T.Vector3(0.5, 1, -0.45).normalize();
     const sol = new T.DirectionalLight(0xfff0d6, 2.8);
-    sol.position.copy(MEIO).addScaledVector(SOL, 70);
-    sol.target.position.copy(MEIO);
+    // As sombras do sol cobrem um quadrado de 52 m. Na cidade ele fica sempre no mesmo lugar; quem vai
+    // para um dos passeios, longe dali, leva o quadrado junto (ver vila.focarSol, chamada antes de cada desenho).
+    const focoDoSol = MEIO.clone();
+    sol.position.copy(focoDoSol).addScaledVector(SOL, 70);
+    sol.target.position.copy(focoDoSol);
+    vila.focarSol = (x, z) => {
+      const longe = Math.hypot(x - MEIO.x, z - MEIO.z) > 36, fx = longe ? Math.round(x / 8) * 8 : MEIO.x, fz = longe ? Math.round(z / 8) * 8 : MEIO.z;
+      if (fx === focoDoSol.x && fz === focoDoSol.z) return;
+      focoDoSol.set(fx, 0, fz);
+      sol.position.copy(focoDoSol).addScaledVector(vila.clima && vila.clima.v ? vila.clima.v.sol : SOL, 70);
+      sol.target.position.copy(focoDoSol);
+      sol.target.updateMatrixWorld();
+    };
     sol.castShadow = true;
     sol.shadow.mapSize.set(4096, 4096);
     Object.assign(sol.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 20, far: 130 });
@@ -1950,8 +2216,8 @@
 
     plano(MEIO.x - 300, MEIO.x + 300, MEIO.z - 300, MEIO.z + 300, grama, -0.02);
     // o asfalto: as quatro ruas (que seguem para fora da cidade) e a pista da rotatória
-    plano(PX - 300, PX - 3.6, PZ - MP, PZ + MP, asfalto, 0); plano(PX + 3.6, PX + 300, PZ - MP, PZ + MP, asfalto, 0);
-    plano(PX - MP, PX + MP, PZ - 300, PZ - 3.6, asfalto, 0); plano(PX - MP, PX + MP, PZ + 3.6, PZ + 300, asfalto, 0);
+    plano(PX - 300, PX - 3.6, PZ - MP, PZ + MP, asfalto, 0); plano(PX + 3.6, 95.2, PZ - MP, PZ + MP, asfalto, 0);   // (a do leste acaba no retorno da cachoeira)
+    plano(PX - MP, PX + MP, PZ - 300, PZ - 3.6, asfalto, 0); plano(PX - MP, PX + MP, PZ + 3.6, 79.2, asfalto, 0);   // (a do norte, no da hidrelétrica)
     deitar(new T.RingGeometry(R_PRACA - 0.1, R_PISTA + 0.02, 96).translate(PX, -PZ, 0), asfalto, 0.002);
     // As calçadas, um degrau acima do asfalto, com a guia de pedra na beirada. As das ruas vão do
     // asfalto até a face das paredes; a da rotatória dá a volta inteira, cortada só pelas pistas.
@@ -2109,8 +2375,10 @@
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
       // na praça, um banco em cada canto, de frente para o meio; e, na calçada da volta, um poste
       const a = Math.atan2(sz, sx), x = PX + Math.cos(a) * (R_PRACA - 0.42), z = PZ + Math.sin(a) * (R_PRACA - 0.42);   // na beirada da praça: no meio fica o caminho em volta do ponto de encontro
-      banco(x, z, Math.PI / 2 - a, CG, 0.8);    // (um pouco menores que os da rua, para sobrar passagem)
-      redondo('banco', x, z, 0.4);
+      if (sx > 0 || sz < 0) {                    // (o canto noroeste não tem banco: é ali que se desce do carro e que fica o ponto de chamá-lo)
+        banco(x, z, Math.PI / 2 - a, CG, 0.8);  // (um pouco menores que os da rua, para sobrar passagem)
+        redondo('banco', x, z, 0.4);
+      }
       poste(PX + sx * 3.96, PZ + sz * 3.96);
     }
 
@@ -2315,6 +2583,18 @@
     cerca(16.37, 11.6, 16.37, FIM.n);             // o parquinho
     // onde a cidade acaba: um cavalete listrado fecha a pista, e uma moita alta, cada calçada
     const listras = mat(0xffffff, { roughness: 0.6, map: texturaCanvas(256, 32, (c, l, a) => { for (let i = 0; i < 8; i++) { c.fillStyle = i % 2 ? '#ffffff' : '#d8362b'; c.fillRect(i * l / 8, 0, l / 8, a); } }) });
+    // Uma cancela: dois postes, um de cada lado da pista, e o braço listrado, que gira no alto de um deles.
+    // Fica fechada, com o braço deitado de um poste ao outro, e só abre para o carro passar (ver animarCancelas).
+    const cancela = (x, z, aoLongoDeX) => {
+      const b = new T.Group(), eixo = new T.Group();
+      b.position.set(x, 0, z); if (!aoLongoDeX) b.rotation.y = Math.PI / 2;
+      g.add(b);
+      for (const dx of [-1.5, 1.5]) caixa(0.14, 1.1, 0.14, ferro, dx, 0.55, 0, b);
+      eixo.position.set(-1.5, 1.05, 0);
+      b.add(eixo);
+      caixa(2.9, 0.12, 0.05, listras, 1.45, 0, 0, eixo);
+      vila.cancelas.push({ x, z, eixo, aberta: 0, abrindo: false });
+    };
     const cavalete = (x, z, aoLongoDeX) => {
       const b = new T.Group();
       b.position.set(x, 0, z); if (!aoLongoDeX) b.rotation.y = Math.PI / 2;
@@ -2323,8 +2603,9 @@
       for (const dx of [-1.05, 1.05]) { caixa(0.06, 0.96, 0.06, ferro, dx, 0.48, 0, b); caixa(0.06, 0.05, 0.5, ferro, dx, 0.025, 0, b); }
     };
     for (const s of [-1, 1]) {
-      cavalete(s < 0 ? CIDADE.oeste - 0.15 : CIDADE.leste + 0.15, PZ, false);
-      cavalete(PX, s < 0 ? CIDADE.sul - 0.15 : CIDADE.norte + 0.15, true);
+      // (as estradas do leste e do norte levam aos passeios: nelas, uma cancela, que só abre para o carro passar. A pé não se passa de nenhuma.)
+      (s < 0 ? cavalete : cancela)(s < 0 ? CIDADE.oeste - 0.15 : CIDADE.leste + 0.15, PZ, false);
+      (s < 0 ? cavalete : cancela)(PX, s < 0 ? CIDADE.sul - 0.15 : CIDADE.norte + 0.15, true);
       for (const lado of [-1, 1]) {
         malha(g, caixaSuave(0.4, 0.9, 1.0, 0.12), sebeMat, s < 0 ? FIM.o + 0.2 : FIM.l - 0.2, 0.45, PZ + lado * 1.72);
         malha(g, caixaSuave(1.0, 0.9, 0.4, 0.12), sebeMat, PX + lado * 1.72, 0.45, s < 0 ? FIM.s + 0.2 : FIM.n - 0.2);
@@ -2362,25 +2643,42 @@
       c.position.set(x, 0, z); c.rotation.y = giro;
       g.add(c);
       const lataria = mat(hex, { roughness: 0.3, metalness: 0.35, envMap: reflexoDaRua, envMapIntensity: 0.9 });
-      const vidraca = mat(0x1c2b35, { roughness: 0.05, metalness: 0.7, envMap: reflexoDaRua, envMapIntensity: 1.3, side: T.DoubleSide });
+      const latariaDosDoisLados = lataria.clone();                              // (para as chapas da cabine, que se veem por fora e por dentro)
+      latariaDosDoisLados.side = T.DoubleSide;
+      // os vidros são transparentes: de fora vê-se quem vai no carro, e quem vai nele vê a rua (ver aplicarVisual)
+      const vidraca = mat(0xbfdcea, { roughness: 0.03, metalness: 0.2, envMap: reflexoDaRua, envMapIntensity: 1.1, transparent: true, opacity: 0.22, depthWrite: false, side: T.DoubleSide });
       const borracha = liso(0x17181a, 0.9), plastico = liso(0x25282c, 0.6), cromado = mat(0xd0d5da, { metalness: 0.9, roughness: 0.25, envMap: reflexoDaRua });
+      const forro = liso(0x23272c, 0.9), tecido = liso(0x4d525b, 0.95);
+      const caminho = (traco, pontos) => { pontos.forEach((p, i) => { if (!i) traco.moveTo(p[0], p[1]); else if (p.length === 4) traco.quadraticCurveTo(p[0], p[1], p[2], p[3]); else traco.lineTo(p[0], p[1]); }); return traco; };
+      const envidracar = (geo, x, y, z) => { const m = malha(c, geo, vidraca, x, y, z); vidros.push(m); return m; };   // (os vidros não fazem sombra: ver `vidros`)
       // um perfil de lado (x = comprimento, y = altura; um ponto de quatro números é uma curva), esticado na largura do carro
       const perfilado = (pontos, largura, chanfro) => {
         const s = new T.Shape();
         pontos.forEach((p, i) => { if (!i) s.moveTo(p[0], p[1]); else if (p.length === 4) s.quadraticCurveTo(p[0], p[1], p[2], p[3]); else s.lineTo(p[0], p[1]); });
         return new T.ExtrudeGeometry(s, { depth: largura - 2 * chanfro, bevelEnabled: true, bevelThickness: chanfro, bevelSize: chanfro * 0.8, bevelSegments: 3, curveSegments: 8 }).translate(0, 0, chanfro - largura / 2);
       };
-      // a carroceria de baixo, de um para-choque ao outro, e a cabine, mais estreita, por cima
+      // a carroceria de baixo, de um para-choque ao outro, com o assoalho por baixo, entre as rodas
       malha(c, perfilado([[-1.6, 0.34], [-1.64, 0.62], [-1.64, 0.86, -1.5, 0.9], [0.98, 0.92], [1.5, 0.82], [1.66, 0.78, 1.66, 0.6], [1.62, 0.34]], LARG, 0.06), lataria, 0, 0, 0);
-      malha(c, perfilado([[-1.5, 0.86], [-1.08, 1.32], [-1.04, 1.38, -0.9, 1.38], [0.14, 1.38], [0.28, 1.38, 0.34, 1.33], [0.98, 0.9]], 1.28, 0.05), lataria, 0, 0, 0);
-      // os vidros: os dos lados (dois de cada), o para-brisa e o de trás, deitados sobre a cabine
-      for (const pontos of [[[-1.36, 0.93], [-1.06, 1.27], [-0.44, 1.29], [-0.44, 0.93]], [[-0.36, 0.93], [-0.36, 1.29], [0.28, 1.29], [0.84, 0.93]]]) {
-        const s = new T.Shape();
-        pontos.forEach(([px, py], i) => { if (i) s.lineTo(px, py); else s.moveTo(px, py); });
-        for (const lado of [-1, 1]) malha(c, new T.ShapeGeometry(s), vidraca, 0, 0, lado * 0.642);
+      malha(c, new T.BoxGeometry(2.5, 0.23, 1.06), plastico, 0, 0.245, 0);
+      // A cabine, mais estreita, por cima: é oca. O teto, as duas laterais (uma chapa de cada lado, com os
+      // furos das janelas) e as colunas da frente e de trás; por dentro, o piso (na altura da cintura
+      // da lataria: do banco para baixo não se vê), o painel e os encostos dos dois bancos.
+      const JANELAS = [[[-1.36, 0.93], [-1.06, 1.27], [-0.44, 1.29], [-0.44, 0.93]], [[-0.36, 0.93], [-0.36, 1.29], [0.28, 1.29], [0.84, 0.93]]];
+      malha(c, perfilado([[-1.1, 1.3], [-1.05, 1.38, -0.9, 1.38], [0.14, 1.38], [0.28, 1.38, 0.36, 1.315], [0.3, 1.3], [0.16, 1.335], [-0.9, 1.335], [-1.04, 1.3]], 1.28, 0.012), lataria, 0, 0, 0);
+      const lateral = caminho(new T.Shape(), [[-1.5, 0.86], [-1.08, 1.32], [-1.04, 1.38, -0.9, 1.38], [0.14, 1.38], [0.28, 1.38, 0.34, 1.33], [0.98, 0.9]]);
+      for (const pontos of JANELAS) lateral.holes.push(caminho(new T.Path(), pontos));
+      for (const lado of [-1, 1]) {
+        malha(c, new T.ShapeGeometry(lateral), latariaDosDoisLados, 0, 0, lado * 0.63);
+        malha(c, new T.BoxGeometry(0.775, 0.05, 0.05), lataria, 0.66, 1.115, lado * 0.612).rotation.z = -0.592;   // a coluna do para-brisa
+        malha(c, new T.BoxGeometry(0.625, 0.05, 0.05), lataria, -1.29, 1.09, lado * 0.612).rotation.z = 0.831;    // a coluna de trás
       }
-      malha(c, new T.BoxGeometry(0.64, 0.012, 1.1), vidraca, 0.686, 1.153, 0).rotation.z = -0.592;
-      malha(c, new T.BoxGeometry(0.48, 0.012, 1.08), vidraca, -1.324, 1.121, 0).rotation.z = 0.831;
+      malha(c, new T.BoxGeometry(2.41, 0.02, 1.22), forro, -0.255, 0.975, 0);                 // (logo acima do alto da carroceria, que o chanfro deixa em 0,97)
+      malha(c, caixaSuave(0.4, 0.03, 1.2, 0.012), plastico, 0.75, 0.99, 0);                    // o painel, baixo, para tapar o mínimo da rua de quem vai dentro
+      for (const [x, alt] of [[-0.32, 0.3], [-1.02, 0.27]]) malha(c, caixaSuave(0.1, alt, 1.12, 0.03), tecido, x, 0.975 + alt / 2, 0);
+      // os vidros: os dos lados (dois de cada), o para-brisa e o de trás
+      for (const pontos of JANELAS) for (const lado of [-1, 1]) envidracar(new T.ShapeGeometry(caminho(new T.Shape(), pontos)), 0, 0, lado * 0.629);
+      envidracar(new T.PlaneGeometry(0.775, 1.21).rotateX(Math.PI / 2), 0.66, 1.115, 0).rotation.z = -0.592;
+      envidracar(new T.PlaneGeometry(0.625, 1.21).rotateX(Math.PI / 2), -1.29, 1.09, 0).rotation.z = 0.831;
       for (const rx of [-1.02, 1.04]) for (const lado of [-1, 1]) {            // as rodas: o pneu, a calota e, atrás, o vão escuro do para-lama
         const roda = new T.Group();
         roda.position.set(rx, 0.3, lado * 0.66); roda.rotation.x = Math.PI / 2;
@@ -2411,24 +2709,33 @@
     {
       // Na entrada ao lado da nossa casa, de frente para a rua. Dá para entrar nele e dirigir (ver "o carro"):
       // o jogo não pede isso em lugar nenhum. Parado, ele barra o caminho como um móvel.
-      const c = carro(-4.0, 1.95, -Math.PI / 2, 0x2f6fb5), aro = new T.Group(), barra = { nome: 'carro', x1: 0, x2: 0, z1: 0, z2: 0 };
+      const c = carro(-4.0, 1.95, -Math.PI / 2, 0x2f6fb5), aro = new T.Group(), barras = [0, 1, 2].map(() => ({ nome: 'carro', r: 0.01, cx: 1e6, cz: 1e6, x1: 1e6, x2: 1e6, z1: 1e6, z2: 1e6 }));
       for (const [l, p, x, z] of [[3.6, 0.06, 0, 0.84], [3.6, 0.06, 0, -0.84], [0.06, 1.74, 1.8, 0], [0.06, 1.74, -1.8, 0]]) malha(aro, new T.BoxGeometry(l, 0.05, p), M.destaque, x, 0.04, z);
       aro.visible = false;
       c.add(aro);
-      blocos.push(barra);
-      vila.carro = { nome: 'carro', ehCarro: true, grupo: c, x: -4.0, z: 1.95, rumo: 4, sala: 4, motorista: null, contorno: aro, barra,
+      blocos.push(...barras);
+      // (onde: em que ponto de parada ele está; viagem: a que está fazendo agora, ou null; yaw: para onde aponta, no meio de uma viagem)
+      vila.carro = { nome: 'carro', ehCarro: true, grupo: c, x: -4.0, z: 1.95, rumo: 4, yaw: 4 * GIRO, sala: 4, motorista: null, contorno: aro, barras, onde: 'garagem', viagem: null,
         // o ponto da lataria mais perto de (px, pz): é dele que se mede se o carro está ao alcance
         pontoMaisPerto(px, pz) {
           const a = this.rumo * GIRO, fx = -Math.sin(a), fz = -Math.cos(a), dx = px - this.x, dz = pz - this.z;
           const ao = Math.max(-CARRO.meio, Math.min(CARRO.meio, dx * fx + dz * fz)), deLado = Math.max(-CARRO.lado, Math.min(CARRO.lado, dx * fz - dz * fx));
           return { x: this.x + ao * fx + deLado * fz, z: this.z + ao * fz - deLado * fx };
         },
-        // onde ele barra o caminho de quem anda: um retângulo, se está ao longo de uma rua; de viés, um círculo
+        // Onde ele barra o caminho de quem anda: três círculos, enfileirados ao longo dele. (Numa gravação
+        // de quando era dirigido à mão: um retângulo, se está ao longo de uma rua; de viés, um círculo.)
         assentar() {
-          const b = this.barra, k = ((this.rumo % 8) + 8) % 8, m = CARRO.meio, l = CARRO.lado, r = 1.15;
-          delete b.r; delete b.cx; delete b.cz;
-          if (k % 2) Object.assign(b, { r, cx: this.x, cz: this.z, x1: this.x - r, x2: this.x + r, z1: this.z - r, z2: this.z + r });
-          else Object.assign(b, k % 4 ? { x1: this.x - m, x2: this.x + m, z1: this.z - l, z2: this.z + l } : { x1: this.x - l, x2: this.x + l, z1: this.z - m, z2: this.z + m });
+          const [b, ...resto] = this.barras;
+          if (carroManual) {
+            const k = ((this.rumo % 8) + 8) % 8, m = CARRO.meio, l = CARRO.lado, r = 1.15;
+            delete b.r; delete b.cx; delete b.cz;
+            if (k % 2) Object.assign(b, { r, cx: this.x, cz: this.z, x1: this.x - r, x2: this.x + r, z1: this.z - r, z2: this.z + r });
+            else Object.assign(b, k % 4 ? { x1: this.x - m, x2: this.x + m, z1: this.z - l, z2: this.z + l } : { x1: this.x - l, x2: this.x + l, z1: this.z - m, z2: this.z + m });
+            for (const q of resto) Object.assign(q, { r: 0.01, cx: 1e6, cz: 1e6, x1: 1e6, x2: 1e6, z1: 1e6, z2: 1e6 });
+            return;
+          }
+          const a = this.viagem ? this.yaw : this.rumo * GIRO, fx = -Math.sin(a), fz = -Math.cos(a), r = CARRO.lado;
+          this.barras.forEach((q, i) => { const cx = this.x + fx * (i - 1), cz = this.z + fz * (i - 1); Object.assign(q, { r, cx, cz, x1: cx - r, x2: cx + r, z1: cz - r, z2: cz + r }); });
         } };
       vila.carro.assentar();
     }
@@ -2511,6 +2818,209 @@
       }
     }
     predio(11.75, 15.7, Math.PI / 2, 4.2, 3.2, 0xa85a3c, { parede: '#f3e2a9', portas: [[1.65, '#3d6fa8']], janelas: [0.35, 2.95], letreiro: ['ESCOLA', '#3d6fa8', '#ffffff'] });
+
+    // --- fora da cidade: a hidrelétrica (no fim da estrada do norte) e a cachoeira (no fim da do leste) ---
+    // Só se chega de carro (ver "o carro"). Cada estrada acaba num retorno redondo, em volta de um
+    // canteiro: o carro dá a volta e para na beirada de fora, e o robô desce a pé num lugar de passeio.
+    // Não há nada para fazer ali: são lugares para ver. (O jogo não fala deles; as placas da cidade, sim.)
+    {
+      const USINA = { x: PX, z: 84, r: 6 }, QUEDA = { x: 100, z: PZ, r: 6 };
+      const concreto = rebocado(0xb7b4ab), concretoEscuro = liso(0x8f8d86, 0.9), pedra = mat(0x77736b, { roughness: 1, flatShading: true }), pedraClara = mat(0x8d897f, { roughness: 1, flatShading: true });
+      const deck = liso(0x9a7148, 0.8), verdePlaca = liso(0x1f6b4a, 0.6);
+      // a água parada (o lago, o rio, o poço) e a que cai (o vertedouro e a cachoeira), cada uma com o seu desenho, que corre
+      const texAgua = repetida(texturaCanvas(256, 256, (c, l) => {
+        c.fillStyle = '#3f8fb5'; c.fillRect(0, 0, l, l);
+        const sorte = aleatorio(321);
+        for (let i = 0; i < 90; i++) {
+          c.strokeStyle = `rgba(255,255,255,${0.05 + sorte() * 0.12})`; c.lineWidth = 1 + sorte() * 2;
+          const x = sorte() * l, y = sorte() * l, w = 14 + sorte() * 40;
+          c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + w / 2, y - 4 - sorte() * 5, x + w, y); c.stroke();
+        }
+      }));
+      const agua = mat(0xffffff, { map: texAgua, roughness: 0.1, metalness: 0.25, envMap: reflexoDaRua, envMapIntensity: 1.2 });
+      agua.userData.lado = 7;
+      const queda = () => {
+        const t = repetida(texturaCanvas(128, 256, (c, l, a) => {
+          c.fillStyle = '#9fd0e6'; c.fillRect(0, 0, l, a);
+          const sorte = aleatorio(77);
+          for (let i = 0; i < 70; i++) { c.fillStyle = `rgba(255,255,255,${0.25 + sorte() * 0.6})`; c.fillRect(sorte() * l, sorte() * a, 2 + sorte() * 5, 30 + sorte() * 90); }
+        }));
+        return { textura: t, material: new T.MeshBasicMaterial({ map: t, transparent: true, opacity: 0.93, side: T.DoubleSide, toneMapped: false, color: 0xdde9ee }) };
+      };
+      const pedras = [], verdes = [];
+      const rocha = (x, y, z, r, achatar, material) => { const m = malha(g, new T.IcosahedronGeometry(r, 1), material || pedra, x, y, z); m.scale.y = achatar || 1; m.rotation.set(x * 1.7, z * 2.3, x + z); pedras.push(m); return m; };
+      // Uma placa verde, com o texto dado, em dois pés — que ficam por trás da chapa: pela frente só se vê a placa.
+      // Com `vao`, é um pórtico: os pés, mais altos, ficam um de cada lado da pista (a `vao` metros um do
+      // outro), e a chapa, no alto, entre eles, presa em duas travessas: lê-se de longe, por cima de quem passa.
+      const placa = (linhas, x, z, giro, larg, alt, vao) => {
+        const p = new T.Group(), base = vao ? 2.75 : 1.5, grosso = vao ? 0.12 : 0.07, tras = -0.025 - grosso / 2, alto = base + alt + (vao ? 0.1 : 0);
+        p.position.set(x, 0, z); p.rotation.y = giro;
+        g.add(p);
+        for (const dx of vao ? [-vao / 2, vao / 2] : [-larg / 2 + 0.15, larg / 2 - 0.15]) caixa(grosso, alto, grosso, ferro, dx, alto / 2, tras, p);
+        if (vao) for (const y of [base + 0.16, base + alt - 0.16]) caixa(vao, 0.08, 0.08, ferro, 0, y, -0.065, p);
+        caixa(larg, alt, 0.05, verdePlaca, 0, base + alt / 2, 0, p);
+        malha(p, new T.PlaneGeometry(larg - 0.08, alt - 0.08), mat(0xffffff, { roughness: 0.6, map: texturaCanvas(Math.round(larg * 256), Math.round(alt * 256), (c, l, a) => {
+          c.fillStyle = '#0a8f5b'; c.fillRect(0, 0, l, a);
+          c.strokeStyle = '#ffffff'; c.lineWidth = 8; c.strokeRect(10, 10, l - 20, a - 20);
+          linhas.forEach((t, i) => letras(c, t, l / 2, a * (i + 0.5) / linhas.length + 4, i ? Math.min(52, a / linhas.length * 0.5) : Math.min(84, a / linhas.length * 0.62), '#ffffff', l - 50));
+        }) }), 0, base + alt / 2, 0.03);
+      };
+      // o retorno no fim de cada estrada: a pista em volta, o canteiro no meio (com um ipê) e a calçada do passeio
+      for (const p of [USINA, QUEDA]) {
+        deitar(new T.RingGeometry(p.r - MP, p.r + MP, 72).translate(p.x, -p.z, 0), asfalto, 0.002);
+        malha(g, new T.CylinderGeometry(p.r - MP - 0.05, p.r - MP - 0.05, CG, 48), granito, p.x, CG / 2, p.z);
+        deitar(new T.CircleGeometry(p.r - MP - 0.18, 48).translate(p.x, -p.z, 0), grama, CG + 0.002);
+        redondo('canteiro', p.x, p.z, p.r - MP - 0.05);
+        arvore(p.x, p.z, { flor: p === USINA ? 'amarelo' : 'rosa' });
+      }
+
+      // a hidrelétrica: o passeio de quem visita, o rio ao pé da barragem, a barragem com o vertedouro, a casa de força e as torres
+      lugar(13, 'hidrelétrica', 3, 25, 76, 96.5, { x: USINA.x, y: 3, z: USINA.z, forca: 0 });
+      plano(3, 25, 91.4, 97, calcada, 0.004);
+      caixa(22, 0.05, 0.05, ferro, 14, 0.78, 96.85); caixa(22, 0.04, 0.04, ferro, 14, 0.42, 96.85);                // a grade do mirante (abaixo dos olhos do robô, para não tapar a vista)
+      for (let x = 3; x <= 25; x += 2) caixa(0.07, 0.8, 0.07, ferro, x, 0.4, 96.85);
+      placa(['USINA HIDRELÉTRICA', 'barragem · vertedouro · casa de força'], 20.2, 95.9, Math.PI, 3.2, 1.0);
+      bloco('placa', 18.6, 21.8, 95.7, 96.1);
+      caixa(46, 0.5, 0.4, concretoEscuro, 14, 0.25, 98.4);                                                          // a mureta da margem
+      plano(MEIO.x - 300, MEIO.x + 300, 98.6, 109.6, agua, 0.03);                                                   // o rio, que segue para os dois lados
+      {
+        const perfil = new T.Shape([[0, 0], [7, 12], [10, 12], [10, 0]].map(([a, b]) => new T.Vector2(a, b)));     // (de lado: o pé da barragem, a rampa de jusante, a crista)
+        const corpo = malha(g, new T.ExtrudeGeometry(perfil, { depth: 60, bevelEnabled: false }), concreto, 44, 0, 110);
+        corpo.rotation.y = -Math.PI / 2;                                                                            // (o desenho de lado vira para o norte, e o comprimento, para o oeste: de x = 44 a x = -16)
+        caixa(60, 0.9, 0.25, concretoEscuro, 14, 12.45, 117.15); caixa(60, 0.9, 0.25, concretoEscuro, 14, 12.45, 119.85);   // as muretas da crista
+        for (const x of [5, 9.5, 14, 18.5, 23]) caixa(0.9, 3.2, 3.4, concretoEscuro, x, 12.4, 118.5);              // os pilares das comportas
+        caixa(19, 0.5, 3.6, concretoEscuro, 14, 14.2, 118.5);                                                       // a ponte das comportas
+        for (const x of [7.25, 11.75, 16.25, 20.75]) caixa(3.5, 1.9, 0.2, liso(0x2f4a5c, 0.5), x, 12.9, 117.5);    // as comportas
+        const cai = queda(), lamina = malha(g, new T.PlaneGeometry(17.6, 13.9), cai.material, 14, 6.02, 113.42);
+        lamina.rotation.x = 0.528 + Math.PI;                                                                        // deitada na rampa, com o lado de cima para a crista
+        cai.textura.repeat.set(5, 2);
+        vila.aguas.caem.push({ textura: cai.textura, quanto: -0.55 });
+        for (let i = 0; i < 9; i++) vila.aguas.espumas.push(malha(g, new T.SphereGeometry(0.9, 10, 8), new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 }), 6.2 + i * 1.95, 0.25, 109.3));
+      }
+      caixa(16, 6, 6.4, concreto, 33, 3, 106.4);                                                                    // a casa de força, ao pé da barragem
+      caixa(16.6, 0.4, 7, concretoEscuro, 33, 6.2, 106.4);
+      for (let i = 0; i < 6; i++) caixa(1.6, 2.2, 0.1, liso(0x24384a, 0.2), 26.6 + i * 2.56, 3.6, 103.16);
+      malha(g, new T.PlaneGeometry(9, 0.9), mat(0xffffff, { roughness: 0.7, map: texturaCanvas(720, 72, (c, l, a) => { c.fillStyle = '#b7b4ab'; c.fillRect(0, 0, l, a); letras(c, 'CASA DE FORÇA', l / 2, a / 2 + 3, 54, '#3a3f45', l - 30); }) }), 33, 5.35, 103.17).rotation.y = Math.PI;
+      {
+        // as torres de alta tensão, que levam a energia embora, e os fios entre elas
+        const aco = liso(0x8b939a, 0.5), pontas = [];
+        for (const tx of [48, 74, 100, 126]) {
+          for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+            const perna = malha(g, new T.BoxGeometry(0.14, 14.2, 0.14), aco, tx + sx * 0.75, 7, 104 + sz * 0.75);
+            perna.rotation.set(sz * 0.085, 0, -sx * 0.085);
+          }
+          for (const y of [3.5, 7, 10.5]) caixa(1.9 - y * 0.09, 0.08, 1.9 - y * 0.09, aco, tx, y, 104);
+          for (const y of [11.2, 13.2]) { caixa(0.12, 0.12, 6.4, aco, tx, y, 104); pontas.push([tx, y - 0.25, 101], [tx, y - 0.25, 107]); }
+        }
+        const fios = [];
+        for (let i = 0; i + 4 < pontas.length; i += 4) for (let k = 0; k < 4; k++) {                                // de cada ponta à mesma ponta da torre seguinte, com barriga
+          const [x1, y1, z1] = pontas[i + k], [x2, , z2] = pontas[i + 4 + k];
+          for (let s = 0; s < 8; s++) { const u = s / 8, v = (s + 1) / 8, cede = t => y1 - 1.6 * 4 * t * (1 - t); fios.push(x1 + (x2 - x1) * u, cede(u), z1 + (z2 - z1) * u, x1 + (x2 - x1) * v, cede(v), z1 + (z2 - z1) * v); }
+        }
+        const linhas = new T.BufferGeometry();
+        linhas.setAttribute('position', new T.Float32BufferAttribute(fios, 3));
+        g.add(new T.LineSegments(linhas, new T.LineBasicMaterial({ color: 0x2a2f33 })));
+      }
+      {
+        // por trás da barragem: o lago, no alto de um platô, e os morros em que a barragem se apoia
+        const morro = mat(0x6e9e58, { roughness: 1 });
+        const plato = malha(g, new T.BoxGeometry(180, 11.3, 120), [morro, morro, agua, morro, morro, morro], 14, 5.65, 180);
+        semSombra.push(plato);
+        const uv = plato.geometry.attributes.uv;                                                                     // (a água do lago, do tamanho da dos outros lugares)
+        for (let i = 8; i < 12; i++) uv.setXY(i, uv.getX(i) * 26, uv.getY(i) * 17);
+        for (const [x, r] of [[-27, 17], [55, 17]]) { const m = malha(g, new T.SphereGeometry(1, 20, 12), morro, x, -1, 121); m.scale.set(r, 17, 21); semSombra.push(m); }
+      }
+
+      // a cachoeira: o passeio, o deque de madeira, o poço, o paredão de pedra com a queda e o riacho que sai dali
+      lugar(14, 'cachoeira', 91, 113.7, -4, 16.5, { x: QUEDA.x, y: 3, z: QUEDA.z, forca: 0 });
+      plano(108.4, 114.1, 0.4, 12.1, deck, 0.006);
+      for (let z = 0.6; z <= 12; z += 0.42) plano(108.4, 114.1, z - 0.01, z + 0.01, liso(0x6f4f31, 0.9), 0.008);    // as frestas entre as tábuas
+      caixa(0.05, 0.05, 11.7, ferro, 114.05, 0.78, 6.25); caixa(0.04, 0.04, 11.7, ferro, 114.05, 0.42, 6.25);      // a grade do deque
+      for (let z = 0.4; z <= 12.2; z += 1.47) caixa(0.07, 0.8, 0.07, ferro, 114.05, 0.4, z);
+      placa(['CACHOEIRA', 'cuidado: pedras molhadas'], 111.4, 13.4, Math.PI, 2.6, 0.9);
+      bloco('placa', 110.1, 112.7, 13.2, 13.6);
+      deitar(new T.CircleGeometry(7.2, 40).translate(121.7, -PZ, 0), agua, 0.04);                                   // o poço
+      plano(119.6, 123.8, MEIO.z - 300, 1.2, agua, 0.035);                                                          // o riacho, que segue para o sul
+      malha(g, new T.BoxGeometry(24, 13, 62), pedra, 141, 6.5, PZ);                                                 // o paredão
+      plano(129.2, 152.8, 3.3, 9.2, agua, 13.03);                                                                   // o rio lá em cima, que chega à beirada
+      {
+        const sorte = aleatorio(505);
+        for (let i = 0; i < 30; i++) {                                                                              // a face do paredão, irregular (menos onde a água cai)
+          const z = -23 + sorte() * 58, x = 128.2 + sorte() * 1.6, y = 1 + sorte() * 11.5, r = 1.6 + sorte() * 2.2, achatar = 0.7 + sorte() * 0.5;
+          if (z < -0.5 || z > 13) rocha(x, y, z, r, achatar, i % 3 ? pedra : pedraClara);
+        }
+        for (let i = 0; i < 16; i++) { const a = -2.2 + i * 0.29, r = 7.3 + sorte() * 0.9; rocha(121.7 + Math.cos(a) * r, 0.15, PZ + Math.sin(a) * r, 0.5 + sorte() * 0.6, 0.6, i % 2 ? pedra : pedraClara); }   // em volta do poço
+        for (let i = 0; i < 7; i++) rocha(124.5 + sorte() * 2.4, 0.3, 2.6 + sorte() * 7.4, 0.7 + sorte() * 0.7, 0.55, pedraClara);                                            // ao pé da queda
+        for (let i = 0; i < 14; i++) { const m = malha(g, new T.SphereGeometry(1, 10, 8), mat(0x4a8f44, { roughness: 1, flatShading: true }), 131 + sorte() * 18, 13.2, -22 + sorte() * 56); m.scale.set(1.6 + sorte() * 2, 0.9 + sorte(), 1.6 + sorte() * 2); verdes.push(m); }   // o mato lá em cima
+        const cai = queda(), cai2 = queda();
+        malha(g, new T.PlaneGeometry(5.6, 13), cai.material, 128.95, 6.55, PZ).rotation.y = -Math.PI / 2;
+        malha(g, new T.PlaneGeometry(3.4, 12.6), cai2.material, 128.7, 6.35, PZ + 0.5).rotation.y = -Math.PI / 2;
+        cai.textura.repeat.set(2, 2); cai2.textura.repeat.set(1.3, 1.6);
+        vila.aguas.caem.push({ textura: cai.textura, quanto: 0.6 }, { textura: cai2.textura, quanto: 0.85 });
+        for (let i = 0; i < 6; i++) vila.aguas.espumas.push(malha(g, new T.SphereGeometry(0.85, 10, 8), new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 }), 128.1, 0.3, 3.9 + i * 0.95));
+        // a névoa que sobe do pé da queda
+        const texNevoa = texturaCanvas(128, 128, (c, l) => { const d = c.createRadialGradient(l / 2, l / 2, 4, l / 2, l / 2, l / 2); d.addColorStop(0, 'rgba(255,255,255,0.55)'); d.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = d; c.fillRect(0, 0, l, l); });
+        for (let i = 0; i < 7; i++) {
+          const n = new T.Sprite(new T.SpriteMaterial({ map: texNevoa, transparent: true, depthWrite: false, toneMapped: false }));
+          n.position.set(127.2, 1, 3.6 + i * 0.9);
+          g.add(n);
+          vila.aguas.nevoas.push({ sprite: n, vez: i / 7, z: n.position.z });
+        }
+      }
+      for (const [x, z, flor] of [[104, -8, ''], [112, -9, 'amarelo'], [96, 20.5, ''], [108, 21, ''], [116.5, 19, 'rosa'], [90, -8.5, ''], [-2, 80, ''], [30, 79, ''], [30.5, 90, 'amarelo'], [-1.5, 92, '']]) arvore(x, z, flor ? { flor } : {});
+      for (const m of pedras.concat(verdes)) semSombra.push(m);
+      vila.aguas.parada = texAgua;
+
+      // o ponto do carro, em cada ponto de parada: um totem amarelo com um botão, que chama o carro (ver chamarCarro)
+      const pontoDoCarro = (x, z, y, id, paraX, paraZ) => {
+        const p = new T.Group(), aro = malha(p, new T.TorusGeometry(0.22, 0.03, 8, 28), M.destaque, 0, 0.04, 0), destino = DESTINOS.find(d => d.id === id);
+        p.position.set(x, y, z); p.rotation.y = Math.atan2(paraX - x, paraZ - z);
+        g.add(p);
+        aro.rotation.x = Math.PI / 2; aro.visible = false;
+        malha(p, new T.CylinderGeometry(0.04, 0.05, 1.15, 12), ferro, 0, 0.575, 0);
+        malha(p, caixaSuave(0.46, 0.5, 0.1, 0.03), liso(0xf2c230, 0.5), 0, 1.38, 0);
+        malha(p, new T.PlaneGeometry(0.4, 0.44), mat(0xffffff, { roughness: 0.6, map: texturaCanvas(200, 220, (c, l, a) => {
+          c.fillStyle = '#f2c230'; c.fillRect(0, 0, l, a);
+          c.fillStyle = '#1d1f22';                                                                                    // o desenho de um carro, de lado
+          c.beginPath(); if (c.roundRect) c.roundRect(34, 62, 132, 40, 12); else c.rect(34, 62, 132, 40); c.fill();
+          c.beginPath(); if (c.roundRect) c.roundRect(62, 32, 76, 40, 14); else c.rect(62, 32, 76, 40); c.fill();
+          for (const cx of [66, 136]) { c.fillStyle = '#f2c230'; c.beginPath(); c.arc(cx, 102, 15, 0, 7); c.fill(); c.fillStyle = '#1d1f22'; c.beginPath(); c.arc(cx, 102, 10, 0, 7); c.fill(); }
+          letras(c, 'CHAME', l / 2, 148, 40, '#1d1f22', l - 16); letras(c, 'O CARRO', l / 2, 190, 40, '#1d1f22', l - 16);
+        }) }), 0, 1.38, 0.052);
+        malha(p, new T.CylinderGeometry(0.045, 0.045, 0.03, 16), luminoso({ color: 0x35d07f }), 0, 1.06, 0.06).rotation.x = Math.PI / 2;   // o botão
+        redondo('ponto do carro', x, z, 0.12);
+        vila.pontos.push({ nome: 'ponto do carro', ehPonto: true, destino, x, z, sala: destino.sala, contorno: aro });
+      };
+      pontoDoCarro(12.71, 8.68, CG, 'praca', PX, PZ); pontoDoCarro(16.6, 92.0, 0, 'usina', 14, 88); pontoDoCarro(107.9, 8.9, 0, 'cachoeira', 104, PZ);
+      {
+        // a chave geral da vila, num armário ao pé da grade do mirante da hidrelétrica: a alavanca para cima e a luz verde, ligada
+        const corpo = caixa(0.9, 1.4, 0.34, liso(0x55606b, 0.6), 8.5, 0.7, 96.32), sinal = luminoso({ color: 0x35d07f }), alavanca = new T.Group();
+        malha(g, new T.PlaneGeometry(0.8, 0.34), mat(0xffffff, { roughness: 0.6, map: texturaCanvas(400, 170, (c, l, a) => { c.fillStyle = '#f2c230'; c.fillRect(0, 0, l, a); letras(c, 'CHAVE GERAL', l / 2, 58, 56, '#1d1f22', l - 20); letras(c, 'DA VILA', l / 2, 122, 50, '#1d1f22', l - 20); }) }), 8.5, 1.14, 96.146).rotation.y = Math.PI;
+        malha(g, new T.SphereGeometry(0.07, 14, 10), sinal, 8.2, 0.72, 96.14);
+        alavanca.position.set(8.62, 0.6, 96.13);
+        g.add(alavanca);
+        malha(alavanca, new T.BoxGeometry(0.07, 0.36, 0.07), liso(0xc8372d, 0.5), 0, 0.18, 0);
+        malha(alavanca, new T.SphereGeometry(0.06, 12, 10), liso(0x1d1f22, 0.4), 0, 0.38, 0);
+        bloco('chave geral', 8.05, 8.95, 96.1, 96.6);
+        vila.chave = { nome: 'chave geral', x: 8.5, z: 96.15, sala: 13, ligada: true, malha: corpo, contorno: contorno(corpo, new T.BoxGeometry(0.98, 1.48, 0.42), 0, 1),
+          mostrar() { alavanca.rotation.x = this.ligada ? 0 : -2.2; sinal.color.set(this.ligada ? 0x35d07f : 0xff3b2a); } };
+      }
+      {
+        // no deque da cachoeira: a bica (um cano de bambu numa pedra, com o fio de água que cai numa cuba) e o caixote do garrafão
+        const corpo = caixa(0.24, 0.95, 0.24, pedraClara, 113.72, 0.475, 9.4), cano = malha(g, new T.CylinderGeometry(0.035, 0.035, 0.5, 10), liso(0x8a7a3a, 0.8), 113.5, 0.86, 9.4);
+        cano.rotation.z = Math.PI / 2 - 0.25;
+        malha(g, new T.CylinderGeometry(0.014, 0.014, 0.5, 8), new T.MeshBasicMaterial({ color: 0xbfe6f7, transparent: true, opacity: 0.85 }), 113.27, 0.55, 9.4);
+        malha(g, new T.CylinderGeometry(0.2, 0.16, 0.22, 16), pedra, 113.27, 0.11, 9.4);
+        vila.bica = { nome: 'bica', x: 113.4, z: 9.4, sala: 14, malha: corpo, contorno: contorno(corpo, new T.BoxGeometry(0.34, 1.05, 0.34), 0, 1) };
+        bloco('bica', 113.05, 113.9, 9.15, 9.65);
+        caixa(0.6, 0.4, 0.6, deck, 109.3, 0.2, 1.3);
+        bloco('caixote', 109.0, 109.6, 1.0, 1.6);
+      }
+      // Na cidade, a placa de cada estrada: um pórtico por cima da pista, logo depois da cancela (ver cancela).
+      // (Ao lado da pista ela não se lia: a casa azul tapava a da cachoeira, e uma árvore do parquinho, parte da outra.)
+      placa(['HIDRELÉTRICA', 'só de carro'], PX, FIM.n + 0.3, Math.PI, 2.4, 0.9, 3.5);
+      placa(['CACHOEIRA', 'só de carro'], FIM.l + 0.3, PZ, -Math.PI / 2, 2.4, 0.9, 3.5);
+    }
 
     // as copas, os troncos, as moitas e as flores, cada tipo numa malha só
     for (const [nome, tons] of Object.entries(copas)) tons.forEach((pecas, i) => { if (pecas.length) malha(g, juntar(pecas), mat(CORES_DAS_COPAS[nome][i], { roughness: 0.9, flatShading: true }), 0, 0, 0); });
@@ -3184,7 +3694,7 @@
       v.sol.lerp(rumoDoSol.set(...h.sol).normalize(), k).normalize();
       for (const [campo, alvo] of [['forca', h.forcaDoSol], ['ceu', h.ceu], ['rebatida', h.rebatida], ['postes', h.postes], ['janelas', h.janelas], ['exposicao', h.exposicao], ['lampada', h.lampada]]) v[campo] += (alvo - v[campo]) * k;
       v.tom.lerp(corDaHora.setRGB(...h.tom), k); v.corDoSol.lerp(corDaHora.set(h.corDoSol), k); v.corDoCeu.lerp(corDaHora.set(h.corDoCeu), k); v.corDoChao.lerp(corDaHora.set(h.corDoChao), k);
-      sol.position.copy(MEIO).addScaledVector(v.sol, 70);
+      sol.position.copy(focoDoSol).addScaledVector(v.sol, 70);
       sol.intensity = v.forca * (1 - 0.7 * m); sol.color.copy(v.corDoSol);
       luzGeral.intensity = v.ceu * (1 - 0.2 * m); luzGeral.color.copy(v.corDoCeu); luzGeral.groundColor.copy(v.corDoChao);
       rebatida.intensity = v.rebatida;
@@ -3340,6 +3850,23 @@
     malha(copoCheio.malha, new T.CylinderGeometry(0.037, 0.031, 0.09, 20), mat(0x6fbdf0, { roughness: 0.05, transparent: true, opacity: 0.85 }), 0, -0.012, 0);
     copoCheio.icone = iconeDeCopo(true);
     copoCheio.fechado = true;
+    // No deque da cachoeira, um garrafão vazio, em cima de um caixote; na bica dali ele se enche de água da cachoeira.
+    const formaDoJarro = nome => ({ nome, alt: 0.3, raio: 0.11, geo: new T.CylinderGeometry(0.1, 0.1, 0.24, 20).translate(0, -0.03, 0), casca: new T.CylinderGeometry(0.14, 0.14, 0.36, 20) });
+    const plasticoDoJarro = new T.MeshStandardMaterial({ color: 0xa9d6f0, transparent: true, opacity: 0.5, roughness: 0.15, side: T.DoubleSide, depthWrite: false });
+    const iconeDeJarro = cheio => (g, x, y, s) => {
+      traco(g); g.fillStyle = cheio ? '#4aa6e8' : 'rgba(190, 225, 245, 0.35)';
+      g.beginPath(); g.rect(x - s * 0.24, y - s * 0.16, s * 0.48, s * 0.56); g.fill(); g.stroke();
+      g.fillStyle = 'rgba(190, 225, 245, 0.35)'; g.beginPath(); g.rect(x - s * 0.09, y - s * 0.38, s * 0.18, s * 0.22); g.fill(); g.stroke();
+    };
+    const jarro = vila.jarro = novo(14, formaDoJarro('garrafão'), plasticoDoJarro), jarroCheio = vila.jarroCheio = novo(14, formaDoJarro('água da cachoeira'), plasticoDoJarro);
+    for (const j of [jarro, jarroCheio]) {
+      malha(j.malha, new T.CylinderGeometry(0.035, 0.05, 0.08, 14), plasticoDoJarro, 0, 0.12, 0);                    // o gargalo e a tampa
+      malha(j.malha, new T.CylinderGeometry(0.04, 0.04, 0.03, 14), liso(0x1f6fd1, 0.4), 0, 0.165, 0);
+    }
+    malha(jarroCheio.malha, new T.CylinderGeometry(0.092, 0.092, 0.2, 20), mat(0x3f9fe0, { roughness: 0.05, transparent: true, opacity: 0.85 }), 0, -0.04, 0);
+    assentar(salas[14], jarro, 109.3, 1.3, 0.4 + jarro.alt / 2);
+    jarro.icone = iconeDeJarro(false); jarroCheio.icone = iconeDeJarro(true);
+    jarroCheio.fechado = true;
     // Na estante da padaria, três pães: pão francês, pão de queijo e sonho. O morador da casa azul quer o pão de queijo (desafio 6).
     const pao = (nome, x, forma, enfeitar, icone) => {
       const o = novo(12, Object.assign({ nome }, forma), forma.material);
@@ -3420,9 +3947,19 @@
     // o que a pessoa deste desafio quer: entregar tudo a ela é a vitória (a ordem é a das falas de "falta": ver DESAFIOS)
     vila.pedidos = DESAFIO === 5 ? [analgesico, copoCheio] : DESAFIO === 6 ? [paoDeQueijo, cafe] : [bolo];
     for (const p of vila.pessoas) p.pedidos = p.casa === 2 ? [analgesico, copoCheio] : p.casa === 3 ? [paoDeQueijo, cafe] : [bolo];
+    // (Com qual dos dois cada casa começa, e qual das três pede primeiro, é o sorteio da partida que diz: ver sortear. Abaixo, a ordem de quando não há sorteio.)
+    // No coletivo, os pedidos de cada casa se revezam. A casa 1 começa sem luz (é preciso ir à hidrelétrica
+    // ligar a chave geral, e voltar para contar) e depois quer o bolo; a casa 3 começa querendo água da
+    // cachoeira (o garrafão do deque, cheio na bica de lá) e depois o pão de queijo com café; a casa 2 só tem o dela.
+    for (const p of vila.pessoas) {
+      const dela = { pedidos: p.pedidos, falas: p.falas };
+      p.rodizio = p.casa === 1 ? [{ pedidos: [], falas: { pedido: 'Estou sem luz', agradecimento: 'Obrigado! A luz voltou!', recusa: 'Preciso de luz!', queimado: 'Preciso de luz!' },
+        tarefa: () => vila.chave.ligada, aoAbrir() { vila.chave.ligada = false; vila.chave.mostrar(); } }, dela]
+        : p.casa === 3 ? [{ pedidos: [jarroCheio], falas: { pedido: 'Quero água fresca da cachoeira', agradecimento: 'Obrigado! Que água boa!', recusa: 'Não é isso!', queimado: 'Não é isso!' } }, dela] : [dela];
+    }
     // (no coletivo: o que é do pedido de cada casa, e que volta para o lugar quando ela pede de novo: ver reporMissao)
     const todos = Object.values(salas).flatMap(s => s.objetos);
-    vila.missoes = { 1: todos.filter(o => o.ingrediente || o === massa || o === bolo || o === queimado), 2: [analgesico, vila.copo, copoCheio], 3: todos.filter(o => o.paraOCafe || o === paoDeQueijo || o === cafe) };
+    vila.missoes = { 1: todos.filter(o => o.ingrediente || o === massa || o === bolo || o === queimado), 2: [analgesico, vila.copo, copoCheio], 3: todos.filter(o => o.paraOCafe || o === paoDeQueijo || o === cafe || o === jarro || o === jarroCheio) };
     // o número de cada casa, numa plaquinha ao lado da porta (a central de pedidos chama as casas pelo número)
     const numeroDaCasa = (n, x, z, giro) => {
       const p = new T.Group();
@@ -4025,7 +4562,7 @@
     // 'esquerda' e 'direita' são o passo de lado: o robô anda para o lado sem virar, e continua
     // olhando para onde olhava. Só existe no desafio 4 (REGRAS.passoDeLado): nos três primeiros
     // o robô só anda para onde está olhando, de propósito.
-    if (estado.dirigindo) return dirigir(direcao);   // dentro do carro, quem anda é ele
+    if (estado.dirigindo) return carroManual ? dirigir(direcao) : resposta(`mover ${direcao}`, false, 'o carro anda sozinho: escolha um destino');   // dentro do carro, quem anda é ele
     // (na cidade, o passo para trás é como o de lado: o robô recua sem virar. Numa gravação de antes disso, ele dava meia-volta: ver reComMeiaVolta)
     const lado = REGRAS.passoDeLado ? { esquerda: 2, direita: -2, tras: reComMeiaVolta ? undefined : 4 }[direcao] : undefined, giro = lado === undefined ? GIRO_DA_DIRECAO[direcao] : 0;
     if (giro === undefined) return resposta(`mover ${direcao}`, false, 'direção inválida');
@@ -4063,6 +4600,7 @@
 
   function virar(lado) {
     if (lado !== 'esquerda' && lado !== 'direita') return resposta(`virar ${lado}`, false, 'lado inválido');
+    if (estado.dirigindo && !carroManual) return resposta(`virar ${lado}`, false, 'o carro anda sozinho: escolha um destino');
     escolhido = undefined;
     estado.rumo += lado === 'esquerda' ? 1 : -1;
     if (estado.dirigindo) { estado.dirigindo.rumo = estado.rumo; estado.dirigindo.assentar(); }   // (o carro vira com quem dirige)
@@ -4101,7 +4639,10 @@
   // Na vila o robô carrega mais de um item: mesmo com a mão cheia os objetos ao alcance entram
   // na lista (antes do "em nada"), e só vale o que está no mesmo lugar que ele (ver "a vila").
   function candidatos() {
-    if (estado.dirigindo) return [estado.dirigindo];   // dentro do carro, o ESPACO só serve para sair dele
+    if (estado.dirigindo) {                     // dentro do carro: os destinos (menos o lugar em que ele está) e, por último, sair dele; andando, nada
+      const c = estado.dirigindo;
+      return carroManual ? [c] : c.viagem ? [] : [...DESTINOS.filter(d => d.id !== c.onde), c];
+    }
     const aqui = estado.sala, s = salas[aqui], o = estado.segurando, lista = [];
     const perto = a => !!a && (!REGRAS.vila || (a.salas ? a.salas.includes(aqui) : a.sala === aqui)) && alcance(a) < Infinity;
     // Entre coisas do mesmo tipo, vem primeiro a que está mais no centro da imagem (ver centralidade).
@@ -4131,6 +4672,7 @@
       if (REGRAS.vila) {
         if (o.ingrediente && !vila.tigela.pronta && perto(vila.tigela)) lista.push(vila.tigela);
         if ((o === vila.massa || vila.forno.dentro) && perto(vila.forno)) lista.push(vila.forno);   // pôr a massa no forno, ou tirar o que está lá
+        if (o === vila.jarro && perto(vila.bica)) lista.push(vila.bica);                              // encher o garrafão na bica da cachoeira
         if (o === vila.copo && perto(vila.filtro)) lista.push(vila.filtro);                           // encher o copo no filtro
         if (o.paraOCafe && !vila.cafeteira.pronta && perto(vila.cafeteira)) lista.push(vila.cafeteira);   // pôr a água ou o pó na cafeteira
         if (REGRAS.inventario) lista.push(...soltos());
@@ -4140,7 +4682,9 @@
       if (REGRAS.vila && vila.forno.dentro && perto(vila.forno)) lista.push(vila.forno);
       lista.push(...soltos());
     }
-    if (vila.carro && !semCarro && !vila.carro.motorista && !estado.maoLevantada && perto(vila.carro)) lista.push(vila.carro);   // o carro, para entrar nele
+    if (vila.carro && !semCarro && !vila.carro.motorista && !vila.carro.viagem && !estado.maoLevantada && perto(vila.carro)) lista.push(vila.carro);   // o carro, para entrar nele (parado e vazio)
+    if (!carroManual && !estado.maoLevantada) for (const p of vila.pontos) if (perto(p)) lista.push(p);   // o ponto do carro, para chamá-lo
+    if (vila.chave && !estado.maoLevantada && perto(vila.chave)) lista.push(vila.chave);                // a chave geral, na hidrelétrica
     // Por último, o que está aberto e dá para fechar: os móveis e as portas (menos a porta em cujo vão o robô está).
     lista.push(...maisPertoPrimeiro([...abrem, ...(portasNaoFecham ? [] : portas.filter(p => !noVaoDaPorta(p)))].filter(a => a.aberta)));
     // São no máximo MAXIMO_DE_ALVOS (um algarismo para cada um: ver marcarAlvos). Num lugar
@@ -4162,7 +4706,7 @@
   // A altura do ponto para onde se olha em quem não é um objeto de pegar (móvel, porta, gente):
   // é onde fica o número dele na imagem. Escolhida para não tapar o que importa ver (o que há
   // dentro do móvel, o vidro do forno, o texto no peito do outro robô).
-  const ALTO = { 'central de pedidos': 1.05, carro: 1.0, cesta: 0.42, forno: 0.68, pessoa: 0.8, porta: 1.15, 'outro robô': 1.38, geladeira: 0.38, 'armário': 0.6 };
+  const ALTO = { 'central de pedidos': 1.05, carro: 1.0, 'ponto do carro': 1.4, 'chave geral': 1.0, bica: 0.9, cesta: 0.42, forno: 0.68, pessoa: 0.8, porta: 1.15, 'outro robô': 1.38, geladeira: 0.38, 'armário': 0.6 };
   // O ponto do alvo: o meio do objeto de pegar; nos outros, o lugar dele no chão, na altura de ALTO.
   const pontoDe = a => {
     if (!a.malha) return new T.Vector3(a.x, ALTO[a.nome] || 1, a.z);
@@ -4233,6 +4777,56 @@
   mira.malha.layers.set(2);
   mira.malha.visible = false;
   camera.add(mira.malha);
+  // O mapa do carro: dentro do carro parado, a imagem do robô mostra os lugares aonde ele vai, cada um
+  // com o número do seu alvo (o do alvo atual, em azul-claro), o lugar em que o carro está e, embaixo,
+  // o alvo que é sair dele. Em viagem o mapa some, para se ver a estrada (fica o selo "a caminho").
+  const mapa = { canvas: document.createElement('canvas'), chave: null };
+  mapa.canvas.width = mapa.canvas.height = 512;
+  mapa.textura = new T.CanvasTexture(mapa.canvas);
+  mapa.textura.colorSpace = T.SRGBColorSpace;
+  mapa.malha = new T.Mesh(new T.PlaneGeometry(1, 1), luminoso({ map: mapa.textura, transparent: true, depthTest: false, depthWrite: false }));
+  mapa.malha.renderOrder = 999;
+  mapa.malha.layers.set(2);
+  mapa.malha.visible = false;
+  camera.add(mapa.malha);
+  function desenharMapa() {
+    const c = estado.dirigindo, mostra = !!c && !c.viagem && !carroManual;
+    mapa.malha.visible = mostra;
+    if (!mostra) return;
+    const lista = candidatos(), alvo = alvoAtual(), chave = [c.onde, lista.indexOf(alvo)].join('|');
+    if (chave === mapa.chave) return;
+    mapa.chave = chave;
+    const g = mapa.canvas.getContext('2d'), L = 512, CIANO = '#00e5ff', ONDE = { praca: [190, 318], usina: [190, 150], cachoeira: [404, 318] };
+    const texto = (t, x, y, px, cor, alinha) => { g.font = `bold ${px}px Arial, sans-serif`; g.fillStyle = cor; g.textAlign = alinha || 'center'; g.textBaseline = 'middle'; g.fillText(t, x, y); };
+    g.clearRect(0, 0, L, L);
+    g.beginPath();
+    if (g.roundRect) g.roundRect(4, 4, L - 8, L - 8, 26); else g.rect(4, 4, L - 8, L - 8);
+    g.fillStyle = 'rgba(12, 18, 24, 0.9)'; g.fill();
+    g.strokeStyle = CIANO; g.lineWidth = 5; g.stroke();
+    texto('CARRO AUTÔNOMO', L / 2, 42, 34, '#ffffff');
+    texto('escolha o destino', L / 2, 80, 24, '#9eeaf5');
+    // as estradas: a rotatória no meio, a do norte e a do leste até os passeios, as outras duas só começadas
+    g.strokeStyle = '#6b7780'; g.lineWidth = 12; g.lineCap = 'round';
+    g.beginPath(); g.arc(190, 318, 30, 0, 7); g.stroke();
+    for (const [x1, y1, x2, y2] of [[190, 288, 190, 150], [220, 318, 404, 318], [160, 318, 92, 318], [190, 348, 190, 412]]) { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
+    for (const d of DESTINOS) {
+      const [x, y] = ONDE[d.id], i = lista.indexOf(d), aqui = d.id === c.onde, daVez = d === alvo;
+      g.beginPath(); g.arc(x, y, 27, 0, 7);
+      g.fillStyle = aqui ? '#3f7a5c' : daVez ? CIANO : '#ffffff'; g.fill();
+      g.strokeStyle = '#0c1218'; g.lineWidth = 4; g.stroke();
+      if (i >= 0) texto(String(i + 1), x, y + 2, 34, '#0c1218');
+      const nome = d.nome.toUpperCase() + (aqui ? ' (aqui)' : '');
+      if (d.id === 'usina') texto(nome, x + 40, y, 27, daVez ? CIANO : '#ffffff', 'left');
+      else texto(nome, d.id === 'praca' ? x - 8 : x - 6, y + (d.id === 'praca' ? 112 : -50), 27, daVez ? CIANO : '#ffffff');
+    }
+    const sair = lista.indexOf(c);
+    if (sair >= 0) {
+      g.beginPath(); g.arc(300, 462, 22, 0, 7); g.fillStyle = alvo === c ? CIANO : '#ffffff'; g.fill();
+      texto(String(sair + 1), 300, 464, 28, '#0c1218');
+      texto('sair do carro', 334, 463, 26, alvo === c ? CIANO : '#ffffff', 'left');
+    }
+    mapa.textura.needsUpdate = true;
+  }
   // No coletivo: a missão que o robô da vez pegou na central ("missão: casa 2"), no canto de cima, à
   // esquerda, da imagem dele — para ele não depender de lembrar o que a central disse.
   const missao = { canvas: document.createElement('canvas'), texto: null };
@@ -4245,7 +4839,9 @@
   missao.malha.visible = false;
   camera.add(missao.malha);
   function desenharMissao() {
-    const p = atual && atual.dentro ? vila.pessoas.find(q => q.pedindo && q.com === atual) : null, texto = p ? `missão: casa ${p.casa}` : '';
+    const p = atual && atual.dentro ? vila.pessoas.find(q => q.pedindo && q.com === atual) : null, viagem = estado.dirigindo && estado.dirigindo.viagem;
+    const vindo = vila.carro && vila.carro.viagem && vila.carro.viagem.chamou === estado;        // (o carro que este robô chamou de um ponto)
+    const texto = viagem ? (viagem.parado ? 'robô na frente: o carro espera' : `a caminho: ${viagem.destino.nome}`) : vindo ? 'o carro está vindo' : p ? `missão: casa ${p.casa}` : '';   // (no carro em viagem, o selo diz para onde ele vai)
     missao.malha.visible = !!texto;
     if (texto === missao.texto) return;
     missao.texto = texto;
@@ -4264,6 +4860,10 @@
   function acaoDe(a) {
     const o = estado.segurando;
     if (!a) return 'soltar no chão';
+    if (a.ehDestino) return `ir de carro: ${a.nome}`;
+    if (a.ehPonto) return 'chamar o carro';
+    if (a === vila.chave) return a.ligada ? 'chave geral: ligada' : 'ligar a chave geral';
+    if (a === vila.bica) return 'encher o garrafão';
     if (a.ehCarro) return estado.dirigindo ? 'sair do carro' : 'entrar no carro';
     if (a.ehCentral) return vila.pessoas.some(p => p.pedindo && p.com === atual) ? 'ver a minha missão' : 'pedir uma missão';
     if (a.ehPessoa) return o ? `dar ${o.nome} à pessoa` : 'falar com a pessoa';
@@ -4281,7 +4881,7 @@
     marcas.forEach((m, i) => {
       const a = lista[i];
       m.userData.ponto = null;
-      if (n < 2 || i >= n || (a ? a === estado.naCabeca : estado.maoLevantada)) return;   // (a cabeça do robô não aparece na imagem)
+      if (n < 2 || i >= n || (a ? a === estado.naCabeca : estado.maoLevantada) || (a && (a.ehDestino || (a.ehCarro && estado.dirigindo)))) return;   // (os destinos do carro têm o número no mapa, não no mundo)   // (a cabeça do robô não aparece na imagem)
       const v = vetores(), p = a ? pontoDe(a) : new T.Vector3(estado.x + v.fx * 0.75, 0.1, estado.z + v.fz * 0.75);   // "em nada": o chão à frente, onde o item cairia (fica na beirada de baixo da imagem)
       if (a && a.malha) p.y += (a.alt || 0.2) / 2 + 0.05;   // logo acima do objeto, sem tapar o que ele tem escrito
       m.userData.ponto = p;
@@ -4318,7 +4918,7 @@
   function assentarMarcas() {
     const meiaAltura = Math.tan(camera.fov * Math.PI / 360), direita = meiaAltura * camera.aspect;
     // o que tapa o alto da imagem, de -1 a 1: de x1 a x2, de y para cima (do indicador, só a caixa escrita: ver mira.usado)
-    const tapado = [contador.malha, inventario.malha, mira.malha, missao.malha].filter(q => q.visible).map(q => {
+    const tapado = [contador.malha, inventario.malha, mira.malha, missao.malha, mapa.malha].filter(q => q.visible).map(q => {
       const usado = q === mira.malha ? mira.usado : { l: 1, a: 1 }, x2 = q.position.x + q.scale.x / 2, topo = q.position.y + q.scale.y / 2;
       return { x1: (x2 - q.scale.x * usado.l) / direita, x2: x2 / direita, y: (topo - q.scale.y * usado.a) / meiaAltura };
     });
@@ -4465,6 +5065,7 @@
     animar(1, 1);                               // sem animação pela metade
     aplicarVisual();
     if (COLETIVO) contarVistas(atual);          // (os balões de fala que esta imagem mostra: ver falaVale)
+    if (estado.dirigindo) { marcarAlvos(); desenharMissao(); desenharMapa(); }   // (o carro pode ter chegado desde o último botão: o mapa e o selo desta hora)
     const densidade = renderer.getPixelRatio();
     renderer.setPixelRatio(1);
     definirTamanho(FRAME.l, FRAME.a);
@@ -4524,9 +5125,12 @@
     const braco = estado.maoLevantada ? BRACO.levantado : estado.segurando ? carregando : BRACO.caido;
     const l = luzDaqui(), alvo = { x: estado.x, z: estado.z, yaw: estado.rumo * GIRO, braco, luz: l.x, luzY: l.y, luzZ: l.z, forca: l.forca, chao: alturaDoChao(estado.x, estado.z) };
     for (const c in alvo) visual[c] += (alvo[c] - visual[c]) * k;
+    const carro = estado.dirigindo;
+    if (carro && carro.viagem) Object.assign(visual, { x: carro.x, z: carro.z, yaw: carro.yaw });   // em viagem, o robô vai exatamente onde o carro está
   }
   function animar(k, kPorta) {
     atualizarPedidos();                         // (no coletivo: os pedidos cuja hora chegou)
+    atualizarCarro();                           // (o carro em viagem)
     animarRobo(k);
     for (const gel of abrem) {                  // as duas portas da geladeira (ou do armário) giram para fora, uma para cada lado
       gel.vis += ((gel.aberta ? 1 : 0) - gel.vis) * kPorta;
@@ -4561,6 +5165,12 @@
     const lugar = Object.values(areas).find(a => cabeNoLugar(a, ouve.x, ouve.z, 0)), abafado = lugar && lugar.n !== 4 ? 0.4 : 1;
     som.musica(Math.max(0, 1 - Math.hypot(ouve.x - vila.vida.violeiro.x, ouve.z - vila.vida.violeiro.z) / 14) ** 1.6 * abafado);
     som.chover((vila.clima ? vila.clima.molhado : 0) * abafado);
+    animarAguas(t, dt);
+    animarCancelas(dt);
+    const ouvido = (x, z, alcance) => Math.max(0, 1 - Math.hypot(ouve.x - x, ouve.z - z) / alcance) ** 2 * abafado;   // (quanto se ouve, dali, de um som que vem de x, z)
+    som.fundo('cachoeira', ouvido(127, CIDADE.z, 55));
+    som.fundo('usina', ouvido(CIDADE.x, 110, 60));
+    som.fundo('motor', vila.carro && vila.carro.viagem ? ouvido(vila.carro.x, vila.carro.z, 28) * (vila.carro.viagem.parado ? 0.35 : 1) : 0);
   }
   // As pessoas, que não ficam paradas como estátuas. Quem chega perto, pela frente, ganha um olhar.
   function animarPessoas(t) {
@@ -4576,7 +5186,8 @@
   }
   // O corpo do robô da vez, e o que ele tem na mão, no lugar em que `visual` diz.
   function porCorpo() {
-    robo.position.set(visual.x, visual.chao, visual.z);
+    const sentado = estado.dirigindo ? CARRO.assento : 0;   // (no carro, o robô vai sentado no banco da frente: a cabeça aparece pelos vidros, e o resto fica dentro da lataria)
+    robo.position.set(visual.x - Math.sin(visual.yaw) * sentado, visual.chao + (estado.dirigindo ? CARRO.banco : 0), visual.z - Math.cos(visual.yaw) * sentado);
     robo.rotation.y = visual.yaw;
     bracoDireito.rotation.x = visual.braco;
     if (estado.segurando) {                     // o objeto acompanha a mão
@@ -4593,10 +5204,12 @@
   function aplicarVisual() {
     porCorpo();
     lampada.position.set(visual.luz, visual.luzY, visual.luzZ);
-    lampada.intensity = visual.forca * (vila.clima ? vila.clima.lampada : 1);   // (de noite a imagem inteira escurece, e a lâmpada de dentro é reforçada: ver "a hora do dia e a chuva")
-    const noCarro = estado.dirigindo ? 1.05 : 0;   // (quem dirige vê de cima do capô, na frente do para-brisa)
-    camera.position.set(visual.x - Math.sin(visual.yaw) * noCarro, (noCarro ? 1.15 : ALTURA_OLHOS) + visual.chao, visual.z - Math.cos(visual.yaw) * noCarro);
-    camera.rotation.set(INCLINACAO, visual.yaw, 0);
+    lampada.intensity = visual.forca * (vila.clima ? vila.clima.lampada : 1) * (vila.chave && !vila.chave.ligada && estado.sala <= 3 ? 0.1 : 1);   // (com a chave geral desligada, a casa 1 fica no escuro)   // (de noite a imagem inteira escurece, e a lâmpada de dentro é reforçada: ver "a hora do dia e a chuva")
+    // Quem vai no carro vê de dentro dele: os olhos do robô sentado no banco da frente, olhando reto pelo para-brisa
+    // (o painel embaixo, as colunas dos lados, a beirada do teto em cima). A pé, a câmera olha um pouco para baixo.
+    const noCarro = !!estado.dirigindo, adiante = noCarro ? CARRO.olho : 0;
+    camera.position.set(visual.x - Math.sin(visual.yaw) * adiante, ALTURA_OLHOS + (noCarro ? CARRO.banco : 0) + visual.chao, visual.z - Math.cos(visual.yaw) * adiante);
+    camera.rotation.set(noCarro ? 0 : INCLINACAO, visual.yaw, 0);
     atualizarBalao();
   }
   const alvoDescartavel = new T.WebGLRenderTarget(1, 1);
@@ -4607,6 +5220,7 @@
       // Na vila não há espelho: só as sombras (calculadas num desenho descartável em que a
       // câmera "vê" o corpo do robô, como abaixo) e o mundo, com o corpo de fora.
       vidro.visible = false;
+      vila.focarSol(camera.position.x, camera.position.z);   // (as sombras do sol, em volta de quem olha)
       for (const c of CAMADAS_DOS_CORPOS) camera.layers.enable(c);   // (a camada 1, e as dos outros robôs do coletivo)
       camera.layers.disable(2);
       renderer.shadowMap.needsUpdate = true;
@@ -4683,6 +5297,8 @@
       refrescarHUD();
       aplicarVisual();
       assentarMarcas();
+      vila.focarSol(camera.position.x, camera.position.z);   // (cada robô com as sombras do lugar em que está)
+      renderer.shadowMap.needsUpdate = true;
       renderer.setViewport(x, A - y - h, w, h);
       renderer.setScissor(x, A - y - h, w, h);
       for (const c of CAMADAS_DOS_CORPOS) if (c === r.camada) camera.layers.disable(c); else camera.layers.enable(c);
@@ -4744,6 +5360,10 @@
     const am = 0.22 * meiaAltura, lmi = am * missao.canvas.width / missao.canvas.height;
     missao.malha.scale.set(lmi, am, 1);
     missao.malha.position.set(-direita + lmi / 2, meiaAltura * 0.97 - am / 2, -1);
+    // o mapa do carro: 56% da altura da tela, encostado na esquerda, abaixo do selo
+    const lado = 1.12 * meiaAltura;
+    mapa.malha.scale.set(lado, lado, 1);
+    mapa.malha.position.set(-direita + lado / 2, -0.16 * meiaAltura, -1);
     mira.malha.position.set(direita - lm / 2, (cabe ? meiaAltura * 0.97 : inventario.malha.position.y - li * 300 / 2400 - 0.03 * meiaAltura) - hm / 2, -1);
   }
   function ajustarTamanho() {
@@ -4774,6 +5394,7 @@
     if (vista.voando) { esconderEtiquetas(); aplicarVisual(); voar(real); desenharDeFora(); }   // quem assiste de fora vê tudo ao vivo, mesmo no modo iA
     else if (variosOlhos()) { if (!modoIA) desenharMosaico(agora); }                           // no coletivo, com mais de um robô: a tela dividida, um quadro para cada um
     else if (!modoIA) { esconderEtiquetas(); aplicarVisual(); desenhar(); }
+    if (agora - ultimoArranjo > 250) { ultimoArranjo = agora; arrumarPaineis(); }   // (quatro vezes por segundo basta: os painéis de quem assiste saem de cima do que o jogo escreve)
     requestAnimationFrame(quadro);
   }
 
@@ -4824,6 +5445,51 @@
     if (dica) { const d = document.createElement('div'); d.className = 'dica'; d.textContent = dica; grupo.appendChild(d); }
     elAjuda.appendChild(grupo);
   }
+  // A lista de teclas (e, assistindo a uma gravação, o painel dela) é de quem assiste e fica por cima
+  // do jogo: não pode tapar o que o jogo escreve na imagem — a missão, o inventário, o indicador do
+  // alvo e o mapa do carro (os lugares e os tamanhos são os de arrumarHUD) —, nem na tela dividida,
+  // em que cada quadro tem os seus. Cada painel vai para o primeiro lugar livre, descendo pela
+  // beirada esquerda da janela e depois pela direita; sem lugar livre (a tela dividida, numa janela
+  // pequena), para o que menos tapa — e o que o jogo escreve pesa muito mais que o canto de outro
+  // painel. Onde a imagem não tem nada no canto de cima, à esquerda (os desafios 1 a 3), é lá que
+  // ele fica, como sempre.
+  let ultimoArranjo = 0;
+  function arrumarPaineis() {
+    const L = window.innerWidth, A = window.innerHeight, BEIRA = 14, FOLGA = 6, DO_JOGO = 20;
+    const soltos = [elAjuda, document.querySelector('.gravacao')].filter(el => el && !el.hidden && el.offsetWidth);
+    if (!soltos.length) return;
+    const ocupados = [];                         // [x, y, largura, altura, peso]
+    for (const q of variosOlhos() && quadros.length ? quadros : [{ x: 0, y: 0, w: L, h: A }]) {
+      const larguraDoAlvo = 0.1 * q.h * mira.canvas.width / mira.canvas.height + 0.02 * q.w;
+      ocupados.push([q.x + q.w - larguraDoAlvo, q.y, larguraDoAlvo, 0.125 * q.h, DO_JOGO]);                                  // o indicador do alvo
+      ocupados.push(REGRAS.inventario ? [q.x + q.w / 2 - 0.39 * q.h, q.y, 0.78 * q.h, 0.215 * q.h, DO_JOGO] : [q.x + q.w / 2 - 0.09 * q.h, q.y, 0.18 * q.h, 0.1 * q.h, DO_JOGO]);   // o inventário, ou o contador
+      if (REGRAS.vila) ocupados.push([q.x, q.y, 0.01 * q.w + 0.53 * q.h, 0.135 * q.h, DO_JOGO], [q.x, q.y + 0.29 * q.h, 0.01 * q.w + 0.57 * q.h, 0.58 * q.h, DO_JOGO]);   // a missão e o mapa do carro
+    }
+    for (const el of document.querySelectorAll('.painel')) {                                                               // os outros painéis da página
+      if (soltos.includes(el) || el.hidden || !el.offsetWidth) continue;
+      const r = el.getBoundingClientRect();
+      ocupados.push([r.left, r.top, r.width, r.height, 1]);
+    }
+    for (const el of soltos) {
+      const w = el.offsetWidth, h = el.offsetHeight;
+      const tapa = (x, y) => {                   // quanto o painel taparia, posto ali
+        let soma = 0;
+        for (const [ox, oy, ow, oh, peso] of ocupados) {
+          const lx = Math.min(x + w, ox + ow + FOLGA) - Math.max(x, ox - FOLGA), ly = Math.min(y + h, oy + oh + FOLGA) - Math.max(y, oy - FOLGA);
+          if (lx > 0 && ly > 0) soma += peso * lx * ly;
+        }
+        return soma;
+      };
+      let lugar = [BEIRA, BEIRA], menor = Infinity;
+      for (const x of [BEIRA, L - w - BEIRA]) for (let y = BEIRA; y <= A - h - BEIRA && menor > 0; y += 4) { const t = tapa(x, y); if (t < menor) { menor = t; lugar = [x, y]; } }
+      const onde = `${Math.round(lugar[0])},${Math.round(lugar[1])}`;
+      if (el.dataset.onde !== onde) {
+        el.dataset.onde = onde;
+        for (const [lado, valor] of [['left', Math.round(lugar[0]) + 'px'], ['top', Math.round(lugar[1]) + 'px'], ['right', 'auto'], ['bottom', 'auto']]) el.style.setProperty(lado, valor, 'important');
+      }
+      ocupados.push([lugar[0], lugar[1], w, h, DO_JOGO]);
+    }
+  }
   const linhas = [REGRAS.mensagem];
   let destacado = null, ultima = null;
   // Painel de depuração: mostra tudo o que o jogo esconde, então não pode estar ao alcance
@@ -4842,7 +5508,7 @@
     destacado = alvoAtual();
     if (destacado) destacado.contorno.visible = true;
     marcarAlvos();                              // os números de todos os alvos possíveis e o indicador de qual é o atual
-    if (COLETIVO) desenharMissao();             // (e a missão que este robô pegou na central)
+    if (REGRAS.vila) { desenharMissao(); desenharMapa(); }   // (o selo do canto — a missão do coletivo, ou para onde o carro vai — e o mapa do carro)
     linhas.push(`› ${comando} — ${mensagem}`);
     if (linhas.length > 6) linhas.shift();
     elLog.textContent = '';
@@ -4875,6 +5541,7 @@
   };
   if (REGRAS.passoDeLado) Object.assign(BOTOES, { Q: () => mover('esquerda'), E: () => mover('direita') });   // desafio 4: um passo de lado, sem virar
   function acionar(botao, texto) {
+    atualizarCarro();                           // (se o carro está em viagem: onde ele está nesta hora)
     const acao = Object.prototype.hasOwnProperty.call(BOTOES, botao) && BOTOES[botao];
     return acao ? acao(texto) : resposta(`apertar ${botao}`, false, 'botão inexistente');
   }
@@ -4901,10 +5568,10 @@
   const quemJoga = { quem: 0, nome: '', modelo: '' }, contagem = { botoes: 0, imagens: 0 };
   // A versão das regras que mudam o que um botão faz, para a gravação antiga continuar igual
   // quando é assistida. 2: entre alvos do mesmo tipo, vale o mais central na imagem (ver ordemAntiga).
-  const VERSAO_DAS_REGRAS = 7;                  // (3: as portas que o jogador abre também fecham: ver portasNaoFecham; 4: o violeiro e o cachorro barram um canto da praça; 5: dá para entrar no carro; 6: na cidade, o S recua sem virar; 7: no coletivo, cada robô pede a sua missão na central)
+  const VERSAO_DAS_REGRAS = 9;                  // (3: as portas que o jogador abre também fecham: ver portasNaoFecham; 4: o violeiro e o cachorro barram um canto da praça; 5: dá para entrar no carro; 6: na cidade, o S recua sem virar; 7: no coletivo, cada robô pede a sua missão na central; 8: o carro anda sozinho; 9: ele para para os robôs e pode ser chamado, e as casas 1 e 3 do coletivo revezam dois pedidos)
   const gravando = !ASSISTINDO && GRAVACAO
     ? GRAVACAO.gravar(COLETIVO ? 'V' : DESAFIO, () => ({ versao: VERSAO_DAS_REGRAS, nome: COLETIVO ? 'coletivo' : quemJoga.nome, modelo: COLETIVO ? `${participantes.size} robôs, ${entregas} pedidos` : quemJoga.modelo, botoes: contagem.botoes, imagens: contagem.imagens, ganhou: estado.ganhou,
-      perdeu: estado.perdeu || undefined, assar: REGRAS.vila ? [ASSAR.pronto, ASSAR.queima] : undefined }))
+      perdeu: estado.perdeu || undefined, assar: REGRAS.vila ? [ASSAR.pronto, ASSAR.queima] : undefined, sorte: COLETIVO ? sorte : undefined }))   // (sorte: o sorteio do começo, no coletivo: ver sortear)
     : null;
   const NOME_DO_BOTAO = { ESPACO: 'Espaço', F: 'F · imagem' };
   const elQuer = document.getElementById('quer'), intencoes = [];
@@ -4926,6 +5593,8 @@
           linha('linha', pedaco('b', 'disse'), pedaco('span', `"${r.dito.texto}" — ${viram ? 'viu: ' + viram : 'ninguém viu' + (r.fala === r.dito ? ' ainda' : '')}${r.fala === r.dito ? ' (balão no ar)' : ''}`));
         }
       }
+      if (vila.diario.length) linha('titulo', 'o que aconteceu');
+      for (const d of vila.diario.slice(-6)) linha('linha', pedaco('b', minutos(d.t)), pedaco('span', d.texto));
       elQuer.style.zoom = '0.72';               // (são até quatro: a lista fica menor que a de um jogador só)
       elQuer.hidden = false;
       return;
@@ -5006,7 +5675,21 @@
   // (em milissegundos do relógio do jogo) primeiro: quando cada casa faz o primeiro pedido; volta: quanto depois de atendida ela pede de novo;
   // obrigado: por quanto tempo agradece; fala: quanto dura o que uma pessoa ou a central diz; esquecido: o bolo queimado que ninguém tira do forno
   // prazo: quanto tempo um robô fica com uma missão sem a cumprir, até ela voltar para a central; antes: os tempos do primeiro pedido nas gravações antigas (ver pedidosDeTodos)
-  const PEDIDO = { primeiro: [3000, 6000, 9000], antes: [4000, 50000, 100000], volta: 60000, obrigado: 15000, fala: 60000, esquecido: 60000, prazo: 480000 };
+  const PEDIDO = { primeiro: [3000, 6000, 9000], antes: [4000, 50000, 100000], volta: 60000, obrigado: 15000, fala: 60000, esquecido: 60000, prazo: 480000, parado: 360000 };
+  // O sorteio do começo. Sem ele toda partida começava igual: a casa 1 pedia primeiro, e a central
+  // dava a missão dela ao primeiro robô. Cada partida tem a sua `sorte` — um número —, de onde saem a
+  // ordem em que as três casas fazem o primeiro pedido e com qual dos pedidos do seu rodízio cada uma
+  // começa. A sorte vai no resumo da gravação: quem assiste a ela refaz o mesmo sorteio.
+  // Sorte 0 é sem sorteio: as casas pedem na ordem 1, 2, 3, cada uma com o primeiro pedido do seu
+  // rodízio (como era antes, e como é numa gravação que não traz a sorte). `?sorte=N` no endereço
+  // escolhe a sorte da partida: é para os testes, e para repetir um começo.
+  let sorte = 0;
+  function sortear(n) {
+    sorte = n;
+    const acaso = aleatorio(n), ordem = [0, 1, 2];
+    if (n) for (let i = ordem.length - 1; i > 0; i--) { const j = Math.floor(acaso() * (i + 1)); [ordem[i], ordem[j]] = [ordem[j], ordem[i]]; }
+    for (const p of [...vila.pessoas].sort((a, b) => a.casa - b.casa)) Object.assign(p, { abreEm: PEDIDO.primeiro[ordem[p.casa - 1]], comeca: n ? Math.floor(acaso() * p.rodizio.length) : 0 });
+  }
   const FALA = { letras: 80, minimo: 20000, maximo: 90000, imagens: 2 };
   const PARADO_DEMAIS = 15 * 60000;             // a iA que some sem sair deixa o lugar depois desse tempo (do relógio de verdade)
   // as vagas de quem entra: em volta do ponto de encontro, cada uma com o rumo que olha para ele
@@ -5036,6 +5719,7 @@
     marcarAlvos();
     desenharInventario();
     desenharMissao();
+    desenharMapa();
   }
   // O balão de fala de um robô: um desenho só dele, na camada do corpo dele (ele mesmo não o vê).
   function balaoDeFala(camada) {
@@ -5153,23 +5837,47 @@
     if (!COLETIVO || !robos.length) return;
     const t = hora();
     let mudou = false;
-    for (const p of vila.pessoas) {
+    for (const p of [...vila.pessoas].sort((a, b) => a.abreEm - b.abreEm)) {   // (na ordem em que as horas chegaram: é a ordem do diário, mesmo quando o relógio dá um salto e várias abrem de uma vez)
       if (p.pedindo || t < p.abreEm) continue;
       if (p.vezes) reporMissao(p.casa);          // (da segunda vez em diante: o que foi usado no pedido anterior volta para o lugar)
+      if (!semRodizio) {                         // o pedido da vez, no rodízio dos pedidos dessa casa (que começa no que o sorteio escolheu: ver sortear)
+        const m = p.rodizio[(p.vezes + p.comeca) % p.rodizio.length];
+        Object.assign(p, { pedidos: m.pedidos, falas: m.falas, tarefa: m.tarefa || null });
+        if (m.aoAbrir) m.aoAbrir();
+      }
       Object.assign(p, { pedindo: true, desde: p.abreEm, com: null, fala: '', vezes: p.vezes + 1 });
+      anotarNoDiario(p.vezes > 1 ? `a casa ${p.casa} pediu de novo` : `a casa ${p.casa} fez um pedido`, p.abreEm);
       mudou = true;
       som.efeito('pedido', vila.central, 30);
     }
-    for (const p of vila.pessoas) if (p.pedindo && p.com && !pedidosDeTodos && t - p.pegoEm > PEDIDO.prazo) { p.com = null; mudou = true; }   // a missão que o robô largou volta para a central
+    // A missão de quem parou de jogar volta para a central: o robô que fica PEDIDO.parado sem apertar
+    // nenhum botão perde a dele. (Quem continua jogando fica com a missão o tempo que precisar. Numa
+    // gravação da versão 7 valia um prazo fixo de 8 minutos, contado de quando a missão foi pega.)
+    for (const p of vila.pessoas) {
+      if (!p.pedindo || !p.com || pedidosDeTodos) continue;
+      if (prazoFixo ? t - p.pegoEm <= PEDIDO.prazo : t - p.com.ultimoBotao <= PEDIDO.parado) continue;
+      anotarNoDiario(`a missão da casa ${p.casa} voltou para a central: ${p.com.nome} ${prazoFixo ? 'passou do prazo de 8 minutos' : 'ficou ' + Math.round(PEDIDO.parado / 60000) + ' minutos sem jogar'}`);
+      p.com = null;
+      mudou = true;
+    }
     if (vila.forno.dentro && tempoNoForno() > ASSAR.queima + PEDIDO.esquecido) reporMissao(1);
     if (mudou) vila.central.redesenhar();
   }
   // A pessoa recebeu a última coisa que pediu: agradece, e daqui a um tempo pede de novo.
   function concluirPedido(p) {
+    anotarNoDiario(`${atual.nome} atendeu a casa ${p.casa}`);
     Object.assign(p, { pedindo: false, com: null, abreEm: hora() + PEDIDO.volta, agradeceAte: hora() + PEDIDO.obrigado, falaAte: hora() + PEDIDO.obrigado });
     entregas++;
     atual.entregas++;
     vila.central.redesenhar();
+    desenharQuer();
+  }
+  // O diário da vila: o que foi acontecendo com os pedidos e com os robôs (quem entrou, quem pegou qual
+  // missão, quem atendeu, que missão voltou para a central e por quê). É só para quem assiste: aparece
+  // embaixo da lista de quem está na vila.
+  function anotarNoDiario(texto, quando) {      // (quando: a hora em que aconteceu, se não foi agora — o pedido que abriu entre um quadro e outro)
+    vila.diario.push({ t: quando != null ? quando : hora(), texto });
+    if (vila.diario.length > 60) vila.diario.shift();
     desenharQuer();
   }
   // O ESPACO na central de pedidos: é ali que cada robô pede a sua missão. Ela entrega ao robô o
@@ -5179,7 +5887,7 @@
   function usarACentral() {
     const c = vila.central, meu = vila.pessoas.find(q => q.pedindo && q.com === atual);
     const p = meu || vila.pessoas.filter(q => q.pedindo && !q.com).sort((a, b) => a.desde - b.desde)[0];
-    if (p && !meu) Object.assign(p, { com: atual, pegoEm: hora() });
+    if (p && !meu) { Object.assign(p, { com: atual, pegoEm: hora() }); anotarNoDiario(`${atual.nome} pegou a missão da casa ${p.casa}`); }
     c.fala = p ? `${atual.nome}: sua missão é na casa ${p.casa}` : 'Sem missão agora. Volte depois';
     c.falaAte = hora() + PEDIDO.fala / 2;
     c.redesenhar();
@@ -5206,6 +5914,8 @@
     r.corpo.grupo.visible = true;
     r.corpo.escrever(r.nome);                   // o nome fica na tela do peito, para os outros lerem
     participantes.add(r.nome);
+    r.ultimoBotao = hora();                     // (a hora, no relógio do jogo, do último botão dele: quem para de jogar perde a missão)
+    anotarNoDiario(`${r.nome} entrou na vila`);
     if (gravando) gravando.anotar('entrou', { t: Math.round(hora()), r: r.n, nome: r.nome, modelo: r.modelo, x: onde[0], z: onde[1], rumo: onde[2] });
     som.efeito('entrou', r.estado);
     if (!emJogo().includes(atual)) encarnar(r); // (a página passa a mostrar quem está jogando)
@@ -5226,7 +5936,8 @@
     Object.assign(r, { dentro: false, fala: null, intencao: null });
     r.corpo.grupo.visible = false;
     r.balao.sprite.visible = false;
-    for (const p of vila.pessoas) if (p.com === r) p.com = null;
+    anotarNoDiario(`${r.nome} saiu da vila`);
+    for (const p of vila.pessoas) if (p.com === r) { p.com = null; anotarNoDiario(`a missão da casa ${p.casa} voltou para a central: ${r.nome} saiu do jogo`); }
     if (gravando) gravando.anotar('saiu', { t: Math.round(hora()), r: r.n });
     som.efeito('saiu', r.estado);
     if (r === atual && emJogo().length) encarnar(emJogo()[0]);
@@ -5252,6 +5963,7 @@
       saida = acionar(botao, texto);
     } finally { horaDaJogada = null; }
     r.ativo = performance.now();
+    if (existe) r.ultimoBotao = t;
     if (existe) {
       if (quer) r.intencao = { botao, quer };
       if (botao === 'F') contagem.imagens++; else contagem.botoes++;
@@ -5276,7 +5988,10 @@
         balao: balaoDeFala(CAMADAS_DOS_CORPOS[n]) });
     }
     atual = robos[0];
-    for (const p of vila.pessoas) Object.assign(p, { pedindo: false, abreEm: PEDIDO.primeiro[p.casa - 1], agradeceAte: 0, falaAte: 0, com: null, vezes: 0 });
+    for (const p of vila.pessoas) Object.assign(p, { pedindo: false, agradeceAte: 0, falaAte: 0, com: null, vezes: 0 });
+    // a hora do primeiro pedido de cada casa, e o pedido com que ela começa (assistindo, vale a sorte da gravação: ver o fim do arquivo)
+    const pedida = /^\d{1,9}$/.test(ENDERECO.get('sorte') || '') ? Number(ENDERECO.get('sorte')) : null;
+    sortear(ASSISTINDO ? 0 : pedida !== null ? pedida : 1 + Math.floor(Math.random() * 0x7fffffff));
     fotografarObjetos();
     vila.central.redesenhar();
   }
@@ -5306,7 +6021,7 @@
   const entre = (v, a, b) => Math.max(a, Math.min(b, v));
   // Até onde a câmera vai. Nas salas com espelho ela não sai do prédio: de fora dele, ou de
   // trás do espelho, o truque do reflexo ficaria à mostra (o mundo é desenhado duas vezes).
-  const VOO = REGRAS.vila ? { x1: CIDADE.oeste - 14, x2: CIDADE.leste + 14, y1: 0.25, y2: 16, z1: CIDADE.sul - 14, z2: CIDADE.norte + 14 }
+  const VOO = REGRAS.vila ? { x1: CIDADE.oeste - 14, x2: 162, y1: 0.25, y2: 36, z1: CIDADE.sul - 14, z2: 138 }   // (até a cachoeira, a leste, e a hidrelétrica, ao norte)
     : { x1: centro(1) - SALA.L / 2 + 0.15, x2: centro(REGRAS.salas) + SALA.L / 2 - 0.15, y1: 0.25, y2: SALA.A - 0.15, z1: Z_ESPELHO + 0.15, z2: SALA.P / 2 - 0.15 };
   // Põe a câmera perto do robô, olhando para ele: de preferência atrás dele, a 2,3 m e mais
   // alta do que ele, mas dentro do cômodo em que ele está e fora dos móveis. Se atrás houver
@@ -5352,6 +6067,7 @@
     voador.rotation.set(vista.pitch, vista.yaw, 0);
     atualizarBalao(voador);                     // o balão da pessoa, virado para esta câmera
     refletirEspelhos(voador);                   // os espelhos das casas da cidade
+    if (vila.focarSol) vila.focarSol(vista.x, vista.z);   // (as sombras do sol, em volta de quem voa)
     renderer.clear();
     voador.layers.disable(3);
     if (!REGRAS.semEspelho) {                   // 1) o mundo refletido no plano do espelho
@@ -5525,7 +6241,7 @@
         elModo.hidden = !modoIA;
         resposta('modo iA', true, modoIA ? 'ligado: a tela congela até pedir frame' : 'desligado');
         break;
-      case 'KeyH': elAjuda.hidden = !elAjuda.hidden; break;
+      case 'KeyH': elAjuda.hidden = !elAjuda.hidden; arrumarPaineis(); break;
       case 'KeyG': if (GRAVACAO && GRAVACAO.noServidor) GRAVACAO.abrirLista(); break;   // as gravações, em outra aba
       case 'KeyR': reiniciar(); break;
       case 'Digit1': case 'Numpad1': comecar(1); break;
@@ -5577,6 +6293,14 @@
       const nome = semControle(gravada.resumo.nome, 12), modelo = semControle(gravada.resumo.modelo, 24);
       const assar = Array.isArray(gravada.resumo.assar) ? gravada.resumo.assar.map(Number) : [];
       if (assar[0] > 0 && assar[1] > assar[0]) { ASSAR.pronto = assar[0]; ASSAR.queima = assar[1]; }       // o tempo de forno que valia naquela partida
+      if (COLETIVO && Number.isInteger(gravada.resumo.sorte) && gravada.resumo.sorte > 0) sortear(gravada.resumo.sorte);   // ...e o sorteio do começo (sem ele na gravação, fica a ordem de antes)
+      if (!(Number(gravada.resumo.versao) >= 9)) {                                                                     // ...os pontos do carro, que não existiam, o carro, que não parava, e o rodízio dos pedidos...
+        carroNaoPara = semRodizio = true;
+        for (let i = blocos.length - 1; i >= 0; i--) if (blocos[i].nome === 'ponto do carro') blocos.splice(i, 1);
+        { const r = CIDADE.praca - 0.42, cx = CIDADE.x - r * Math.SQRT1_2, cz = CIDADE.z + r * Math.SQRT1_2; blocos.push({ nome: 'banco', cx, cz, r: 0.4, x1: cx - 0.4, x2: cx + 0.4, z1: cz - 0.4, z2: cz + 0.4 }); }   // (e o banco do canto noroeste da praça, que ainda estava lá)
+        vila.pontos.length = 0;
+      }
+      if (!(Number(gravada.resumo.versao) >= 8)) { prazoFixo = true; carroManual = true; if (vila.carro) vila.carro.assentar(); }       // ...o carro, que era dirigido à mão...
       if (COLETIVO && !(Number(gravada.resumo.versao) >= 7)) { pedidosDeTodos = true; for (const p of vila.pessoas) p.abreEm = PEDIDO.antes[p.casa - 1]; }   // ...as missões, que no coletivo eram de qualquer robô...
       if (!(Number(gravada.resumo.versao) >= 6)) reComMeiaVolta = true;                                                 // ...o S, que na cidade dava meia-volta antes do passo...
       if (!(Number(gravada.resumo.versao) >= 5)) semCarro = true;                                                       // ...o carro, que era só enfeite...
@@ -5598,6 +6322,7 @@
               else if (ev.e === 'saiu') sairDoJogo(r);
               else if (r.dentro) {
                 atualizarPedidos();
+                r.ultimoBotao = hora();
                 encarnar(r);
                 if (ev.b === 'F') { aplicarVisual(); contarVistas(r); } else acionar(String(ev.b), ev.x);
                 if (ev.q) r.intencao = { botao: String(ev.b), quer: semControle(ev.q, 140) };
