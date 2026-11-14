@@ -3075,7 +3075,7 @@
   const elAjuda = document.getElementById('ajuda'), elMensagem = document.getElementById('mensagem');
   const elLog = document.getElementById('log'), elStatus = document.getElementById('status');
   const elCaixa = document.getElementById('caixa'), elEntrada = document.getElementById('entrada');
-  elAjuda.textContent = 'J1:  W A S D  Q E  Espaço  L X T\nJ2:  ↑ ← ↓ →  , .  Enter   O / P\n1 2 3 M Shift+T   R H J C V B N G';
+  elAjuda.textContent = 'J1:  W A S D  Q E  Espaço  L X T\nJ2:  ↑ ← ↓ →  , .  Enter   O / P\n1 2 3 4 M Shift+T   R H J C V B N G';
   if (ASSISTINDO) elAjuda.hidden = true;         // numa gravação essas teclas não valem (as de quem assiste estão no painel dela)
   elMensagem.textContent = MENSAGEM;
 
@@ -3207,6 +3207,7 @@
       case 'Digit1': case 'Numpad1': comecar(1); break;
       case 'Digit2': case 'Numpad2': comecar(2); break;
       case 'Digit3': case 'Numpad3': comecar(3); break;
+      case 'Digit4': case 'Numpad4': comecar(4); break;
     }
   });
 

@@ -262,8 +262,9 @@ function Concluir($a, [byte[]]$corpo, $req) {
   } elseif ($ganhou) {                        # jogo vencido: daqui em diante todo comando recebe os parabens
     if (-not $script:avisouVitoria) { Registrar ("a iA{0} venceu o jogo" -f (Quem $a.quem)); $script:avisouVitoria = $true }
     $texto = $config.respostaVitoria
-  } elseif ($perdeu) {                        # desafio M: o outro jogador venceu
-    $texto = $config.respostaDerrota
+  } elseif ($perdeu) {                        # desafio M: o outro jogador venceu. Um desafio pode ter a sua propria frase (no 4, o bolo queimou)
+    $d = $config.desafios.PSObject.Properties[[string]$script:desafioAtual]
+    $texto = if ($d -and $d.Value.respostaDerrota) { [string]$d.Value.respostaDerrota } else { $config.respostaDerrota }
   } else {
     $script:avisouVitoria = $false
     $texto = $config.respostaComando; $neutro = $true
