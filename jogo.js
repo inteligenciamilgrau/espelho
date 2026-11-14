@@ -152,6 +152,7 @@
   cena.add(raiz);
   const camera = new T.PerspectiveCamera(75, 1, 0.05, 60);
   camera.rotation.order = 'YXZ';
+  const olhos = camera;                         // (outro nome para a câmera do robô, onde `camera` quer dizer a de quem olha: ver atualizarBalao)
 
   // Brilho e reflexos suaves nos materiais vêm de um "ambiente" simples: uma caixa do
   // tamanho da sala, com um painel de luz no teto e um chão cor de madeira.
@@ -1741,11 +1742,14 @@
   balao.scale.set(0.84, 0.84 * BALAO.a / BALAO.l, 1);
   balao.renderOrder = 998;
   balao.layers.set(2);
+  balao.layers.enable(3);                       // camada 3 = o que a câmera de quem assiste também vê (ver "o modo voador")
   balao.visible = false;
   cena.add(balao);
   // Põe o balão ao lado do rosto, do lado que fica mais para o meio da tela, e o esconde
-  // quando a pessoa não disse nada ou há uma parede entre ela e a câmera.
-  function atualizarBalao() {
+  // quando a pessoa não disse nada ou há uma parede entre ela e a câmera. A câmera é a do
+  // robô; no modo voador, a de quem assiste (e volta a ser a do robô antes de cada imagem da iA).
+  function atualizarBalao(cam) {
+    const camera = cam || olhos;
     balao.visible = false;
     if (!pessoa || !pessoa.fala) return;
     const cx = camera.position.x, cz = camera.position.z, r = pessoa.rosto, parede = centro(pessoa.sala) + SALA.L / 2;
@@ -2372,7 +2376,7 @@
     const imagem = canvas.toDataURL('image/png');
     renderer.setPixelRatio(densidade);          // de volta ao tamanho da janela, na mesma hora
     definirTamanho(window.innerWidth, window.innerHeight);
-    desenhar();
+    if (vista.voando) desenharDeFora(); else desenhar();   // (a janela volta a mostrar a visão de quem assiste: a imagem da iA é sempre a dos olhos do robô)
     resposta('frame', true, `${FRAME.l}x${FRAME.a}`);
     return imagem;
   }
@@ -2495,8 +2499,9 @@
 
   function definirTamanho(l, a) {
     renderer.setSize(l, a, false);
-    camera.aspect = l / a;
+    camera.aspect = voador.aspect = l / a;
     camera.updateProjectionMatrix();
+    voador.updateProjectionMatrix();
     // contador: 7% da altura da tela, centralizado no alto, a 1 m da câmera
     const meiaAltura = Math.tan(camera.fov * Math.PI / 360), alt = 0.14 * meiaAltura;
     contador.malha.scale.set(alt * 2.2, alt, 1);
@@ -2519,7 +2524,7 @@
   }
   function ajustarTamanho() {
     definirTamanho(window.innerWidth, window.innerHeight);
-    if (modoIA) desenhar();                     // redimensionar limpa o canvas
+    if (modoIA && !vista.voando) desenhar();    // redimensionar limpa o canvas
   }
   window.addEventListener('resize', ajustarTamanho);
 
@@ -2533,7 +2538,8 @@
     if (ASSISTINDO) horaGravada += dt * 1000;   // o relógio do jogo (ver hora): entre um botão gravado e o outro ele anda com a gravação
     if (toca) toca.soltar();                    // os botões gravados cuja hora chegou
     animar(1 - Math.exp(-dt * 14), 1 - Math.exp(-dt * 5));
-    if (!modoIA) { aplicarVisual(); desenhar(); }
+    if (vista.voando) { aplicarVisual(); voar(real); desenharDeFora(); }   // quem assiste de fora vê tudo ao vivo, mesmo no modo iA
+    else if (!modoIA) { aplicarVisual(); desenhar(); }
     requestAnimationFrame(quadro);
   }
 
@@ -2548,7 +2554,10 @@
   // A lista de teclas, desenhada como teclas: em cima as do jogo, arrumadas como no teclado, e
   // embaixo as da página. Continua dizendo só quais existem, não o que cada uma faz.
   elAjuda.textContent = '';
-  for (const [classe, fileiras] of [['do-jogo', [REGRAS.passoDeLado ? ['Q', 'W', 'E'] : ['W'], ['A', 'S', 'D'], ['Espaço', 'Tab'], ['L', 'T', 'F']]], ['da-pagina', [['1', '2', '3', '4', 'M'], ['Shift+T', 'I', 'R', 'H', 'G']]]]) {
+  // (No modo voador as teclas do jogo dão lugar às de quem voa, que não são do jogo e por isso vêm explicadas: ver "o modo voador".)
+  for (const [classe, fileiras, dica] of [['do-jogo', [REGRAS.passoDeLado ? ['Q', 'W', 'E'] : ['W'], ['A', 'S', 'D'], ['Espaço', 'Tab'], ['L', 'T', 'F']]],
+    ['do-voador', [['Q', 'W', 'E'], ['A', 'S', 'D'], ['Shift', 'Z']], 'W A S D voam · Q e E descem e sobem · Shift corre · Z vai até o robô · arrastar o mouse vira'],
+    ['da-pagina', [['1', '2', '3', '4', 'M', 'C'], ['Shift+T', 'I', 'R', 'H', 'G']]]]) {
     const grupo = document.createElement('div');
     grupo.className = classe;
     for (const teclas of fileiras) {
@@ -2557,6 +2566,7 @@
       for (const t of teclas) { const k = document.createElement('kbd'); k.textContent = t; fileira.appendChild(k); }
       grupo.appendChild(fileira);
     }
+    if (dica) { const d = document.createElement('div'); d.className = 'dica'; d.textContent = dica; grupo.appendChild(d); }
     elAjuda.appendChild(grupo);
   }
   const linhas = [REGRAS.mensagem];
@@ -2699,12 +2709,186 @@
     return saida;
   }
 
+  // ---------- quem assiste: a visão da iA e o modo voador ----------
+  // A página mostra uma de duas visões. Nenhuma muda o jogo, e a imagem que a iA recebe é
+  // sempre a dos olhos do robô, seja qual for a visão de quem assiste (ver frame).
+  //   visão da iA: o que o robô vê, com tudo o que é desenhado na imagem dela.
+  //   voador:      uma câmera solta, de quem assiste. Voa por onde quiser, atravessa as paredes
+  //                e vê o robô por fora, de corpo inteiro (camada 1, que em primeira pessoa
+  //                fica de fora). Não vê o que é desenhado na tela do robô (camada 2). Em cima
+  //                da cabeça do robô vai um balão com o que a iA disse que pretende: é um
+  //                pedaço da página (#pensa), não do jogo, onde apareceria no espelho.
+  // Troca-se pela tecla C ou pelo botão da página (#vista); vale também assistindo a uma
+  // gravação. No modo voador o teclado é de quem voa — W A S D andam, Q e E descem e sobem,
+  // Shift corre, Z volta para perto do robô — e os botões do jogo, no teclado, ficam
+  // desligados (a iA continua jogando pelo MCP). Arrastar o mouse vira a câmera; a roda anda.
+  // A visão escolhida e o lugar da câmera ficam guardados na aba, porque a página recarrega a
+  // cada `comecar` e quando se volta numa gravação.
+  const voador = new T.PerspectiveCamera(60, 1, 0.05, 140);
+  voador.rotation.order = 'YXZ';
+  voador.layers.enable(1);                      // vê o corpo do robô
+  const vista = { voando: false, posta: false, x: 0, y: 2, z: 0, yaw: 0, pitch: 0 };
+  const TECLAS_DO_VOO = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight']), apertadas = new Set();
+  const entre = (v, a, b) => Math.max(a, Math.min(b, v));
+  // Até onde a câmera vai. Nas salas com espelho ela não sai do prédio: de fora dele, ou de
+  // trás do espelho, o truque do reflexo ficaria à mostra (o mundo é desenhado duas vezes).
+  const VOO = REGRAS.vila ? { x1: -7, x2: 15, y1: 0.25, y2: 10, z1: -3.5, z2: 16 }
+    : { x1: centro(1) - SALA.L / 2 + 0.15, x2: centro(REGRAS.salas) + SALA.L / 2 - 0.15, y1: 0.25, y2: SALA.A - 0.15, z1: Z_ESPELHO + 0.15, z2: SALA.P / 2 - 0.15 };
+  // Põe a câmera perto do robô, olhando para ele: de preferência atrás dele, a 2,3 m e mais
+  // alta do que ele, mas dentro do cômodo em que ele está e fora dos móveis. Se atrás houver
+  // uma parede ou um móvel, vai para o lado em que há mais espaço.
+  function irAteORobo() {
+    const a = estado.rumo * GIRO;
+    const c = REGRAS.vila ? areas[estado.sala] : { x1: centro(estado.sala) - SALA.L / 2, x2: centro(estado.sala) + SALA.L / 2, z1: -SALA.P / 2, z2: SALA.P / 2 };
+    const noMeioDeUmMovel = (x, z) => blocos.some(b => x > b.x1 - 0.15 && x < b.x2 + 0.15 && z > b.z1 - 0.15 && z < b.z2 + 0.15);
+    let melhor = null;
+    for (let k = 0; k < 8; k++) {               // k = 0: bem atrás dele; os outros, de 45° em 45°
+      const g = a + k * Math.PI / 4;
+      for (const longe of [2.3, 1.9, 1.5, 1.1]) {   // nessa direção, o ponto mais afastado que não cai dentro de um móvel
+        let x = estado.x + Math.sin(g) * longe, z = estado.z + Math.cos(g) * longe;
+        if (c) { x = entre(x, c.x1 + 0.3, c.x2 - 0.3); z = entre(z, c.z1 + 0.3, c.z2 - 0.3); }
+        x = entre(x, VOO.x1, VOO.x2); z = entre(z, VOO.z1, VOO.z2);
+        if (noMeioDeUmMovel(x, z) && longe > 1.1) continue;
+        const d = Math.hypot(x - estado.x, z - estado.z) + (k === 0 ? 0.5 : k === 1 || k === 7 ? 0.25 : 0) - (noMeioDeUmMovel(x, z) ? 1 : 0);   // (atrás vale mais)
+        if (!melhor || d > melhor.d + 1e-9) melhor = { x, z, d };
+        break;
+      }
+    }
+    Object.assign(vista, { posta: true, x: melhor.x, y: entre(2.05, VOO.y1, VOO.y2), z: melhor.z });
+    const dx = estado.x - vista.x, dz = estado.z - vista.z;
+    vista.yaw = Math.atan2(-dx, -dz);
+    vista.pitch = Math.atan2(0.5 - vista.y, Math.hypot(dx, dz) || 1e-6);   // mirando os joelhos dele: o robô fica no meio da tela, acima do campo das intenções
+  }
+  // Anda com a câmera: para a frente é para onde ela olha (subindo ou descendo junto); de lado, na horizontal.
+  function andar(frente, lado, sobe) {
+    const sy = Math.sin(vista.yaw), cy = Math.cos(vista.yaw), cp = Math.cos(vista.pitch), sp = Math.sin(vista.pitch);
+    vista.x = entre(vista.x - sy * cp * frente + cy * lado, VOO.x1, VOO.x2);
+    vista.y = entre(vista.y + sp * frente + sobe, VOO.y1, VOO.y2);
+    vista.z = entre(vista.z - cy * cp * frente - sy * lado, VOO.z1, VOO.z2);
+  }
+  function voar(dt) {
+    const tem = c => apertadas.has(c) ? 1 : 0, passo = (tem('ShiftLeft') || tem('ShiftRight') ? 9 : 3) * dt;   // metros por segundo
+    andar((tem('KeyW') - tem('KeyS')) * passo, (tem('KeyD') - tem('KeyA')) * passo, (tem('KeyE') - tem('KeyQ')) * passo);
+  }
+  // O desenho de quem voa: como em desenhar, mas por esta câmera, com o corpo do robô e sem o que é desenhado na tela dele.
+  function desenharDeFora() {
+    voador.position.set(vista.x, vista.y, vista.z);
+    voador.rotation.set(vista.pitch, vista.yaw, 0);
+    atualizarBalao(voador);                     // o balão da pessoa, virado para esta câmera
+    renderer.clear();
+    voador.layers.disable(3);
+    if (!REGRAS.semEspelho) {                   // 1) o mundo refletido no plano do espelho
+      raiz.scale.z = -1; raiz.position.z = 2 * Z_ESPELHO;
+      vidro.visible = false;
+      renderer.shadowMap.needsUpdate = true;
+      renderer.render(cena, voador);
+      raiz.scale.z = 1; raiz.position.z = 0;
+      renderer.clearDepth();
+    }
+    vidro.visible = !REGRAS.semEspelho && !REGRAS.espelhoDisfarcado;
+    voador.layers.enable(3);                    // 2) o mundo real por cima, com o balão da pessoa
+    renderer.shadowMap.needsUpdate = true;
+    renderer.render(cena, voador);
+    porPensamento();
+  }
+  // O balão do que a iA pretende, em cima da cabeça do robô: a última intenção, no lugar da tela em que a cabeça aparece.
+  const elVista = document.getElementById('vista'), elPensa = document.getElementById('pensa');
+  let pensado = null;
+  function porPensamento() {
+    if (!elPensa) return;
+    const ultima = intencoes[intencoes.length - 1];
+    v3.set(visual.x, 1.52, visual.z).applyMatrix4(voador.matrixWorldInverse);
+    if (!ultima || v3.z > -0.15) { elPensa.hidden = true; return; }      // nada a dizer, ou o robô está atrás de quem olha
+    const longe = -v3.z;
+    v3.applyMatrix4(voador.projectionMatrix);
+    if (ultima !== pensado) {                   // (sempre como texto: tudo aqui vem da iA)
+      pensado = ultima;
+      const b = document.createElement('b'), s = document.createElement('span');
+      b.textContent = NOME_DO_BOTAO[ultima.botao] || ultima.botao;
+      s.textContent = ultima.quer;
+      elPensa.textContent = '';
+      elPensa.append(b, s);
+    }
+    const x = (v3.x + 1) / 2 * window.innerWidth, y = (1 - v3.y) / 2 * window.innerHeight;
+    elPensa.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, calc(-100% - 26px)) scale(${entre(3.2 / longe, 0.55, 1).toFixed(3)})`;
+    elPensa.hidden = false;
+  }
+  function mostrarVista() {
+    document.body.classList.toggle('voando', vista.voando);
+    canvas.style.cursor = vista.voando ? 'grab' : '';
+    if (elVista) elVista.querySelectorAll('button').forEach(b => b.classList.toggle('acesa', (b.dataset.vista === 'voador') === vista.voando));
+    if (elPensa && !vista.voando) elPensa.hidden = true;
+  }
+  function guardarVista() {
+    try { sessionStorage.setItem('desafio.vista', JSON.stringify({ d: DESAFIO, voando: vista.voando, p: vista.posta ? [vista.x, vista.y, vista.z, vista.yaw, vista.pitch] : null })); } catch (e) { }
+  }
+  // Troca a visão de quem assiste: 'ia', 'voador' ou, sem dizer qual, a outra.
+  function verComo(qual) {
+    const voando = qual ? qual === 'voador' : !vista.voando;
+    if (voando === vista.voando) return;
+    vista.voando = voando;
+    apertadas.clear();
+    if (voando && !vista.posta) irAteORobo();
+    mostrarVista();
+    guardarVista();
+    if (!voando && modoIA) { aplicarVisual(); desenhar(); }   // no modo iA a tela só muda quando a iA pede a imagem: sem isto ficaria a do voo
+  }
+  // A visão em que a página abre: a que estava (ver guardarVista), ou a do endereço (?vista=voador).
+  function abrirVista() {
+    try {
+      const g = JSON.parse(sessionStorage.getItem('desafio.vista'));
+      if (g && g.voando === true) vista.voando = true;
+      if (g && g.d === DESAFIO && Array.isArray(g.p) && g.p.length === 5 && g.p.every(Number.isFinite))
+        Object.assign(vista, { posta: true, x: entre(g.p[0], VOO.x1, VOO.x2), y: entre(g.p[1], VOO.y1, VOO.y2), z: entre(g.p[2], VOO.z1, VOO.z2), yaw: g.p[3], pitch: entre(g.p[4], -1.45, 1.45) });
+    } catch (e) { }
+    if (ENDERECO.get('vista') === 'voador') vista.voando = true;
+    if (ENDERECO.get('vista') === 'ia') vista.voando = false;
+    if (vista.voando && !vista.posta) irAteORobo();
+    if (elVista) elVista.hidden = false;
+    mostrarVista();
+  }
+  if (elVista) elVista.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    b.blur();                                   // (senão o Espaço, que numa gravação pausa, apertaria o botão de novo)
+    verComo(b.dataset.vista);
+  });
+  window.addEventListener('pagehide', guardarVista);
+  // o mouse, no modo voador: arrastar vira a câmera; a roda anda para a frente e para trás
+  let arrasto = null;
+  canvas.addEventListener('pointerdown', e => {
+    if (!vista.voando || e.button !== 0) return;
+    arrasto = { x: e.clientX, y: e.clientY };
+    canvas.setPointerCapture(e.pointerId);
+    canvas.style.cursor = 'grabbing';
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!arrasto) return;
+    vista.yaw -= (e.clientX - arrasto.x) * 0.0045;
+    vista.pitch = entre(vista.pitch - (e.clientY - arrasto.y) * 0.0045, -1.45, 1.45);
+    arrasto = { x: e.clientX, y: e.clientY };
+  });
+  for (const fim of ['pointerup', 'pointercancel']) canvas.addEventListener(fim, () => { arrasto = null; canvas.style.cursor = vista.voando ? 'grab' : ''; });
+  canvas.addEventListener('wheel', e => {
+    if (!vista.voando) return;
+    e.preventDefault();
+    andar(-entre(e.deltaY, -300, 300) * 0.004, 0, 0);
+  }, { passive: false });
+  window.addEventListener('keyup', e => apertadas.delete(e.code));
+  window.addEventListener('blur', () => apertadas.clear());
+
   // ---------- teclado ----------
   const BOTAO_DA_TECLA = { KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D', KeyQ: 'Q', KeyE: 'E', Space: 'ESPACO', Tab: 'TAB', KeyL: 'L', KeyT: 'T', KeyF: 'F' };
   const REPETE_SEGURANDO = new Set(['W', 'A', 'S', 'D', 'Q', 'E']);
   let ultimoPasso = 0;
 
   window.addEventListener('keydown', e => {
+    // Quem assiste (vale também numa gravação): C troca a visão e, no modo voador, o teclado é de quem voa.
+    if (elCaixa.hidden && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      if (e.code === 'KeyC') { e.preventDefault(); if (!e.repeat) verComo(); return; }
+      if (vista.voando && TECLAS_DO_VOO.has(e.code)) { e.preventDefault(); apertadas.add(e.code); return; }
+      if (vista.voando && e.code === 'KeyZ') { if (!e.repeat) irAteORobo(); return; }
+    }
     if (ASSISTINDO) return;                     // numa gravação o teclado não joga (as teclas de quem assiste estão em gravacao.js)
     if (!elCaixa.hidden) {                      // digitando o texto do botão T
       if (e.code === 'Enter' || e.code === 'NumpadEnter') { apertar('T', elEntrada.value); elCaixa.hidden = true; }
@@ -2716,6 +2900,7 @@
     const botao = BOTAO_DA_TECLA[e.code];
     if (botao) {
       e.preventDefault();
+      if (vista.voando) return;                 // voando, o teclado não joga: quem assiste é invisível
       if (REPETE_SEGURANDO.has(botao)) {
         if (e.timeStamp - ultimoPasso < INTERVALO_TECLA) return;
         ultimoPasso = e.timeStamp;
@@ -2756,6 +2941,7 @@
   // resultado: o jogo acabou para quem joga? (no desafio 4 dá para perder: o bolo queima)
   window.jogo = { apertar, comecar, mover, virar, pegar, levantar, escrever, frame, reiniciar, estado, salas, itens, desafio: DESAFIO, diagnostico: () => ultima,
     resultado: () => estado.ganhou ? 'ganhou' : estado.perdeu ? 'perdeu' : '' };
+  abrirVista();                                 // a visão de quem assiste: a da iA ou a de quem voa
   ajustarTamanho();
   aplicarVisual();
   resposta('início', true, 'ok');

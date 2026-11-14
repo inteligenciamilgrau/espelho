@@ -26,6 +26,7 @@
   #modo   { bottom: 52px; right: 12px; background: rgba(150, 60, 0, .8); font-weight: bold; }
   #ponte  { bottom: 12px; right: 12px; font-size: 12px; color: #9fb0ba; text-align: right; }
   #ponte.alerta { background: rgba(150, 30, 20, .9); color: #fff; font-size: 14px; font-weight: bold; }
+  #vista  { bottom: 92px; right: 12px; pointer-events: auto; }
   #mensagem { bottom: 12px; left: 12px; }
   #caixa {
     position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -102,10 +103,30 @@
   /* o canto de cima, à direita, é do indicador dos alvos (desenhado no jogo): os replays ficam embaixo, e o aviso do MCP em cima deles */
   body.desafio #replays { top: auto; bottom: 14px; right: 14px; padding: 8px 15px; border-radius: 999px; font: 600 13px/1 var(--texto); color: var(--verde); transition: background .15s, color .15s; }
   body.desafio #replays:hover { text-decoration: none; background: var(--verde); color: #07130d; }
-  body.desafio #ponte { bottom: 54px; right: 14px; padding: 8px 14px; border-radius: 999px; font-size: 12.5px; color: #c9d4db; text-align: left; }
+  body.desafio #ponte { bottom: 98px; right: 14px; padding: 8px 14px; border-radius: 999px; font-size: 12.5px; color: #c9d4db; text-align: left; }
   body.desafio #ponte::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--verde); box-shadow: 0 0 0 3px rgba(125, 255, 176, .2); }
   body.desafio #ponte.alerta { border-radius: 14px; background: rgba(170, 36, 28, .92); border-color: rgba(255, 255, 255, .25); color: #fff; font-size: 14px; font-weight: 600; }
   body.desafio #ponte.alerta::before { background: #fff; box-shadow: none; }
+  /* a visão de quem assiste: dois botões numa pílula, o aceso é a visão atual (tecla C) */
+  body.desafio #vista { bottom: 54px; right: 14px; padding: 4px; border-radius: 999px; display: flex; align-items: center; gap: 2px; white-space: nowrap; }
+  body.desafio #vista button { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 999px; font: 600 12.5px/1 var(--texto); color: #c9d4db; transition: background .15s, color .15s; }
+  body.desafio #vista button:hover { color: #fff; }
+  body.desafio #vista button.acesa { background: var(--verde); color: #07130d; }
+  body.desafio #vista kbd { min-width: 22px; height: 22px; padding: 0 6px; margin: 0 4px 0 5px; font-size: 11px; }
+  /* no modo voador: as teclas de quem voa no lugar das do jogo, e o balão do que a iA pretende, em cima da cabeça do robô */
+  body.desafio #ajuda .do-voador::before { content: 'voador'; display: block; margin: 0 2px 4px; text-align: center; font: 600 10px/1 var(--titulo); letter-spacing: 1.5px; text-transform: uppercase; color: var(--verde); }
+  body.desafio #ajuda .do-voador .dica { margin: 5px auto 0; max-width: 168px; text-align: center; font: 11px/1.4 var(--texto); color: var(--apagado); }
+  body.desafio:not(.voando) #ajuda .do-voador, body.desafio.voando #ajuda .do-jogo { display: none; }
+  body.desafio #pensa {
+    position: fixed; left: 0; top: 0; max-width: 300px; box-sizing: border-box; padding: 9px 13px 10px; border-radius: 16px;
+    background: #fff; color: #14181d; font: 600 14.5px/1.3 var(--texto); white-space: normal; overflow-wrap: anywhere;
+    box-shadow: 0 8px 26px rgba(0, 0, 0, .4); pointer-events: none; user-select: none;
+    transform-origin: 50% calc(100% + 26px); will-change: transform;
+  }
+  body.desafio #pensa::before, body.desafio #pensa::after { content: ''; position: absolute; left: 50%; border-radius: 50%; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .3); }
+  body.desafio #pensa::before { bottom: -14px; width: 12px; height: 12px; margin-left: -10px; }
+  body.desafio #pensa::after { bottom: -25px; width: 7px; height: 7px; margin-left: -2px; }
+  body.desafio #pensa b { display: inline-block; margin-right: 7px; padding: 2px 6px; border-radius: 6px; background: #14181d; color: #fff; font: 700 10.5px/1.4 var(--mono); vertical-align: 2px; }
   body.desafio #modo { bottom: 15px; right: 150px; padding: 6px 13px; border-radius: 999px; background: rgba(190, 86, 10, .9); font: 700 13px/1 var(--mono); }
   body.desafio #status { top: 58px; right: 14px; font: 12.5px/1.5 var(--mono); }
   body.desafio #log { bottom: 14px; left: 14px; font: 12.5px/1.5 var(--mono); }
@@ -127,17 +148,24 @@
 <body>
 <canvas id="tela"></canvas>
 
+<!-- No modo voador (jogo.js): o balão com o que a iA pretende, em cima da cabeça do robô. É da
+     página, não do jogo: nunca entra na imagem que a iA recebe. -->
+<div id="pensa" hidden></div>
+
 <!-- Só quais botões existem: o jogo não diz o que cada botão faz.
-     (As duas últimas linhas são da página, não do jogo: 1, 2, 3, M e Shift+T começam um desafio,
-     I é o modo iA, R recomeça, H esconde esta lista e G abre os replays. Nos desafios M e T,
-     arena.js troca esta lista pela dos dois jogadores.) -->
+     (As duas últimas linhas são da página, não do jogo: 1, 2, 3, 4, M e Shift+T começam um desafio,
+     C troca a visão de quem assiste, I é o modo iA, R recomeça, H esconde esta lista e G abre os
+     replays. Nos desafios M e T, arena.js troca esta lista pela dos dois jogadores.) -->
 <div id="ajuda" class="painel">  W
 A S D
 Espaço Tab
 L T F
 
-1 2 3 4 M Shift+T
+1 2 3 4 M C Shift+T
 I R H G</div>
+
+<!-- A visão de quem assiste, nos desafios 1 a 4 (jogo.js): a da iA ou a de quem voa por fora. -->
+<div id="vista" class="painel" hidden><button type="button" tabindex="-1" data-vista="ia" title="O que o robô da iA está vendo">visão da iA</button><button type="button" tabindex="-1" data-vista="voador" title="Uma câmera solta, invisível: W A S D voam, Q e E descem e sobem, Shift corre, Z vai até o robô; arrastar o mouse vira a câmera">voador</button><kbd>C</kbd></div>
 
 <!-- As partidas gravadas, em outra aba (ver gravacao.js e replays.html). Só com o servidor ligado. -->
 <a id="replays" class="painel" href="replays.html" target="_blank" rel="noopener">▶ replays (G)</a>

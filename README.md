@@ -78,6 +78,7 @@ Antes de começar, o jogo pede à iA um nome de guerra e o modelo dela, e daí e
 ### 5. Assista
 
 - **Na aba do jogo**, o robô se mexe a cada botão que a iA aperta. Nos Desafios 1 a 4, embaixo da tela aparecem **quem está jogando** (o nome de guerra e o modelo) e **o que o robô pretende**: a iA tem de dizer, junto com cada botão, o que quer com ele (veja [Quem joga e a intenção de cada botão](#quem-joga-e-a-intenção-de-cada-botão)).
+- **De fora, voando**, nos Desafios 1 a 4: a tecla `C` (ou o botão **visão da iA / voador**, no canto de baixo, à direita) troca a visão da página entre o que o robô vê e uma câmera solta, com que você passeia invisível pelo cenário (veja [Duas visões para quem assiste](#duas-visões-para-quem-assiste)).
 - **Na janela do servidor**, aparece cada botão apertado (com a intenção), a hora, e a linha `a iA venceu o jogo` quando ela termina.
 - **Depois, com calma**, na aba de replays: toda partida é gravada, e dá para assistir a ela sem as esperas (veja [Replays](#replays-assistir-a-uma-partida-depois)).
 - **Para ver o que cada botão fez de verdade**, acrescente `?depurar` ao endereço da página do jogo. Aparece um painel com o estado do jogo. Não deixe a iA ver essa tela.
@@ -85,6 +86,31 @@ Antes de começar, o jogo pede à iA um nome de guerra e o modelo dela, e daí e
 ### 6. Repita
 
 Para outra rodada, a iA chama a ferramenta `comecar` com o número do desafio. Na página, `R` recomeça o desafio atual e as teclas `1`, `2`, `3`, `4`, `M` e `Shift+T` trocam de desafio.
+
+## Duas visões para quem assiste
+
+Nos Desafios 1 a 4 a página mostra uma de duas visões. Troca-se pela tecla `C` ou pelo botão **visão da iA / voador**, no canto de baixo, à direita; vale ao vivo e nos replays.
+
+- **Visão da iA:** o que o robô está vendo, com tudo o que é desenhado na imagem dela (o inventário, os números dos alvos, o indicador). É a visão em que a página abre.
+- **Voador:** uma câmera solta, só sua. Você voa por onde quiser, atravessa as paredes e vê o robô por fora, de corpo inteiro. Em cima da cabeça dele vai um balão com **o que a iA disse que pretende** com o último botão. O que a pessoa diz também aparece no balão dela.
+
+No modo voador o teclado é de quem voa:
+
+| Tecla | O que faz |
+|---|---|
+| `W` `A` `S` `D` | Voam: para a frente (para onde a câmera olha), para trás e de lado |
+| `Q` / `E` | Descem / sobem |
+| `Shift` | Corre (segurando junto) |
+| `Z` | Leva a câmera para perto do robô, olhando para ele |
+| arrastar o mouse | Vira a câmera |
+| roda do mouse | Anda para a frente e para trás |
+
+Você é invisível, e isso vale nos dois sentidos:
+
+- **Nada disso muda o jogo nem a imagem da iA.** A imagem que a iA recebe é sempre a dos olhos do robô, seja qual for a visão da página. O balão do pensamento é um pedaço da página, não do jogo: não entra na imagem dela nem aparece no espelho.
+- **Voando, o teclado não joga.** Os botões do jogo no teclado ficam desligados até você voltar para a visão da iA; a iA continua jogando pelo MCP do mesmo jeito.
+
+A visão escolhida e o lugar da câmera ficam guardados na aba, então continuam valendo quando a página recarrega (a cada `comecar`, ou ao voltar num replay). `?vista=voador` no endereço já abre a página voando. Nas salas com espelho a câmera não sai do prédio; na vila, ela vai até uns metros além das casas e sobe até 10 m.
 
 ## Replays: assistir a uma partida depois
 
@@ -271,6 +297,7 @@ Dê duplo clique em `index.html`. As teclas são as mesmas que a iA tem, mais al
 
 - `1`, `2`, `3` e `4` começam o Desafio 1, 2, 3 ou 4, `M` começa o Desafio M e `Shift+T` começa o Desafio T (o `T` sozinho é um botão do jogo);
 - `R` recomeça o desafio atual;
+- `C` troca a visão de quem assiste, entre a da iA e a de quem voa por fora (veja [Duas visões para quem assiste](#duas-visões-para-quem-assiste); só nos Desafios 1 a 4);
 - `I` congela a tela até a próxima imagem ser pedida (para sentir como a iA enxerga; só nos Desafios 1 a 4);
 - `H` esconde a lista de teclas;
 - `G` abre a aba de replays (só com o servidor ligado: aberta direto do arquivo, a página não grava).
