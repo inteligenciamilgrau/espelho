@@ -166,7 +166,7 @@
   body.desafio #quer { overflow: hidden; overflow-wrap: anywhere; }
   /* tela cheia: uma pilha no canto de baixo, à direita (o campo das intenções em cima, as pílulas embaixo), que só sobe até --teto: o indicador
      do alvo, no alto da imagem, ou o pé da lista de teclas, quando ela está desse lado (jogo.js mede: ver arrumarPaineis) */
-  body.desafio.tela-cheia #doca { right: 14px; bottom: 14px; width: min(380px, calc(100vw - 28px)); max-height: calc(100vh - 14px - var(--teto, 14vh)); flex-direction: column; align-items: flex-end; justify-content: flex-end; gap: 8px; }
+  body.desafio.tela-cheia #doca { right: 14px; bottom: 14px; width: min(412px, calc(100vw - 28px)); max-height: calc(100vh - 14px - var(--teto, 14vh)); flex-direction: column; align-items: flex-end; justify-content: flex-end; gap: 8px; }
   body.desafio.tela-cheia #quer { position: static; transform: none; width: 100%; box-sizing: border-box; flex: 0 1 auto; min-height: 0; }
   body.desafio.tela-cheia #quer .ultima { font-size: 15.5px; }
   body.desafio.tela-cheia #pilulas { width: 100%; flex-wrap: wrap; justify-content: flex-end; align-items: center; }   /* (as pílulas em fileiras, da direita para a esquerda: a pilha fica mais baixa) */
@@ -195,9 +195,9 @@
   body.desafio.doca-lado #ponte { order: 1; }
   body.desafio.doca-lado #replays { order: 2; }
   body.desafio.doca-lado #quer .ultima { font-size: 15.5px; }
-  /* o som em duas fileiras (o botão em cima, as réguas embaixo): na coluna e, assistindo a uma gravação, na faixa */
-  body.desafio.doca-lado #som, body.desafio.doca-baixo.assistindo #som { display: grid; grid-template-columns: auto minmax(0, 1fr); row-gap: 5px; border-radius: 18px; padding: 5px 6px 8px; }
-  body.desafio.doca-lado #som kbd, body.desafio.doca-baixo.assistindo #som kbd { justify-self: start; }
+  /* na coluna, o som em duas fileiras: o botão em cima, as réguas embaixo */
+  body.desafio.doca-lado #som { display: grid; grid-template-columns: auto minmax(0, 1fr); row-gap: 5px; border-radius: 18px; padding: 5px 6px 8px; }
+  body.desafio.doca-lado #som kbd { justify-self: start; }
   body.desafio.doca-lado #som { flex-basis: 100%; }
   body.desafio.doca-lado #som label input[type=range] { flex: 1 1 40px; min-width: 40px; width: auto; }
   /* a faixa: da esquerda para a direita, o que o jogo disse, quem joga e o que pretende, e as pílulas; assistindo a uma
@@ -207,7 +207,8 @@
   body.desafio.doca-baixo #doca > .gravacao { order: -2; }
   body.desafio.doca-baixo #mensagem { order: -1; flex: 0 1 auto; max-width: 210px; }
   body.desafio.doca-baixo #quer { flex: 1 1 0; min-width: 0; max-height: 100%; }
-  body.desafio.doca-baixo #pilulas { flex-direction: column; align-items: flex-end; justify-content: flex-end; max-height: 100%; }
+  body.desafio.doca-baixo #pilulas { width: 330px; flex-wrap: wrap; justify-content: flex-end; align-content: flex-end; align-items: center; max-height: 100%; }
+  body.desafio.doca-baixo #som label { display: none; }   /* (as réguas de volume não cabem na faixa: ficam na tela cheia e na coluna) */
   body.desafio.doca-baixo #pilulas > #mensagem { max-width: 270px; padding: 7px 13px 8px; }
   /* na vila coletiva são até quatro robôs: na faixa, o campo deles vai em duas colunas */
   body.desafio.doca-baixo.coletivo #quer { column-count: 2; column-gap: 26px; }
@@ -230,6 +231,36 @@
   /* o painel de quem assiste a uma gravação (gravacao.js monta com estilo próprio: aqui só a cara dos desafios; no menu ao lado, jogo.js o põe na bancada) */
   body.desafio .gravacao { top: 14px !important; left: 14px !important; width: 276px !important; padding: 11px 13px !important; border-radius: 14px !important; background: var(--vidro) !important; font: 13px/1.5 var(--texto) !important; }
   body.desafio .gravacao b { font-family: var(--titulo); letter-spacing: 1px; }
+
+  /* ---------- o menu dos jogos ----------
+     Abre sozinho quando a página é aberta sem dizer o jogo (o endereço sem ?desafio=), e pela tecla Esc
+     ou pela pílula "jogos". É da página, por cima de tudo: nunca entra na imagem que a iA recebe.
+     (Vale também na quadra: por isso não depende das cores e das fontes dos desafios.) */
+  #menu { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; background: rgba(4, 7, 10, .6); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px);
+    font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Arial, sans-serif; color: #eef3f6; user-select: none; }
+  #menu .quadro { width: min(780px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; padding: 16px 20px 13px; border-radius: 16px;
+    background: rgba(17, 22, 29, .95); border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 24px 60px rgba(0, 0, 0, .55); }
+  #menu h1 { margin: 0; font: 700 25px/1.1 Bahnschrift, "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; letter-spacing: .5px; }
+  #menu .dica { margin: 4px 0 11px; color: #93a4af; }
+  #menu .lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 6px; }
+  #menu .item { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 7px 12px; border-radius: 10px; cursor: pointer;
+    background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1); transition: background .12s, border-color .12s; }
+  #menu .item:hover, #menu .item:focus-visible { border-color: #7dffb0; background: rgba(125, 255, 176, .1); }
+  #menu .item.atual { border-color: rgba(255, 154, 86, .75); }
+  #menu .item .tecla { flex: none; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-width: 36px; height: 36px; padding: 0 8px; border-radius: 8px;
+    font: 700 15px/1 "Cascadia Mono", Consolas, monospace; color: #f4f7f9; background: linear-gradient(#3b4651, #262e37); border: 1px solid rgba(255, 255, 255, .17); border-bottom: 3px solid rgba(0, 0, 0, .5); }
+  #menu .item b { display: block; font-weight: 600; font-size: 15.5px; }
+  #menu .item .nota { display: block; color: #a9b8c2; font-size: 12.5px; line-height: 1.35; }
+  #menu .item .agora { margin-left: 8px; font: 600 10px/1 Bahnschrift, "Segoe UI", sans-serif; letter-spacing: 1.2px; text-transform: uppercase; color: #ff9a56; }
+  #menu .pe { margin: 10px 0 0; color: #93a4af; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  #menu .pe a { color: #7dffb0; text-decoration: none; }
+  #menu .pe a:hover { text-decoration: underline; }
+  /* a pílula que abre o menu, junto das outras (só nos desafios) */
+  body.desafio #abrirMenu { all: unset; box-sizing: border-box; cursor: pointer; pointer-events: auto; padding: 8px 14px; border-radius: 999px; font: 600 13px/1 var(--texto); color: #c9d4db;
+    background: var(--vidro); border: 1px solid var(--borda); box-shadow: 0 12px 32px rgba(0, 0, 0, .34), inset 0 1px 0 rgba(255, 255, 255, .07); -webkit-backdrop-filter: blur(14px) saturate(1.3); backdrop-filter: blur(14px) saturate(1.3); transition: background .15s, color .15s; }
+  body.desafio #abrirMenu:hover { background: var(--verde); color: #07130d; }
+  body.desafio.bancada #abrirMenu { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07); text-align: center; }
+  body.desafio.doca-lado #abrirMenu { flex: 1 1 auto; order: 3; }
 </style>
 </head>
 <body>
@@ -251,16 +282,16 @@
 <div id="mensagem" class="painel"></div>
 
 <!-- Só quais botões existem: o jogo não diz o que cada botão faz.
-     (As últimas linhas são da página, não do jogo: 1 a 7, V, M e Shift+T começam um desafio,
+     (As últimas linhas são da página, não do jogo: 1 a 8, V, M e Shift+T começam um desafio,
      C troca a visão de quem assiste, B troca o arranjo da página, I é o modo iA, R recomeça, H esconde
-     esta lista e G abre os replays. Nos desafios M e T, arena.js troca esta lista pela dos dois jogadores.) -->
+     esta lista, G abre os replays e Esc abre o menu dos jogos. Nos desafios M e T, arena.js troca esta lista pela dos dois jogadores.) -->
 <div id="ajuda" class="painel">  W
 A S D
 Espaço Tab
 L T F
 
-1 2 3 4 5 6 7 V M C Shift+T
-I R H G</div>
+1 2 3 4 5 6 7 8 V M C Shift+T
+I R H G Esc</div>
 
 <div id="pilulas">
 <!-- O modo iA (tecla I): a imagem só muda quando a iA pede uma. -->
@@ -278,8 +309,11 @@ I R H G</div>
 <!-- O arranjo da página nos desafios (jogo.js): a imagem enchendo a janela, com os painéis por cima, ou a imagem com o menu ao lado. -->
 <div id="arranjo" class="painel" hidden><button type="button" tabindex="-1" data-arranjo="cheia" title="A imagem do jogo enche a janela, e os painéis ficam por cima dela, nos cantos">tela cheia</button><button type="button" tabindex="-1" data-arranjo="lado" title="A imagem fica do tamanho da que a iA recebe, sem nada por cima, e os painéis vão para um menu ao lado">menu ao lado</button><kbd>B</kbd></div>
 
+<!-- Abre o menu dos jogos (o mesmo que a tecla Esc): ver o script no fim da página. -->
+<button id="abrirMenu" type="button" tabindex="-1" hidden title="A lista dos jogos: os desafios, a vila e o Galinha Pong (tecla Esc)">☰ jogos</button>
+
 <!-- As partidas gravadas, em outra aba (ver gravacao.js e replays.html). Só com o servidor ligado. -->
-<a id="replays" class="painel" href="replays.html" target="_blank" rel="noopener">▶ replays (G)</a>
+<a id="replays" class="painel" href="replays.html" target="_blank" rel="noopener" title="As partidas gravadas, em outra aba (tecla G)">▶ replays</a>
 </div>
 
 </div>
@@ -297,6 +331,90 @@ I R H G</div>
 <script src="jogo.js"></script>
 <script src="arena.js"></script>
 <script src="ponte.js"></script>
+
+<!-- O menu dos jogos. Abre sozinho quando a página é aberta sem ?desafio= no endereço (é a "porta de
+     entrada": quem abre a página sem saber o número de cada jogo escolhe aqui), e pela tecla Esc ou
+     pela pílula "jogos". A iA não o vê: é da página, não entra na imagem dela. Quando uma iA aperta um
+     botão, o menu sai da frente sozinho. -->
+<div id="menu" hidden>
+  <div class="quadro" role="dialog" aria-label="Jogos">
+    <h1>Jogos</h1>
+    <p class="dica">Clique num jogo ou aperte a tecla dele. Para uma iA jogar, peça a ela, por exemplo: "jogue o Desafio 8".</p>
+    <div class="lista"></div>
+    <p class="pe"><span><b>Esc</b> fecha este menu (e abre de novo)</span><a href="replays.html" target="_blank" rel="noopener">▶ replays das partidas gravadas</a></p>
+  </div>
+</div>
+<script>
+(() => {
+  'use strict';
+  // cada jogo: o que vai em ?desafio=, a tecla, o nome e uma linha para quem assiste lembrar o que é
+  const JOGOS = [
+    ['1', '1', 'Desafio 1', 'O quarto do espelho, sem instrução nenhuma'],
+    ['2', '2', 'Desafio 2', 'O quarto do espelho: "Dê o objeto para o robô"'],
+    ['3', '3', 'Desafio 3', 'Uma pessoa no quarto, e nenhuma instrução'],
+    ['4', '4', 'Desafio 4', 'A cidade: a casa amarela e a pessoa com fome'],
+    ['5', '5', 'Desafio 5', 'A cidade: o flat e a dor de cabeça'],
+    ['6', '6', 'Desafio 6', 'A cidade: a casa azul, pão de queijo e café'],
+    ['7', '7', 'Desafio 7', 'O quebra-cabeça de 9 peças, com pontuação'],
+    ['8', '8', 'Desafio 8', 'Os zumbis: virar e atirar, com recorde'],
+    ['V', 'V', 'Vila coletiva', 'Até quatro iAs na cidade, cada uma com a sua missão'],
+    ['M', 'M', 'Galinha Pong', 'Duas iAs, uma contra a outra, na quadra'],
+    ['T', 'T', 'Treino de Galinha Pong', 'Uma iA contra o robô da casa'],
+  ];
+  const menu = document.getElementById('menu'), lista = menu.querySelector('.lista'), pilula = document.getElementById('abrirMenu');
+  const endereco = new URLSearchParams(location.search), atual = endereco.get('desafio') || '1', assistindo = endereco.has('assistir');
+  // Começa o jogo `id`: a página recarrega só com ele no endereço (o arranjo da página e o painel de depuração continuam como estavam).
+  function ir(id) {
+    try { sessionStorage.removeItem('quadra.entrada'); sessionStorage.removeItem('vila.entrada'); } catch (e) { }
+    const p = new URLSearchParams();
+    p.set('desafio', id);
+    for (const k of ['painel', 'depurar']) if (endereco.has(k)) p.set(k, endereco.get(k));
+    if ('?' + p.toString() === location.search) location.reload(); else location.search = p.toString();
+  }
+  for (const [id, tecla, nome, nota] of JOGOS) {
+    const item = document.createElement('button'), marca = document.createElement('span'), corpo = document.createElement('span'), titulo = document.createElement('b'), linha = document.createElement('span');
+    item.type = 'button';
+    item.className = 'item' + (id === atual && !assistindo ? ' atual' : '');
+    marca.className = 'tecla'; marca.textContent = tecla;
+    titulo.textContent = nome;
+    if (id === atual && !assistindo) { const agora = document.createElement('span'); agora.className = 'agora'; agora.textContent = 'aberto agora'; titulo.appendChild(agora); }
+    linha.className = 'nota'; linha.textContent = nota;
+    corpo.append(titulo, linha);
+    item.append(marca, corpo);
+    item.addEventListener('click', () => ir(id));
+    lista.appendChild(item);
+  }
+  const aberto = () => !menu.hidden;
+  const abrir = () => { menu.hidden = false; };
+  const fechar = () => { menu.hidden = true; };
+  menu.addEventListener('click', e => { if (e.target === menu) fechar(); });   // um clique fora do quadro fecha
+  if (pilula && document.body.classList.contains('desafio')) { pilula.hidden = false; pilula.addEventListener('click', () => { pilula.blur(); abrir(); }); }
+  // O teclado: Esc abre e fecha; com o menu aberto, a tecla de um jogo o começa, e nenhuma outra chega ao jogo que está atrás.
+  window.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    const caixa = document.getElementById('caixa');
+    if (e.code === 'Escape' && !(caixa && !caixa.hidden)) {      // (com a caixa de texto do botão T aberta, o Esc é dela)
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (aberto()) fechar(); else abrir();
+      return;
+    }
+    if (!aberto()) return;
+    e.stopImmediatePropagation();
+    const tecla = e.key.length === 1 ? e.key.toUpperCase() : '', jogo = JOGOS.find(j => j[1] === tecla);
+    if (jogo && !e.repeat) { e.preventDefault(); ir(jogo[0]); }
+    else if (e.code === 'Space' || e.code === 'Tab' || e.code.startsWith('Arrow')) e.preventDefault();
+  }, true);
+  // A iA que aperta um botão tira o menu da frente (ele taparia o jogo dela para quem assiste).
+  const jogo = window.jogo;
+  if (jogo && typeof jogo.apertar === 'function') {
+    const apertar = jogo.apertar;
+    jogo.apertar = function (...a) { if (Number.isInteger(a[2]) && a[2] > 0) fechar(); return apertar.apply(this, a); };
+  }
+  // a porta de entrada: a página aberta sem dizer o jogo (e sem ser para assistir a uma gravação)
+  if (!endereco.has('desafio') && !assistindo) abrir();
+  window.menuDosJogos = { abrir, fechar, get aberto() { return aberto(); } };
+})();
+</script>
 <!-- O fim da página: é por ele que o navegador espera para desenhar (ver o link rel=expect, no alto). -->
 <i id="pronta" hidden></i>
 </body>

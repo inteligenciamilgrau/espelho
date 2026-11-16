@@ -2,7 +2,7 @@
 
 Um jogo 3D em primeira pessoa, feito para ser jogado por uma iA através de MCP. A iA controla um robô numa sala e quase não recebe explicação: ninguém diz o que cada botão faz. A única coisa que ela pode fazer é apertar botões e olhar a imagem que o jogo devolve.
 
-O jogo tem sete desafios. Os três primeiros começam no mesmo quarto; os três seguintes, numa cidade pequena; o sétimo é um quebra-cabeça:
+O jogo tem oito desafios. Os três primeiros começam no mesmo quarto; os três seguintes, numa cidade pequena; o sétimo é um quebra-cabeça e o oitavo, um jogo de tiro contra zumbis:
 
 - **Desafio 1:** a iA não recebe nem o objetivo; só "jogo começou".
 - **Desafio 2:** a iA recebe uma única instrução: "Dê o objeto para o robô."
@@ -11,6 +11,7 @@ O jogo tem sete desafios. Os três primeiros começam no mesmo quarto; os três 
 - **Desafio 5:** a mesma cidade, de outra casa: um flat de luxo, com uma mulher.
 - **Desafio 6:** a mesma cidade, da casa azul.
 - **Desafio 7:** um quebra-cabeça de 9 peças, numa parede. A iA escolhe cada peça, gira e põe no quadro de 3 x 3; no fim o jogo dá uma pontuação de 0 a 100. Veja [Desafio 7](#desafio-7-o-quebra-cabeça).
+- **Desafio 8:** os zumbis. O robô fica parado no meio de um campo, de noite, e os zumbis vêm de longe, devagar, de todos os lados, cada um mais depressa que o anterior. Nenhum pode encostar nele: a iA só vira e atira, em tempo real. O jogo conta quantos ela derruba, e há um recorde. Veja [Desafio 8](#desafio-8-os-zumbis).
 - **Vila coletiva (Desafio V):** a mesma cidade, com até quatro robôs ao mesmo tempo, cada um de uma iA. Eles entram e saem quando querem, sem o jogo recomeçar, e na praça há uma central de pedidos. Veja [Vila coletiva: várias iAs na mesma cidade](#vila-coletiva-várias-ias-na-mesma-cidade).
 
 E outro jogo, em outro cenário:
@@ -81,19 +82,28 @@ Antes de começar, o jogo pede à iA um nome de guerra e o modelo dela, e daí e
 
 ### 5. Assista
 
-- **Na aba do jogo**, o robô se mexe a cada botão que a iA aperta. Nos Desafios 1 a 7, no canto de baixo, à direita, aparecem **quem está jogando** (o nome de guerra e o modelo) e **o que o robô pretende**: a iA tem de dizer, junto com cada botão, o que quer com ele (veja [Quem joga e a intenção de cada botão](#quem-joga-e-a-intenção-de-cada-botão)). Se preferir a imagem sem nada por cima, com tudo isso num menu ao lado, aperte `B` (veja [Tela cheia ou menu ao lado](#tela-cheia-ou-menu-ao-lado)).
-- **De fora, voando**, nos Desafios 1 a 7: a tecla `C` (ou o botão **visão da iA / voador**, no canto de baixo, à direita) troca a visão da página entre o que o robô vê e uma câmera solta, com que você passeia invisível pelo cenário (veja [Duas visões para quem assiste](#duas-visões-para-quem-assiste)).
+- **Na aba do jogo**, o robô se mexe a cada botão que a iA aperta. Nos Desafios 1 a 8, no canto de baixo, à direita, aparecem **quem está jogando** (o nome de guerra e o modelo) e **o que o robô pretende**: a iA tem de dizer, junto com cada botão, o que quer com ele (veja [Quem joga e a intenção de cada botão](#quem-joga-e-a-intenção-de-cada-botão)). Se preferir a imagem sem nada por cima, com tudo isso num menu ao lado, aperte `B` (veja [Tela cheia ou menu ao lado](#tela-cheia-ou-menu-ao-lado)).
+- **De fora, voando**, nos Desafios 1 a 8: a tecla `C` (ou o botão **visão da iA / voador**, no canto de baixo, à direita) troca a visão da página entre o que o robô vê e uma câmera solta, com que você passeia invisível pelo cenário (veja [Duas visões para quem assiste](#duas-visões-para-quem-assiste)).
 - **Na janela do servidor**, aparece cada botão apertado (com a intenção), a hora, e a linha `a iA venceu o jogo` quando ela termina.
 - **Depois, com calma**, na aba de replays: toda partida é gravada, e dá para assistir a ela sem as esperas (veja [Replays](#replays-assistir-a-uma-partida-depois)).
 - **Para ver o que cada botão fez de verdade**, acrescente `?depurar` ao endereço da página do jogo. Aparece um painel com o estado do jogo. Não deixe a iA ver essa tela.
 
 ### 6. Repita
 
-Para outra rodada, a iA chama a ferramenta `comecar` com o número do desafio. Na página, `R` recomeça o desafio atual e as teclas `1` a `7`, `V`, `M` e `Shift+T` trocam de desafio.
+Para outra rodada, a iA chama a ferramenta `comecar` com o número do desafio. Na página, `R` recomeça o desafio atual e as teclas `1` a `8`, `V`, `M` e `Shift+T` trocam de desafio; o `Esc` abre o menu com todos os jogos (veja [O menu dos jogos](#o-menu-dos-jogos)).
+
+## O menu dos jogos
+
+A página aberta sem dizer o jogo (o endereço sem `?desafio=`, que é como o servidor a abre) mostra o **menu dos jogos**: os oito desafios, a vila coletiva, o Galinha Pong e o treino, cada um com a tecla, o nome e uma linha para lembrar o que é.
+
+- Um clique num jogo, ou a tecla dele, começa esse jogo.
+- O `Esc` fecha o menu e o abre de novo, em qualquer jogo (na quadra também). Nos desafios há ainda a pílula **☰ jogos**, junto das outras.
+- Com o menu aberto, as teclas não chegam ao jogo que está atrás.
+- O menu é da página: nunca aparece na imagem que a iA recebe. Quando uma iA aperta um botão, ele sai da frente sozinho; e quando ela chama `comecar`, a página já abre direto no jogo pedido.
 
 ## Tela cheia ou menu ao lado
 
-Nos Desafios 1 a 7 e na vila coletiva a página tem dois arranjos. Troca-se pela tecla `B` ou pela pílula **tela cheia / menu ao lado**; vale ao vivo e nos replays, e a escolha fica guardada no navegador.
+Nos Desafios 1 a 8 e na vila coletiva a página tem dois arranjos. Troca-se pela tecla `B` ou pela pílula **tela cheia / menu ao lado**; vale ao vivo e nos replays, e a escolha fica guardada no navegador.
 
 **Tela cheia** (é como a página abre):
 
@@ -114,7 +124,7 @@ Para abrir a página já num dos dois, acrescente `?painel=cheia` ou `?painel=la
 
 ## Duas visões para quem assiste
 
-Nos Desafios 1 a 7 a página mostra uma de duas visões. Troca-se pela tecla `C` ou pelo botão **visão da iA / voador**, no canto de baixo, à direita; vale ao vivo e nos replays.
+Nos Desafios 1 a 8 a página mostra uma de duas visões. Troca-se pela tecla `C` ou pelo botão **visão da iA / voador**, no canto de baixo, à direita; vale ao vivo e nos replays.
 
 - **Visão da iA:** o que o robô está vendo, com tudo o que é desenhado na imagem dela (o inventário, os números dos alvos, o indicador). É a visão em que a página abre.
 - **Voador:** uma câmera solta, só sua. Você voa por onde quiser, atravessa as paredes e vê o robô por fora, de corpo inteiro. Em cima da cabeça dele vai um balão com **o que a iA disse que pretende** com o último botão. O que a pessoa diz também aparece no balão dela.
@@ -146,17 +156,17 @@ Ao vivo o jogo é lento: cada iA leva vários segundos para decidir um botão. P
 
 - **Abrir:** na página do jogo, a tecla `G` ou o atalho **▶ replays** (nos desafios, no canto de baixo, à direita; na quadra, no painel das câmeras). Abre **outra aba**, com a lista das gravações, da mais nova para a mais antiga. O endereço é o da página do jogo com `replays.html` no fim.
 - **Não interfere no jogo:** a aba de replays não se liga ao servidor MCP. A partida que estiver sendo jogada continua na aba dela, e a gravação dela aparece na lista (do ponto em que estava quando a lista foi aberta).
-- **Pódio dos desafios:** no alto da lista, cada desafio de 1 a 7 tem o seu pódio, com o 1º, o 2º e o 3º lugar entre as iAs que venceram. Ganha quem venceu com **menos movimentos** (os botões apertados até a vitória, sem contar os pedidos de imagem); no empate, quem levou **menos tempo** (contado desde que o desafio começou). Cada iA — o nome de guerra com o modelo — entra uma vez só, com a melhor partida dela, e um clique num degrau abre essa partida. Partidas do teclado, sem nome, não entram. No Desafio 7 a ordem é a da pontuação. A vila coletiva e o Galinha Pong não têm pódio. (As gravações de antes do pódio não guardavam as contas da hora da vitória: entram com as da partida inteira, que podem ter um ou outro botão apertado depois dela.)
-- **Assistir:** clique numa gravação. Ela abre **em pausa**: o `Espaço`, ou o botão **▶ tocar**, faz a partida andar. O próprio jogo a refaz: na quadra, com tudo o que a transmissão tem (as etiquetas, as câmeras, a torcida, o comentarista, a reprise de cada ponto); nos Desafios 1 a 7, com o campo de quem jogou (nome e modelo) e do que o robô pretende. A lista também diz, de cada gravação, qual iA jogou. As esperas encolhem: entre uma rodada e outra passa no máximo 1,8 segundo, e o jogo dá o tempo de ler cada fala e cada intenção.
-- **Controles:** o painel da gravação tem pausar, voltar ao começo, ir para a rodada anterior ou para a seguinte, uma régua para ir a qualquer ponto e quatro velocidades (0,5×, 1×, 2× e 4×). No teclado: `Espaço` pausa e continua, `←` e `→` andam de rodada em rodada (de botão em botão, nos Desafios 1 a 7), `↑` e `↓` mudam a velocidade e `Home` volta ao começo. Na quadra, as câmeras e o som funcionam como ao vivo.
-- **Botão e imagem, uma parada cada (Desafios 1 a 7):** o pedido de imagem (o botão `F`) também é uma parada de quem anda de botão em botão. E, tocando, o replay dá o tempo de ler a intenção de um botão antes de passar para o seguinte, mesmo que a iA tenha apertado o botão e pedido a imagem em seguida: há uma pausa no botão e outra na imagem.
-- **Voltar (Desafios 1 a 7):** o jogo não sabe desfazer um botão, então para voltar a página é montada de novo já no ponto pedido. A página que estava na tela fica à vista (o painel diz "voltando…") até a nova estar pronta, e a troca é de uma vez, sem tela preta. Leva uma fração de segundo nas salas e cerca de um segundo na cidade.
-- **O que é uma gravação:** na quadra, cada partida (do apito do juiz até o fim, ou até alguém recomeçar); nos Desafios 1 a 7, cada vez que o desafio começa. Partida em que ninguém jogou não é gravada.
+- **Pódio dos desafios:** no alto da lista, cada desafio de 1 a 8 tem o seu pódio, com o 1º, o 2º e o 3º lugar entre as iAs que venceram. Ganha quem venceu com **menos movimentos** (os botões apertados até a vitória, sem contar os pedidos de imagem); no empate, quem levou **menos tempo** (contado desde que o desafio começou). Cada iA — o nome de guerra com o modelo — entra uma vez só, com a melhor partida dela, e um clique num degrau abre essa partida. Partidas do teclado, sem nome, não entram. No Desafio 7 a ordem é a da pontuação. No Desafio 8 não há vitória: o pódio é o do recorde — quem derrubou mais zumbis e, no empate, quem deu menos tiros. A vila coletiva e o Galinha Pong não têm pódio. (As gravações de antes do pódio não guardavam as contas da hora da vitória: entram com as da partida inteira, que podem ter um ou outro botão apertado depois dela.)
+- **Assistir:** clique numa gravação. Ela abre **em pausa**: o `Espaço`, ou o botão **▶ tocar**, faz a partida andar. O próprio jogo a refaz: na quadra, com tudo o que a transmissão tem (as etiquetas, as câmeras, a torcida, o comentarista, a reprise de cada ponto); nos Desafios 1 a 8, com o campo de quem jogou (nome e modelo) e do que o robô pretende. A lista também diz, de cada gravação, qual iA jogou. As esperas encolhem: entre uma rodada e outra passa no máximo 1,8 segundo, e o jogo dá o tempo de ler cada fala e cada intenção.
+- **Controles:** o painel da gravação tem pausar, voltar ao começo, ir para a rodada anterior ou para a seguinte, uma régua para ir a qualquer ponto e quatro velocidades (0,5×, 1×, 2× e 4×). No teclado: `Espaço` pausa e continua, `←` e `→` andam de rodada em rodada (de botão em botão, nos Desafios 1 a 8), `↑` e `↓` mudam a velocidade e `Home` volta ao começo. Na quadra, as câmeras e o som funcionam como ao vivo.
+- **Botão e imagem, uma parada cada (Desafios 1 a 8):** o pedido de imagem (o botão `F`) também é uma parada de quem anda de botão em botão. E, tocando, o replay dá o tempo de ler a intenção de um botão antes de passar para o seguinte, mesmo que a iA tenha apertado o botão e pedido a imagem em seguida: há uma pausa no botão e outra na imagem.
+- **Voltar (Desafios 1 a 8):** o jogo não sabe desfazer um botão, então para voltar a página é montada de novo já no ponto pedido. A página que estava na tela fica à vista (o painel diz "voltando…") até a nova estar pronta, e a troca é de uma vez, sem tela preta. Leva uma fração de segundo nas salas e cerca de um segundo na cidade.
+- **O que é uma gravação:** na quadra, cada partida (do apito do juiz até o fim, ou até alguém recomeçar); nos Desafios 1 a 8, cada vez que o desafio começa. Partida em que ninguém jogou não é gravada.
 - **Onde ficam:** em `%LOCALAPPDATA%\espelho-jogo\partidas`, fora da pasta do projeto, um arquivo de texto pequeno por partida (uma linha por rodada). Ficam as 300 mais novas. Para apagar uma, use o **apagar** da lista. Só há gravação com o servidor ligado: a página aberta direto do arquivo não grava.
 
 O relógio de cada jogador, no replay da quadra, mostra o tempo que ele levou ao vivo; a lista mostra quanto a partida durou de verdade.
 
-As gravações dos desafios guardam a versão das regras com que foram jogadas (`versao`). Uma gravação anterior à ordem dos alvos pelo centro da imagem é assistida com a ordem antiga (o objeto mais próximo primeiro), e uma anterior às portas que fecham (versão 3) é assistida com as portas que ficavam abertas para sempre, para o replay continuar igual à partida. Do mesmo jeito, numa gravação anterior ao violeiro (versão 4) o canto dele na praça está livre, e numa anterior ao carro dirigível (versão 5) o carro não é um alvo; numa anterior à versão 6, o `S` na cidade ainda dá meia-volta antes do passo; e numa gravação da vila coletiva anterior à versão 7 qualquer robô atendia qualquer casa. Numa anterior à versão 8 o carro é dirigido à mão (`W`, `S`, `A`, `D`), e a missão da vila tinha um prazo fixo de 8 minutos. Numa anterior à versão 9 o carro não para para ninguém, não há pontos de chamá-lo, e cada casa da vila só tem o pedido dela. Numa anterior à versão 10 o que estava dentro de um móvel aberto era alvo mesmo tapado pela porta dele.
+As gravações dos desafios guardam a versão das regras com que foram jogadas (`versao`). Uma gravação anterior à ordem dos alvos pelo centro da imagem é assistida com a ordem antiga (o objeto mais próximo primeiro), e uma anterior às portas que fecham (versão 3) é assistida com as portas que ficavam abertas para sempre, para o replay continuar igual à partida. Do mesmo jeito, numa gravação anterior ao violeiro (versão 4) o canto dele na praça está livre, e numa anterior ao carro dirigível (versão 5) o carro não é um alvo; numa anterior à versão 6, o `S` na cidade ainda dá meia-volta antes do passo; e numa gravação da vila coletiva anterior à versão 7 qualquer robô atendia qualquer casa. Numa anterior à versão 8 o carro é dirigido à mão (`W`, `S`, `A`, `D`), e a missão da vila tinha um prazo fixo de 8 minutos. Numa anterior à versão 9 o carro não para para ninguém, não há pontos de chamá-lo, e cada casa da vila só tem o pedido dela. Numa anterior à versão 10 o que estava dentro de um móvel aberto era alvo mesmo tapado pela porta dele. E uma gravação anterior à mudança da poltrona do quarto da casa amarela (versão 11) é assistida com a poltrona e o começo do robô onde ficavam. Numa anterior à versão 12 os móveis barram o robô com os cantos vivos (como retângulos), e o passo que não cabe inteiro não sai. Numa anterior à versão 13 o robô do quebra-cabeça anda e vira.
 
 Na vila coletiva a gravação é uma só para a sessão inteira (desde que a página abriu), com quem entrou, quem saiu e o botão de cada robô. Na lista ela aparece como **Vila coletiva**.
 
@@ -257,15 +267,15 @@ Ao se conectar, a iA recebe a lista de ferramentas. São só duas:
 
 | Ferramenta | Descrição que a iA lê | Parâmetros |
 |---|---|---|
-| `comecar` | "Começa um desafio." | `desafio` (obrigatório): `"1"` a `"7"`, `"V"`, `"M"`, `"T"` ou `"C"`, com a descrição "M: Galinha Pong, um contra o outro. T: treino de Galinha Pong. C: assistir ao Galinha Pong como comentarista."; `nome` (até 12 letras), descrito como "Seu nome de guerra." e exigido em todos os desafios; `modelo` (até 24 letras), descrito como "Que modelo você é (por exemplo: Claude Opus 5.5). Aparece embaixo do seu nome.", exigido nos Desafios 1 a 7 e opcional na quadra |
-| `apertar_botao` | "Aperta um botão." | `botao` (obrigatório), `texto` (opcional; o jogo usa as 10 primeiras letras na barriga do robô e até 140 na fala do comentarista), `intencao` (até 140 letras; obrigatório nos Desafios 1 a 7), `nome` (opcional, o mesmo nome de guerra) e `modelo` (opcional, como no `comecar`) |
+| `comecar` | "Começa um desafio." | `desafio` (obrigatório): `"1"` a `"8"`, `"V"`, `"M"`, `"T"` ou `"C"`, com a descrição "M: Galinha Pong, um contra o outro. T: treino de Galinha Pong. C: assistir ao Galinha Pong como comentarista."; `nome` (até 12 letras), descrito como "Seu nome de guerra." e exigido em todos os desafios; `modelo` (até 24 letras), descrito como "Que modelo você é (por exemplo: Claude Opus 5.5). Aparece embaixo do seu nome.", exigido nos Desafios 1 a 8 e opcional na quadra |
+| `apertar_botao` | "Aperta um botão." | `botao` (obrigatório), `texto` (opcional; o jogo usa as 10 primeiras letras na barriga do robô e até 140 na fala do comentarista), `intencao` (até 140 letras; obrigatório nos Desafios 1 a 8), `nome` (opcional, o mesmo nome de guerra) e `modelo` (opcional, como no `comecar`) |
 
 ### Quem joga e a intenção de cada botão
 
-Nos Desafios 1 a 7, a iA diz duas coisas que são só para quem assiste:
+Nos Desafios 1 a 8, a iA diz duas coisas que são só para quem assiste:
 
 - **Quem ela é:** um nome de guerra e o modelo (os parâmetros `nome` e `modelo`). O `comecar` de um desafio só vale com os dois; sem eles a iA recebe o pedido para chamar de novo dizendo quem é. Se uma iA apertar um botão sem a página saber quem ela é (outra conexão, ou a página aberta sem `comecar`), o botão não é apertado e ela recebe o aviso para mandar o nome e o modelo junto. Aqui não há confirmação do nome, como na quadra: é um jogador só.
-- **O que pretende com cada botão:** o parâmetro `intencao`, que ela lê descrito assim: "O que você pretende com este botão, em poucas palavras. É para quem assiste entender a sua jogada: não muda o que o botão faz. Nos desafios 1 a 7 e na vila coletiva (V) é obrigatório: sem ele o botão não é apertado."
+- **O que pretende com cada botão:** o parâmetro `intencao`, que ela lê descrito assim: "O que você pretende com este botão, em poucas palavras. É para quem assiste entender a sua jogada: não muda o que o botão faz. Nos desafios 1 a 8 e na vila coletiva (V) é obrigatório: sem ele o botão não é apertado."
 
 Como isso aparece e o que não muda:
 
@@ -308,9 +318,9 @@ As respostas são sempre as mesmas, para não dar pista:
 | qualquer botão depois de perder (Desafio M) | `Você perdeu.` |
 | `comecar` sem desafio, ou com um que não existe | `desafio inexistente` |
 | qualquer botão, tenha dado certo ou não | `recebido` |
-| `comecar` com `desafio` de 1 a 7 sem `nome` ou sem `modelo` | `Antes de começar, diga quem você é: chame comecar de novo mandando um nome de guerra no parâmetro nome e o seu modelo no parâmetro modelo (por exemplo: Claude Opus 5.5).` |
-| Desafios 1 a 7, botão de uma iA que ainda não disse quem é | `O botão NÃO foi apertado: faltou dizer quem você é. Aperte de novo mandando junto um nome de guerra no parâmetro nome e o seu modelo no parâmetro modelo (por exemplo: Claude Opus 5.5).` |
-| Desafios 1 a 7, botão sem `intencao` | `O botão NÃO foi apertado: faltou a intenção. Aperte de novo mandando junto, no parâmetro intencao, o que você pretende com este botão, em poucas palavras.` |
+| `comecar` com `desafio` de 1 a 8 sem `nome` ou sem `modelo` | `Antes de começar, diga quem você é: chame comecar de novo mandando um nome de guerra no parâmetro nome e o seu modelo no parâmetro modelo (por exemplo: Claude Opus 5.5).` |
+| Desafios 1 a 8, botão de uma iA que ainda não disse quem é | `O botão NÃO foi apertado: faltou dizer quem você é. Aperte de novo mandando junto um nome de guerra no parâmetro nome e o seu modelo no parâmetro modelo (por exemplo: Claude Opus 5.5).` |
+| Desafios 1 a 8, botão sem `intencao` | `O botão NÃO foi apertado: faltou a intenção. Aperte de novo mandando junto, no parâmetro intencao, o que você pretende com este botão, em poucas palavras.` |
 | o único botão que mostra a tela | uma imagem PNG de 960×540 |
 | qualquer botão depois de vencer | `Parabéns! Você conseguiu!` |
 | botão que não existe | `botao inexistente` |
@@ -346,14 +356,15 @@ No Desafio M há uma chamada de cada jogador em andamento ao mesmo tempo: a pág
 
 Dê duplo clique em `index.html`. As teclas são as mesmas que a iA tem, mais algumas que são da página e não do jogo:
 
-- `1` a `7` começam o desafio desse número, `V` começa a vila coletiva, `M` começa o Desafio M e `Shift+T` começa o Desafio T (o `T` sozinho é um botão do jogo);
+- `Esc` abre e fecha o menu dos jogos (veja [O menu dos jogos](#o-menu-dos-jogos));
+- `1` a `8` começam o desafio desse número, `V` começa a vila coletiva, `M` começa o Desafio M e `Shift+T` começa o Desafio T (o `T` sozinho é um botão do jogo);
 - `X`, na vila coletiva, tira do jogo o robô do teclado;
 - `O` liga e desliga o som (os efeitos do que acontece, a música do violeiro da praça e a chuva); a pílula **som**, no canto de baixo, à direita, faz o mesmo, e tem duas réguas de volume, uma para o violão e outra para os efeitos (a escolha fica guardada no navegador). O navegador só deixa o som tocar depois de um clique ou de uma tecla na página. (A tecla `M` já é a do Galinha Pong.)
 - `R` recomeça o desafio atual;
-- `C` troca a visão de quem assiste, entre a da iA e a de quem voa por fora (veja [Duas visões para quem assiste](#duas-visões-para-quem-assiste); só nos Desafios 1 a 7);
-- `I` congela a tela até a próxima imagem ser pedida (para sentir como a iA enxerga; só nos Desafios 1 a 7);
+- `C` troca a visão de quem assiste, entre a da iA e a de quem voa por fora (veja [Duas visões para quem assiste](#duas-visões-para-quem-assiste); só nos Desafios 1 a 8);
+- `I` congela a tela até a próxima imagem ser pedida (para sentir como a iA enxerga; só nos Desafios 1 a 8);
 - `H` esconde a lista de teclas (ela fica onde não tapa o que o jogo escreve na imagem — a missão, o inventário, o alvo, o mapa do carro; no menu ao lado, mora na coluna);
-- `B` troca o arranjo da página, entre a tela cheia e o menu ao lado (veja [Tela cheia ou menu ao lado](#tela-cheia-ou-menu-ao-lado); só nos Desafios 1 a 7 e na vila coletiva);
+- `B` troca o arranjo da página, entre a tela cheia e o menu ao lado (veja [Tela cheia ou menu ao lado](#tela-cheia-ou-menu-ao-lado); só nos Desafios 1 a 8 e na vila coletiva);
 - `N` troca a hora do dia e `P` liga ou desliga a chuva (só na cidade dos Desafios 4 a 6);
 - `G` abre a aba de replays (só com o servidor ligado: aberta direto do arquivo, a página não grava).
 
@@ -399,7 +410,7 @@ Para usar outra porta: `iniciar-mcp.bat -Porta 8766`.
 | Arquivo | O que é |
 |---|---|
 | `index.html` | A página do jogo |
-| `jogo.js` | O jogo dos Desafios 1 a 7: as salas, a cidade, o quebra-cabeça, o robô, as regras, os botões e o desenho |
+| `jogo.js` | O jogo dos Desafios 1 a 8: as salas, a cidade, o quebra-cabeça, os zumbis, o robô, as regras, os botões e o desenho |
 | `arena.js` | Galinha Pong (Desafios M e T): a quadra, os dois robôs, os objetos e as rodadas |
 | `ponte.js` | Liga a página ao servidor |
 | `gravacao.js` | Grava as partidas e toca as gravadas (o painel de quem assiste) |
@@ -421,7 +432,7 @@ No começo de `jogo.js`:
 | `FRAME` | 960×540 | Tamanho da imagem que a iA recebe |
 | `PASSO`, `GIRO` | 0,5 m, 45° | Tamanho do passo e do giro |
 | `SALA` | 8 × 7 m (Desafios 1 e 2), 5 × 5 m (Desafio 3), 4 × 4 m (a medida de base dos cômodos dos Desafios 4 a 6) | O tamanho das salas: nas pequenas o robô anda menos |
-| `DESAFIOS` | 1 a 7 | Onde o robô começa, as opções de cada desafio e as falas da pessoa (`falas`) |
+| `DESAFIOS` | 1 a 8 | Onde o robô começa, as opções de cada desafio e as falas da pessoa (`falas`) |
 
 Para criar um desafio novo: acrescente o número em `NUMEROS`, uma entrada em `DESAFIOS` e em `planta` (no `jogo.js`) e o texto de início e o número dele em `ferramentas.json`. A cidade dos Desafios 4, 5 e 6 é montada à parte, em `criarVila` (as medidas das ruas e da praça estão em `CIDADE`); o que muda de um para o outro é a casa em que o robô começa, quem mora nela e o que essa pessoa quer (`vila.pedidos`).
 
@@ -443,6 +454,13 @@ A sala tem uma parede inteira de espelho. Em primeira pessoa o robô não enxerg
 | `L` | Levanta ou abaixa a mão, com ou sem objeto nela (na quadra, é a mão do escudo). Nos Desafios 4 a 6, troca o item que está na mão pelo seguinte do inventário |
 | `T` | Escreve o `texto` (até 10 letras) no peito do robô |
 | `F` | Devolve a imagem do que o robô está vendo |
+
+**Quando há algo no caminho**
+
+- O robô é redondo, com 35 cm de raio. Um móvel o barra quando ele encostaria nele: junto de uma quina o robô passa rente, e entre dois móveis passa de viés se couber.
+- Das paredes o meio do robô fica a pelo menos meio metro.
+- Nos Desafios 4 a 6 e na vila coletiva, o passo que não cabe inteiro vai até encostar: o robô chega ao que há na frente, e só fica parado quando já está encostado. Nos Desafios 1 a 3 o passo é sempre inteiro: se não cabe, o robô não anda.
+- Na diagonal contra uma parede, ele desliza ao longo dela.
 
 **Os alvos à vista**
 
@@ -531,7 +549,7 @@ Quando a pessoa quer duas coisas (Desafios 5 e 6), ela aceita uma de cada vez, e
 
 **Desafio 4**
 
-O robô começa no quarto da nossa casa, de frente para uma pessoa sentada numa poltrona, a dois passos dela. O caminho até a vitória:
+O robô começa no quarto da nossa casa, de frente para uma pessoa sentada numa poltrona, a dois passos dela. A poltrona fica do lado da cozinha, longe da cama: entre a ponta da cama e a poltrona há dois metros livres até o vão do banheiro. O caminho até a vitória:
 
 1. Falar com a pessoa (`ESPACO` de frente para ela): "Estou com fome".
 2. Na cozinha, ler a receita colada na porta da geladeira: BOLO, com o desenho e o nome dos três ingredientes (farinha, ovos, chocolate), o caminho (tigela, forno, bolo) e o tempo de forno (de 2 a 5 minutos).
@@ -584,7 +602,7 @@ Uma sala só, sem espelho. O robô começa a 1,1 m da parede do fundo, de frente
 - **Com uma peça na mão**, os alvos são as 9 casas do quadro, numeradas como se lê (1, 2 e 3 em cima; 7, 8 e 9 embaixo), e o alvo `0`, que é o lugar dela na bandeja. O `ESPACO` põe a peça na casa; se lá já havia uma peça, as duas trocam e a outra vem para a mão. No alvo `0`, ele devolve a peça à bandeja.
 - **`TAB`** passa para o alvo seguinte; com um número no `texto`, vai direto para a peça, a casa ou a bandeja com esse número.
 - **`L`** gira um quarto de volta, no sentido horário, a peça da mão ou, de mão vazia, a peça que é o alvo (na bandeja ou no quadro).
-- **`W`, `S`, `Q` e `E`** andam meio metro para a frente, para trás e para os lados, sem virar (para ver de perto ou de longe); `A` e `D` viram. Só é alvo o que aparece na imagem: de perto, só as peças e as casas que couberem nela.
+- **O robô não anda nem vira:** fica parado onde começa, de frente para a parede, de onde se veem o quadro e todas as peças. `W`, `S`, `Q`, `E`, `A` e `D` não fazem nada. (Antes ele andava, e a iA que saía do lugar perdia muito tempo tentando voltar a ver tudo.)
 - **`SAIR`** (no teclado, `X`) desiste: a peça que estiver na mão volta para a bandeja e o jogo acaba como está.
 
 O jogo **não diz se uma peça está certa**. Ele acaba sozinho quando as nove estão na casa certa e de pé (a vitória), ou quando a iA desiste.
@@ -608,6 +626,33 @@ As três últimas partes só contam na proporção das peças certas: quem desis
 
 Na página, na tela cheia, a lista de teclas começa guardada (o `H` a mostra) e o campo de quem joga fica embaixo, no meio, só com a última intenção: a parede toma a imagem inteira, e os painéis tapariam as peças. No menu ao lado nada fica por cima da imagem (veja [Tela cheia ou menu ao lado](#tela-cheia-ou-menu-ao-lado)).
 
+### Desafio 8: os zumbis
+
+Um jogo de tiro em primeira pessoa. O robô fica parado no meio de um campo, de noite, numa laje redonda, com um lampião em cima. Os zumbis vêm andando para ele, lá de longe (32 metros) e devagar. **Nenhum pode encostar nele:** se um encosta, o jogo acaba. O que conta é quantos zumbis a iA derruba.
+
+- **`A` e `D`** viram 45° para a esquerda e para a direita. O robô não anda: `W`, `S`, `Q` e `E` não fazem nada, e `L`, `TAB` e `T` também não.
+- **`ESPACO`** atira para onde o robô está olhando (a mira fica no meio da imagem). O tiro derruba o zumbi mais próximo que estiver bem na frente, a qualquer distância. Munição não acaba.
+- **`F`** devolve a imagem. Nela aparecem a mira, a arma (embaixo, à direita) e, no alto, o número de zumbis derrubados.
+
+**De onde eles vêm.** Cada zumbi anda em linha reta para o robô, por um dos oito lados que ele alcança virando. Os oito primeiros ensinam a virar: o primeiro vem de frente (de onde o robô estiver olhando quando ele aparece), o segundo a 45° dali, o terceiro a 90°, depois 135°, 180°... a volta inteira. Daí em diante o lado é sorteado. **Ninguém avisa de que lado eles vêm:** não há radar nem seta, e a iA tem de olhar em volta. (O zumbi a 45° ainda aparece na beirada da imagem; os outros, não.)
+
+**O tempo corre de verdade.** Os zumbis andam também enquanto a iA pensa.
+
+| O quê | Quanto |
+|---|---|
+| O primeiro zumbi | Aparece 1,5 segundo depois do primeiro botão da iA (a imagem também vale) e leva 2 minutos e meio para chegar |
+| Os seguintes | Cada um leva 6% menos tempo que o anterior (o 10º, 1 min 26 s; o 20º, 46 s; o 30º, 25 s), até o mínimo de 6 segundos |
+| Depois de um cair | O seguinte aparece em 2 segundos |
+| Quantos ao mesmo tempo | Um; a partir do 12º, dois; do 24º, três; e assim até cinco |
+
+**O que a iA fica sabendo.** A resposta de cada tiro diz se ele acertou ("O tiro acertou: um zumbi a menos. Zumbis derrubados: 5." ou "O tiro não acertou nenhum zumbi."), para ela não precisar pedir uma imagem só para conferir. Quando um zumbi encosta, a imagem ganha uma faixa vermelha e a resposta do botão seguinte diz `Um zumbi encostou em você: o jogo acabou. Para jogar de novo, chame comecar.`, com as contas da partida e o recorde.
+
+**O recorde.** É a melhor partida de uma iA com nome, entre as gravações guardadas (as do teclado, sem nome, não contam). Quem assiste o vê no campo de quem joga, com o nome de quem o fez; a iA recebe só o número, no fim. Na aba de replays, o pódio do Desafio 8 mostra os três primeiros.
+
+**Para a partida ser a mesma para todos**, o sorteio dos lados é sempre o mesmo. `?desafio=8&sorte=N` no endereço da página escolhe outro (ele vai para a gravação, e o replay o refaz). `&pressa=N` faz os zumbis andarem N vezes mais depressa: é para testar.
+
+No replay o tempo é o de verdade — os zumbis andam entre um botão e o outro, como andaram na partida —, e a hora em que um zumbi encostou faz parte da gravação. As velocidades do painel (2×, 4×) valem.
+
 **Desafios M e T**
 
 Uma quadra ao ar livre com uma rede no meio. Cada robô fica na sua metade e não passa das linhas brancas. Em cada lado há quatro objetos (frango de borracha, peixe, banana, pizza, torta, pato de borracha, desentupidor e chinelo).
@@ -625,7 +670,7 @@ Na imagem de cada jogador aparecem o placar com os dois nomes de guerra (o dele 
 
 **O que aparece na imagem**
 
-- Um contador sem legenda no alto ("0/4" no Desafio 1, "0/1" no Desafio 2): quantos objetos já foram guardados ou entregues. Os Desafios 3 a 6 não têm contador.
+- Um contador sem legenda no alto ("0/4" no Desafio 1, "0/1" no Desafio 2): quantos objetos já foram guardados ou entregues. Os Desafios 3 a 7 não têm contador; no 8 ele diz quantos zumbis caíram.
 - Uma borda azul-clara em volta daquilo em que o `ESPACO` agiria agora: o objeto que seria pego, a cesta, o outro robô, a pessoa, a porta, a geladeira e, na cidade, o armário, a tigela, o forno, o filtro e a cafeteira.
 - O balão com o que a pessoa disse (Desafios 3 a 6).
 - Nos Desafios 4 a 6: o inventário no alto (quatro casas, com o item da mão em destaque) e os números dos alvos com o indicador. No Desafio 4, também o painel do fogão (relógio e tempo de forno) e, se o bolo queimar, a faixa de derrota.

@@ -36,7 +36,7 @@
   // números desta lista: assim ?desafio=constructor (ou outro nome que todo objeto herda) não
   // passa por desafio.
   const ENDERECO = new URLSearchParams(location.search);
-  const NUMEROS = ['1', '2', '3', '4', '5', '6', '7'];
+  const NUMEROS = ['1', '2', '3', '4', '5', '6', '7', '8'];
   const existeDesafio = n => NUMEROS.includes(String(n));
   const COLETIVO = ENDERECO.get('desafio') === 'V';   // a vila coletiva, com vários robôs (ver "o coletivo"): por dentro, é o desafio 'V'
   const DESAFIO = COLETIVO ? 'V' : existeDesafio(ENDERECO.get('desafio')) ? Number(ENDERECO.get('desafio')) : 1;
@@ -46,7 +46,7 @@
   // e 4 as salas são pequenas, para o robô não gastar o jogo atravessando salões: no 3, o
   // quarto e a cozinha têm 5 m x 5 m; no 4 (a vila), cada cômodo da casa tem 4 m x 4 m. A sala
   // do quebra-cabeça (desafio 7) é do tamanho das do 3.
-  const SALA = DESAFIO === 3 || DESAFIO === 7 ? { L: 5, P: 5, A: 3 } : COLETIVO || DESAFIO >= 4 ? { L: 4, P: 4, A: 2.6 } : { L: 8, P: 7, A: 3 };
+  const SALA = DESAFIO === 8 ? { L: 150, P: 150, A: 40 } : DESAFIO === 3 || DESAFIO === 7 ? { L: 5, P: 5, A: 3 } : COLETIVO || DESAFIO >= 4 ? { L: 4, P: 4, A: 2.6 } : { L: 8, P: 7, A: 3 };
   const PEQUENA = SALA.L < 8;
   const Z_ESPELHO = -SALA.P / 2;                // a parede-espelho inteira fica nesse z (-3.5 na sala grande)
   const Z_PORTA = PEQUENA ? 1.0 : 1.7, LARGURA_PORTA = 1.4, ALTURA_PORTA = 2.1;
@@ -120,7 +120,7 @@
       // Aqui a dificuldade é explorar e decidir o que fazer, não descobrir os comandos: a iA
       // recebe a explicação dos botões ao começar (o texto está em ferramentas.json).
       mensagem: 'Explore a vila e decida o que fazer.',
-      inicio: { x: 2, z: 1, rumo: 4, sala: 1 }, // no quarto, de frente para a pessoa, que está a dois passos
+      inicio: { x: 3, z: 1, rumo: 4, sala: 1 }, // no quarto, de frente para a pessoa, que está a dois passos (ver POLTRONA_DO_QUARTO)
       bracoCaido: false,
       espelhoDisfarcado: false,
       salas: 5,
@@ -179,7 +179,19 @@
       salas: 1,
       contador: false,
       quebraCabeca: true,
-      passoDeLado: true,                        // Q e E andam de lado e o S recua, sem virar: para chegar perto ou longe sem perder a parede de vista
+      passoDeLado: true,                        // (Q e E andavam de lado e o S recuava, sem virar; hoje o robô do quebra-cabeça não sai do lugar: ver quebraAnda)
+    },
+    8: {
+      // Os zumbis: um jogo de tiro. O robô fica parado no meio de um campo, de noite; os zumbis vêm de
+      // longe, devagar, e nenhum pode encostar nele (ver "os zumbis"). A iA recebe a explicação dos botões.
+      mensagem: 'Nenhum zumbi pode encostar em você.',
+      inicio: { z: 0, rumo: 0 },
+      bracoCaido: false,
+      espelhoDisfarcado: false,
+      salas: 1,
+      contador: true,                           // (aqui o número do alto da imagem é o de zumbis derrubados)
+      semEspelho: true,
+      zumbis: true,
     },
   };
   // A vila coletiva (V): a cidade dos desafios 4 a 6, com as três casas abertas, as três pessoas e até quatro robôs, que começam na praça.
@@ -346,6 +358,10 @@
       motor: (t, v) => { nota(62, 0.3, 0.22 * v, t, 'sawtooth', 96); chiado(0.3, 0.12 * v, t, 220, 320, 0.8); },
       cancela: (t, v) => { nota(150, 0.42, 0.1 * v, t, 'sawtooth', 250); nota(990, 0.05, 0.1 * v, t + 0.44, 'square'); },          // o motorzinho que levanta o braço, e o clique lá em cima
       cancelaFecha: (t, v) => { nota(250, 0.42, 0.1 * v, t, 'sawtooth', 150); nota(120, 0.08, 0.3 * v, t + 0.44, 'sine', 70); },   // ...e o que o desce, e a batida no apoio
+      tiro: (t, v) => { chiado(0.09, 0.9 * v, t, 2600, 500, 0.7); nota(150, 0.13, 0.5 * v, t, 'square', 50); },                    // o tiro: um estalo e um baque
+      gemido: (t, v) => { nota(96, 0.75, 0.16 * v, t, 'sawtooth', 68); nota(143, 0.5, 0.07 * v, t + 0.12, 'sawtooth', 100); },      // um zumbi que aparece
+      tombo: (t, v) => { nota(90, 0.26, 0.34 * v, t + 0.12, 'sine', 44); chiado(0.22, 0.22 * v, t + 0.16, 500, 150, 1); },          // ...e um que cai
+      mordida: (t, v) => { nota(220, 0.5, 0.3 * v, t, 'sawtooth', 60); nota(110, 0.95, 0.34 * v, t + 0.22, 'square', 40); },        // o fim: um zumbi encostou
       asas: (t, v) => { for (let i = 0; i < 7; i++) chiado(0.05, 0.22 * v, t + i * 0.07, 1400, 700, 1); },
     };
     // Toca um efeito. `onde` ({ x, z }): o lugar em que ele acontece, para soar mais baixo de longe.
@@ -359,7 +375,8 @@
     // O som de cada coisa que o jogo registra (ver resposta).
     function doQueAconteceu(comando, ok, mensagem, onde) {
       const m = String(mensagem);
-      const nome = comando.startsWith('dirigir') ? (ok ? 'motor' : 'batida')
+      const nome = comando === 'atirar' ? 'tiro'
+        : comando.startsWith('dirigir') ? (ok ? 'motor' : 'batida')
         : /^(entrou no|saiu do) carro/.test(m) ? 'fechar'
         : m.startsWith('o carro vai sozinho') ? 'motor'
         : m.startsWith('chamou o carro') ? 'pedido'
@@ -881,8 +898,14 @@
   // 1), folhas (as portas), contorno e dentro (os objetos que só dá para pegar com ele aberto).
   const abrem = [];
   // (um bloco com `r` é redondo, em volta de cx, cz: o ponto de encontro e os bancos da praça, por onde se passa rente)
+  // O robô é redondo: um móvel o barra quando o ponto mais perto dele fica a menos de um raio. Na quina do móvel isso dá um
+  // canto arredondado, por onde o robô passa rente. (Antes a conta era a de um retângulo engordado, de cantos vivos: junto de
+  // uma quina o robô era barrado até 15 cm antes de encostar, e de um vão em que cabia de viés não saía. A gravação de antes
+  // disso é assistida com os cantos vivos: ver cantosVivos.)
+  let cantosVivos = false;
   const noMovel = (x, z, raio) => blocos.find(b => b.r ? Math.hypot(x - b.cx, z - b.cz) < b.r + raio - 1e-9
-    : x > b.x1 - raio + 1e-9 && x < b.x2 + raio - 1e-9 && z > b.z1 - raio + 1e-9 && z < b.z2 + raio - 1e-9);
+    : cantosVivos ? x > b.x1 - raio + 1e-9 && x < b.x2 + raio - 1e-9 && z > b.z1 - raio + 1e-9 && z < b.z2 + raio - 1e-9
+    : Math.hypot(Math.max(b.x1 - x, 0, x - b.x2), Math.max(b.z1 - z, 0, z - b.z2)) < raio - 1e-9);
 
   // Põe um objeto parado no mundo (x, z absolutos), como parte da sala `s`.
   function assentar(s, o, x, z, y) {
@@ -1267,6 +1290,7 @@
   // da cozinha, com a água da geladeira e o pó de café do mercadinho. A vitória é quando ele
   // recebe o pão de queijo e o café.
   const MARGEM_DA_VILA = 0.5;
+  const POLTRONA_DO_QUARTO = { x: 3, antes: 2 };   // onde fica a poltrona da pessoa da casa amarela (o x; ela fica encostada na parede da rua), e onde ficava
   // A cidade, do lado de fora: a praça redonda (o meio dela é x, z), a pista da rotatória em volta,
   // a calçada em volta da pista e as quatro ruas que saem dali, uma para cada lado. As medidas
   // são raios a partir do meio da praça; meiaPista e meiaRua, a metade da largura do asfalto e a
@@ -3091,7 +3115,19 @@
       vila.pessoas.push(pessoa);
       bloco('poltrona', x - 0.42, x + 0.42, z - 0.65, parede);
     };
-    if (DESAFIO === 4 || COLETIVO) morador(montarPessoa(), 2.0, 3.48, 1, 4, 1);     // (nos outros desafios a casa é outra: aqui não há ninguém)
+    // A poltrona fica do lado da parede da cozinha, longe da cama: entre a ponta da cama e a poltrona passa-se com folga para o
+    // vão do banheiro, que fica no canto de lá. (Ela ficava no meio da parede, em x = 2: sobravam 20 cm de folga para o robô, que
+    // anda de meio em meio metro e empacava ali. A gravação de antes é assistida com a poltrona onde estava: ver poltronaAntiga.)
+    if (DESAFIO === 4 || COLETIVO) {         // (nos outros desafios a casa é outra: aqui não há ninguém)
+      morador(montarPessoa(), POLTRONA_DO_QUARTO.x, 3.48, 1, 4, 1);
+      const dona = pessoa, poltrona = blocos[blocos.length - 1];
+      vila.poltronaAntiga = () => {
+        const x = POLTRONA_DO_QUARTO.antes;
+        dona.corpo.grupo.position.x = dona.x = dona.rosto.x = x;
+        Object.assign(poltrona, { x1: x - 0.42, x2: x + 0.42 });
+        if (!COLETIVO) estado.x = visual.x = x;   // (e o robô começava de frente para ela)
+      };
+    }
 
     // --- banheiro (2): pia com espelho, vaso e box (só enfeite) ---
     const louca = liso(0xf7f7f4, 0.2), vidroDoBox = new T.MeshStandardMaterial({ color: 0xbfe3f0, transparent: true, opacity: 0.28, roughness: 0.05, depthWrite: false, side: T.DoubleSide });
@@ -4488,6 +4524,7 @@
   // Onde fica a lâmpada (há uma só): no meio da sala em que o robô está. Na vila, cada lugar diz
   // onde (ver areas); na rua, onde quem ilumina é o sol, a lâmpada fica na casa ou na loja mais perto.
   const luzDaqui = () => {
+    if (REGRAS.zumbis) return { x: 0, y: 3.4, z: 0, forca: 3.2 };   // (no campo dos zumbis: um lampião em cima do robô, que clareia quem chega perto)
     if (!REGRAS.vila) return { x: centro(estado.sala), y: SALA.A - 0.35, z: 0, forca: 2.1 };
     const l = areas[estado.sala].luz;
     return typeof l === 'function' ? l() : l;
@@ -4581,6 +4618,7 @@
     // 'esquerda' e 'direita' são o passo de lado: o robô anda para o lado sem virar, e continua
     // olhando para onde olhava. Só existe no desafio 4 (REGRAS.passoDeLado): nos três primeiros
     // o robô só anda para onde está olhando, de propósito.
+    if (zumbi || (quebra && !quebraAnda)) return resposta(`mover ${direcao}`, false, 'o robô não sai do lugar');   // (nos zumbis ele só vira e atira; no quebra-cabeça fica de frente para a parede)
     if (estado.dirigindo) return carroManual ? dirigir(direcao) : resposta(`mover ${direcao}`, false, 'o carro anda sozinho: escolha um destino');   // dentro do carro, quem anda é ele
     // (na cidade, o passo para trás é como o de lado: o robô recua sem virar. Numa gravação de antes disso, ele dava meia-volta: ver reComMeiaVolta)
     const lado = REGRAS.passoDeLado ? { esquerda: 2, direita: -2, tras: reComMeiaVolta ? undefined : 4 }[direcao] : undefined, giro = lado === undefined ? GIRO_DA_DIRECAO[direcao] : 0;
@@ -4589,7 +4627,7 @@
     estado.rumo += giro;                        // vira mesmo que o passo acabe bloqueado
     const virou = giro ? ' (virou, mas não andou)' : '';
     const a = (estado.rumo + (lado || 0)) * GIRO, v = { fx: -Math.sin(a), fz: -Math.cos(a) };
-    let nx = estado.x + v.fx * PASSO, nz = estado.z + v.fz * PASSO;
+    let nx = estado.x + v.fx * PASSO, nz = estado.z + v.fz * PASSO, encostou = '';
     if (!livre(nx, nz)) {                       // na diagonal contra uma parede, desliza ao longo dela
       if (Math.abs(v.fx) > 1e-6 && Math.abs(v.fz) > 1e-6 && livre(nx, estado.z)) nz = estado.z;
       else if (Math.abs(v.fx) > 1e-6 && Math.abs(v.fz) > 1e-6 && livre(estado.x, nz)) nx = estado.x;
@@ -4597,7 +4635,12 @@
         const lado = nx - centro(estado.sala), movel = noMovel(nx, nz, RAIO_ROBO);
         const naPorta = REGRAS.vila ? portasDaVila.some(p => !p.aberta && noVaoDe(p, nx, nz))
           : noVao(nz) && ((salas[estado.sala].porta && lado > SALA.L / 2 - MARGEM_PAREDE) || (estado.sala > 1 && lado < MARGEM_PAREDE - SALA.L / 2));
-        return resposta(`mover ${direcao}`, false, (movel ? `bloqueado: ${movel.nome} no caminho` : naPorta ? 'bloqueado: porta fechada' : 'bloqueado: parede') + virou);
+        // Na cidade, o passo que não cabe inteiro vai até onde dá: o robô chega ao que há na frente, em vez de ficar parado a
+        // quase um passo dele, como diante de uma parede que não se vê. Só é bloqueado quem já está encostado.
+        const cabe = REGRAS.vila && !passoInteiro ? ateOnde(v) : null;
+        if (!cabe || cabe.d < PASSO_MINIMO) return resposta(`mover ${direcao}`, false, (cabe ? cabe.barra : movel ? `bloqueado: ${movel.nome} no caminho` : naPorta ? 'bloqueado: porta fechada' : 'bloqueado: parede') + virou);
+        nx = estado.x + v.fx * cabe.d; nz = estado.z + v.fz * cabe.d;
+        encostou = ` — foi até encostar (${cabe.barra.replace('bloqueado: ', '').replace(' no caminho', '')})`;
       }
     }
     for (const s of Object.values(salas)) for (const o of noCaminho(s)) {
@@ -4614,11 +4657,23 @@
       fecharPorta();
       return resposta(`mover ${direcao}`, true, `ok — você entrou na sala ${numero(estado.sala)} e a porta fechou atrás de você`);
     }
-    return resposta(`mover ${direcao}`, true, 'ok');
+    return resposta(`mover ${direcao}`, true, 'ok' + encostou);
+  }
+  // Até onde cabe, de centímetro em centímetro, o passo que não cabe inteiro na direção `v`: a distância (d) e o que barra
+  // o resto dele (o móvel, a porta fechada ou a parede que fica logo adiante).
+  const PASSO_MINIMO = 0.05;
+  let passoInteiro = false;                     // (assistindo a uma gravação de antes disso: o passo ou cabia inteiro, ou não saía)
+  function ateOnde(v) {
+    let k = 0;
+    while (k < Math.round(PASSO * 100) && livre(estado.x + v.fx * (k + 1) / 100, estado.z + v.fz * (k + 1) / 100)) k++;
+    const x = estado.x + v.fx * (k + 1) / 100, z = estado.z + v.fz * (k + 1) / 100, movel = noMovel(x, z, RAIO_ROBO);
+    return { d: k / 100, barra: movel ? `bloqueado: ${movel.nome} no caminho` : portasDaVila.some(p => !p.aberta && noVaoDe(p, x, z)) ? 'bloqueado: porta fechada' : 'bloqueado: parede' };
   }
 
   function virar(lado) {
     if (lado !== 'esquerda' && lado !== 'direita') return resposta(`virar ${lado}`, false, 'lado inválido');
+    if (quebra && !quebraAnda) return resposta(`virar ${lado}`, false, 'o robô não sai do lugar');   // (no quebra-cabeça ele fica de frente para a parede: virar só fazia a iA se perder)
+    if (zumbi && zumbi.fim !== null) return resposta(`virar ${lado}`, false, 'o jogo acabou');
     if (estado.dirigindo && !carroManual) return resposta(`virar ${lado}`, false, 'o carro anda sozinho: escolha um destino');
     escolhido = undefined;
     estado.rumo += lado === 'esquerda' ? 1 : -1;
@@ -4659,6 +4714,7 @@
   // Na vila o robô carrega mais de um item: mesmo com a mão cheia os objetos ao alcance entram
   // na lista (antes do "em nada"), e só vale o que está no mesmo lugar que ele (ver "a vila").
   function candidatos() {
+    if (zumbi) return [];                       // nos zumbis não há alvos: o ESPACO atira para onde o robô olha
     if (quebra) return alvosDoQuebra();         // no quebra-cabeça: as peças ou, com uma na mão, as casas do quadro (ver "o quebra-cabeça")
     if (estado.dirigindo) {                     // dentro do carro: os destinos (menos o lugar em que ele está) e, por último, sair dele; andando, nada
       const c = estado.dirigindo;
@@ -5049,6 +5105,7 @@
   }
 
   function pegar() {
+    if (zumbi) return atirar();
     if (quebra) return usarNoQuebra();
     if (REGRAS.vila) return usarNaVila();
     const v = vetores(), s = salas[estado.sala], alvo = alvoAtual();
@@ -5184,11 +5241,11 @@
 
   // ---------- desenho ----------
   // Ângulos do braço direito: caído, estendido para carregar, mão levantada.
-  const BRACO = { caido: 0, estendido: 1.13, levantado: 2.45 };
+  const BRACO = { caido: 0, estendido: 1.13, levantado: 2.45, apontando: 1.7 };   // (apontando: o braço da arma, no desafio dos zumbis)
   // Aproxima o que se vê do estado do jogo: k = fração do caminho (1 = chega de uma vez).
   function animarRobo(k) {
     const carregando = REGRAS.bracoCaido ? BRACO.caido : BRACO.estendido;
-    const braco = estado.maoLevantada ? BRACO.levantado : estado.segurando ? carregando : BRACO.caido;
+    const braco = REGRAS.zumbis ? BRACO.apontando : estado.maoLevantada ? BRACO.levantado : estado.segurando ? carregando : BRACO.caido;
     const l = luzDaqui(), alvo = { x: estado.x, z: estado.z, yaw: estado.rumo * GIRO, braco, luz: l.x, luzY: l.y, luzZ: l.z, forca: l.forca, chao: alturaDoChao(estado.x, estado.z) };
     for (const c in alvo) visual[c] += (alvo[c] - visual[c]) * k;
     const carro = estado.dirigindo;
@@ -5196,6 +5253,7 @@
   }
   function animar(k, kPorta) {
     atualizarPedidos();                         // (no coletivo: os pedidos cuja hora chegou)
+    if (zumbi) { atualizarZumbis(); porZumbis(); }   // (os zumbis, onde estão nesta hora)
     atualizarCarro();                           // (o carro em viagem)
     animarRobo(k);
     for (const gel of abrem) {                  // as duas portas da geladeira (ou do armário) giram para fora, uma para cada lado
@@ -5275,7 +5333,7 @@
     // (o painel embaixo, as colunas dos lados, a beirada do teto em cima). A pé, a câmera olha um pouco para baixo.
     const noCarro = !!estado.dirigindo, adiante = noCarro ? CARRO.olho : 0;
     camera.position.set(visual.x - Math.sin(visual.yaw) * adiante, ALTURA_OLHOS + (noCarro ? CARRO.banco : 0) + visual.chao, visual.z - Math.cos(visual.yaw) * adiante);
-    camera.rotation.set(noCarro || quebra ? 0 : INCLINACAO, visual.yaw, 0);   // (no quebra-cabeça ele também olha reto: de frente para a parede, as peças saem quadradas na imagem)
+    camera.rotation.set(noCarro || quebra || zumbi ? 0 : INCLINACAO, visual.yaw, 0);   // (no quebra-cabeça ele também olha reto: de frente para a parede, as peças saem quadradas na imagem)
     atualizarBalao();
   }
   // As sombras são calculadas num desenho descartável, de um ponto só, em que a câmera "vê" o corpo do robô (ver desenhar).
@@ -5520,6 +5578,12 @@
     mapa.malha.scale.set(lado, lado, 1);
     mapa.malha.position.set(-direita + lado / 2, -0.16 * meiaAltura, -1);
     mira.malha.position.set(direita - lm / 2, (cabe ? meiaAltura * 0.97 : inventario.malha.position.y - li * 300 / 2400 - 0.03 * meiaAltura) - hm / 2, -1);
+    // (desafio 8) a mira do tiro, no meio da imagem; e a faixa do fim, um pouco acima do meio, sem passar da largura da tela
+    cruz.scale.setScalar(0.2 * meiaAltura);
+    cruz.position.set(0, 0, -1);
+    const lz = Math.min(0.56 * meiaAltura * fimDosZumbis.canvas.width / fimDosZumbis.canvas.height, 1.9 * meiaAltura * camera.aspect);
+    fimDosZumbis.malha.scale.set(lz, lz * fimDosZumbis.canvas.height / fimDosZumbis.canvas.width, 1);
+    fimDosZumbis.malha.position.set(0, meiaAltura * 0.36, -1);
   }
   // Acerta o tamanho da imagem com o da janela. É chamada a cada quadro, e só faz alguma coisa quando
   // a janela mudou de tamanho ou a imagem mudou de formato (a visão de quem assiste, a tela dividida).
@@ -5557,7 +5621,7 @@
     else if (variosOlhos()) { if (!modoIA) desenharMosaico(agora); }                           // no coletivo, com mais de um robô: a tela dividida, um quadro para cada um
     else if (!modoIA) { esconderEtiquetas(); aplicarVisual(); desenhar(); }
     if (agora - ultimoArranjo > 250) { ultimoArranjo = agora; arrumarPaineis(); }   // (quatro vezes por segundo basta: a lista de teclas, quando está solta, sai de cima do que o jogo escreve)
-    if (quebra && elPlacar && agora - ultimoPlacar > 500) { ultimoPlacar = agora; elPlacar.textContent = placarDoQuebra(); }   // (o relógio do quebra-cabeça, para quem assiste)
+    if ((quebra || zumbi) && elPlacar && agora - ultimoPlacar > 500) { ultimoPlacar = agora; elPlacar.textContent = quebra ? placarDoQuebra() : placarDoZumbi(); }   // (o relógio do quebra-cabeça, para quem assiste)
     requestAnimationFrame(quadro);
   }
 
@@ -5597,9 +5661,9 @@
   // embaixo as da página. Continua dizendo só quais existem, não o que cada uma faz.
   elAjuda.textContent = '';
   // (No modo voador as teclas do jogo dão lugar às de quem voa, que não são do jogo e por isso vêm explicadas: ver "o modo voador".)
-  for (const [classe, fileiras, dica] of [['do-jogo', [REGRAS.passoDeLado ? ['Q', 'W', 'E'] : ['W'], ['A', 'S', 'D'], ['Espaço', 'Tab'], REGRAS.quebraCabeca ? ['L', 'F', 'X'] : ['L', 'T', 'F']]],   // (no quebra-cabeça o X desiste, e o T não serve para nada)
+  for (const [classe, fileiras, dica] of [['do-jogo', REGRAS.zumbis ? [['A', 'D'], ['Espaço', 'F']] : REGRAS.quebraCabeca ? [['Espaço', 'Tab'], ['L', 'F', 'X']] : [REGRAS.passoDeLado ? ['Q', 'W', 'E'] : ['W'], ['A', 'S', 'D'], ['Espaço', 'Tab'], ['L', 'T', 'F']]],   // (no quebra-cabeça o X desiste, e o T não serve para nada)
     ['do-voador', [['Q', 'W', 'E'], ['A', 'S', 'D'], ['Shift', 'Z', 'Esc']], 'W A S D voam · Q e E descem e sobem · Shift corre · Z vai até o robô · um clique prende o mouse, que passa a virar a câmera · Esc solta'],
-    ['da-pagina', [['1', '2', '3', '4', '5', '6', '7'], ['V', 'M', 'C', 'Shift+T'], ['I', 'R', 'H', 'G', 'O', 'B'].concat(REGRAS.vila ? ['N', 'P'] : [])]]]) {
+    ['da-pagina', [['1', '2', '3', '4', '5', '6', '7', '8'], ['V', 'M', 'C', 'Shift+T'], ['I', 'R', 'H', 'G', 'O', 'B'].concat(REGRAS.vila ? ['N', 'P'] : [], ['Esc'])]]]) {
     const grupo = document.createElement('div');
     grupo.className = classe;
     for (const teclas of fileiras) {
@@ -5662,7 +5726,7 @@
     // Na tela cheia, o campo de quem joga fica no canto de baixo, à direita, e cresce para cima. O teto dele é o
     // indicador do alvo, no alto da imagem, ou o pé de quem estiver solto desse lado (a lista de teclas, na cidade).
     let teto = Math.round(0.14 * window.innerHeight);
-    if (!comBancada) for (const el of soltos) { const r = el.getBoundingClientRect(); if (r.right > window.innerWidth - 14 - 380 - FOLGA) teto = Math.max(teto, Math.round(r.bottom) + 8); }
+    if (!comBancada) for (const el of soltos) { const r = el.getBoundingClientRect(); if (r.right > window.innerWidth - 14 - 412 - FOLGA) teto = Math.max(teto, Math.round(r.bottom) + 8); }
     if (teto !== ultimoTeto) {
       ultimoTeto = teto;
       document.documentElement.style.setProperty('--teto', teto + 'px');
@@ -5707,9 +5771,10 @@
     if (REGRAS.vila) { desenharMissao(); desenharMapa(); }   // (o selo do canto — a missão do coletivo, ou para onde o carro vai — e o mapa do carro)
     const s = salas[estado.sala];
     const feitos = s.objetos.filter(o => o.naCesta || o.entregue).length;   // guardados na cesta ou entregues
-    if (REGRAS.contador) desenharContador(`${feitos}/${s.objetos.length}`);
+    if (REGRAS.contador) desenharContador(zumbi ? `☠ ${zumbi.mortos}` : `${feitos}/${s.objetos.length}`);
     if (REGRAS.inventario) desenharInventario();
     if (quebra && elPlacar) elPlacar.textContent = placarDoQuebra();   // (as contas do quebra-cabeça, para quem assiste)
+    if (zumbi && elPlacar) elPlacar.textContent = placarDoZumbi();     // (e as dos zumbis)
     elStatus.textContent = `desafio: ${DESAFIO}\nsala: ${numero(s.n)}\nfeitos: ${feitos}/${s.objetos.length}\n` +
       `na cabeça: ${estado.naCabeca ? estado.naCabeca.nome : 'nada'}\nmão: ${estado.maoLevantada ? 'levantada' : 'abaixada'}\n` +
       `segurando: ${estado.segurando ? estado.segurando.nome : 'nada'}\npeito: ${estado.texto || '—'}` +
@@ -6163,6 +6228,311 @@
     fimDoQuebra.malha.visible = true;
   }
 
+  // ---------- os zumbis (desafio 8) ----------
+  // Um jogo de tiro em primeira pessoa. O robô fica parado no meio de um campo, de noite, e os zumbis
+  // vêm andando para ele, lá de longe e devagar. Nenhum pode encostar: se um encosta, o jogo acaba.
+  // O robô só vira (A e D, 45° de cada vez) e atira (ESPACO) para onde está olhando: o tiro derruba o
+  // zumbi mais próximo que estiver bem na frente, a qualquer distância. O que conta é quantos caem.
+  //
+  //   de onde vêm:  cada zumbi anda em linha reta para o robô, por um dos oito lados que o robô
+  //                 alcança virando (os múltiplos de 45°). Os oito primeiros ensinam a virar: o
+  //                 primeiro vem de frente — de onde o robô está olhando quando ele aparece —, o
+  //                 segundo a 45° dali, o terceiro a 90°, depois 135°, 180°... a volta inteira (ver
+  //                 ZUMBI.volta). Daí em diante o lado é sorteado. Ninguém avisa de onde eles vêm: a
+  //                 iA tem de olhar em volta.
+  //   a pressa:     o tempo corre de verdade — eles andam também enquanto a iA pensa. O primeiro
+  //                 leva dois minutos e meio para chegar; cada um leva 6% menos que o anterior (ver
+  //                 ZUMBI.tempo e ZUMBI.queda). O seguinte aparece dois segundos depois de o anterior
+  //                 cair. A partir do 12º vêm dois ao mesmo tempo; do 24º, três... até cinco.
+  //   o começo:     o primeiro zumbi só aparece depois do primeiro botão da iA (a imagem também
+  //                 vale): antes disso ela está lendo as regras.
+  //
+  // Tudo depende só do relógio do jogo (ver hora) e dos botões: onde cada zumbi está é uma conta
+  // feita com a hora, e não um passo dado a cada quadro. Assim a gravação, que guarda a hora de cada
+  // botão, refaz a partida igual. O fim — a hora em que um zumbi encostou — também vai para a
+  // gravação (o acontecimento `fim`), porque não acontece num botão.
+  // A sorte (o sorteio dos lados) é a mesma para todos, para o recorde valer: ?sorte=N escolhe outra.
+  // ?pressa=N faz os zumbis andarem N vezes mais depressa: é para os testes.
+  const ZUMBI = {
+    longe: 32, toque: 1.0,                      // de onde eles vêm (metros do robô), e a que distância encostam
+    tempo: 150000, queda: 0.94, minimo: 6000,   // quanto o primeiro leva para chegar (ms); cada um leva 6% menos que o anterior, até o mínimo
+    pausa: 2000, escala: 7000, inicio: 1500,    // quanto demora o seguinte depois de um cair; o intervalo entre os que vêm juntos; e o primeiro, depois do primeiro botão
+    volta: [0, 1, 2, 3, 4, 5, 6, 7],            // o lado dos primeiros, em giros de 45° para a esquerda de onde o robô olha
+    cada: 12, juntos: 5,                        // a cada 12 zumbis, mais um ao mesmo tempo; no máximo 5
+    caida: 900,                                 // quanto dura a queda de quem leva o tiro (ms)
+    porte: 1.32,                                // o tamanho deles (1 = 1,78 m de altura): grandes, para aparecerem de longe
+  };
+  const mod8 = v => ((v % 8) + 8) % 8;
+  let quebraAnda = false;                       // (assistindo a uma gravação de antes da versão 13: no quebra-cabeça o robô andava e virava: ver mover e virar)
+  const zumbi = REGRAS.zumbis ? { sorte: 1, pressa: 1, acaso: null, lista: [], nascidos: 0, mortos: 0, tiros: 0, comeco: null, fim: null, proximo: null, novidades: [], recorde: null, tiro: null } : null;
+  // A sorte da partida: de onde vem cada zumbi, depois dos da primeira volta. (Assistindo a uma gravação, vale a dela: ver o fim do arquivo.)
+  function sortearZumbis(sorte, pressa) {
+    zumbi.sorte = Number.isInteger(sorte) && sorte >= 0 ? sorte : 1;
+    zumbi.pressa = pressa > 0 && pressa <= 500 ? pressa : 1;
+    zumbi.acaso = aleatorio(Math.imul(zumbi.sorte + 1, 0x9e3779b1) >>> 0);
+  }
+  if (zumbi) sortearZumbis(ENDERECO.has('sorte') ? Number(ENDERECO.get('sorte')) : 1, Number(ENDERECO.get('pressa')));
+  const tempoDoZumbi = k => Math.round(Math.max(ZUMBI.minimo, ZUMBI.tempo * ZUMBI.queda ** k) / zumbi.pressa);   // quanto o zumbi k leva para chegar
+  const prazoDoZumbi = ms => Math.round(ms / zumbi.pressa);
+  const juntosAgora = () => Math.min(ZUMBI.juntos, 1 + Math.floor(zumbi.nascidos / ZUMBI.cada));                 // quantos devem estar vindo ao mesmo tempo
+  const vivosAgora = () => zumbi.lista.filter(m => m.morreu === null);
+  // A que distância do robô o zumbi está na hora t (encostado, ele para).
+  const distanciaDoZumbi = (m, t) => Math.max(ZUMBI.toque, ZUMBI.longe - (ZUMBI.longe - ZUMBI.toque) * (t - m.nasceu) / m.dura);
+  const ladoDoZumbi = m => ({ fx: -Math.sin(m.faixa * GIRO), fz: -Math.cos(m.faixa * GIRO) });                  // para que lado do robô ele está
+  // O relógio dos zumbis começa no primeiro botão (ver apertar e, assistindo, o fim do arquivo).
+  function tocarNoZumbi() {
+    if (!zumbi || zumbi.comeco !== null) return;
+    zumbi.comeco = hora();
+    zumbi.proximo = zumbi.comeco + prazoDoZumbi(ZUMBI.inicio);
+  }
+  // Marca a hora do próximo zumbi, se estão vindo menos do que deviam.
+  function marcarZumbi(t, espera) {
+    if (zumbi.proximo === null && vivosAgora().length < juntosAgora()) zumbi.proximo = t + prazoDoZumbi(espera);
+  }
+  function nascerZumbi(t) {
+    const z = zumbi, k = z.nascidos++;
+    const desvio = k < ZUMBI.volta.length ? ZUMBI.volta[k] : Math.floor(z.acaso() * 8);
+    const m = { k, faixa: mod8(estado.rumo + desvio), nasceu: t, dura: tempoDoZumbi(k), morreu: null, corpo: null };
+    z.lista.push(m);
+    z.proximo = null;
+    marcarZumbi(t, ZUMBI.escala);
+    if (!depressa) som.efeito('gemido', { x: ladoDoZumbi(m).fx * 6, z: ladoDoZumbi(m).fz * 6 }, 40);   // (soa como se viesse de perto, do lado dele: quem assiste ouve que chegou mais um)
+  }
+  // Põe o jogo na hora de agora: os zumbis que já deviam ter aparecido aparecem e, se algum já chegou
+  // ao robô, o jogo acaba — na hora em que ele chegou, e não na hora em que isto foi conferido. É
+  // chamada a cada quadro e antes de cada botão.
+  function atualizarZumbis() {
+    const z = zumbi;
+    if (!z || z.comeco === null || z.fim !== null) return;
+    const agora = hora();
+    for (let voltas = 0; voltas < 100; voltas++) {
+      const chega = vivosAgora().reduce((menor, m) => Math.min(menor, m.nasceu + m.dura), Infinity), nasce = z.proximo === null ? Infinity : z.proximo;
+      if (Math.min(chega, nasce) > agora) return;
+      if (chega <= nasce) { acabarZumbis(chega); return; }
+      nascerZumbi(nasce);
+    }
+  }
+  // O ESPACO: um tiro para onde o robô olha. Derruba o zumbi mais próximo que vem por esse lado.
+  function atirar() {
+    const z = zumbi, t = hora();
+    if (z.fim !== null) return resposta('atirar', false, 'o jogo acabou');
+    z.tiros++;
+    const lado = mod8(estado.rumo), alvo = vivosAgora().filter(m => m.faixa === lado).sort((a, b) => distanciaDoZumbi(a, t) - distanciaDoZumbi(b, t))[0];
+    z.tiro = { lado, ate: alvo ? distanciaDoZumbi(alvo, t) : ZUMBI.longe + 30, visto: depressa ? -1e9 : performance.now() };   // (o risco do tiro, para quem assiste)
+    z.novidades = z.novidades.filter(r => r.tipo === 'zumbiFim');   // (o recado de um tiro vale até o tiro seguinte)
+    if (!alvo) {
+      z.novidades.push({ tipo: 'tiroPerdido' });
+      return resposta('atirar', false, 'o tiro não acertou nada');
+    }
+    alvo.morreu = t;
+    z.mortos++;
+    z.novidades.push({ tipo: 'zumbiAbatido', mortos: z.mortos });
+    marcarZumbi(t, ZUMBI.pausa);
+    if (!depressa) som.efeito('tombo', estado);
+    return resposta('atirar', true, `derrubou um zumbi: ${z.mortos}`);
+  }
+  // O fim: um zumbi encostou no robô, na hora t.
+  function acabarZumbis(t) {
+    const z = zumbi;
+    z.fim = t;
+    estado.perdeu = true;
+    const r = z.recorde;
+    z.novidades.push({ tipo: 'zumbiFim', mortos: z.mortos, tiros: z.tiros, recorde: !r ? '' : z.mortos > r.mortos ? `Novo recorde! O anterior era ${r.mortos}.` : `O recorde é ${r.mortos}.` });
+    if (gravando) gravando.anotar('fim', { t }, true);
+    desenharFimDosZumbis();
+    if (!depressa) { som.efeito('mordida', estado); mostrarOJogo(); desenharQuer(); }
+  }
+  // O que a iA fica sabendo junto com a resposta do botão (os textos estão em ferramentas.json, em "notas"):
+  // se o tiro acertou, quantos já caíram e, depois do fim, as contas da partida.
+  function novidadesDoZumbi() {
+    const n = zumbi.novidades;
+    zumbi.novidades = [];
+    return n;
+  }
+  // O que quem assiste lê no campo de quem joga, na página (a iA não vê).
+  const placarDoZumbi = () => {
+    const z = zumbi, vindo = z.fim !== null ? 0 : vivosAgora().length, r = z.recorde;
+    return `${z.mortos} ${z.mortos === 1 ? 'derrubado' : 'derrubados'} · ${z.tiros} ${z.tiros === 1 ? 'tiro' : 'tiros'}`
+      + (z.fim !== null ? ' · um zumbi encostou: fim' : z.comeco === null ? ' · esperando o primeiro botão' : ` · ${vindo} vindo`)
+      + (r ? ` · recorde: ${r.mortos} (${r.nome})` : '');
+  };
+
+  // O campo: de noite, com lua. O robô fica numa laje redonda, no meio; em volta, grama até onde a
+  // vista alcança, e lápides e árvores secas — sempre entre um lado e outro por onde os zumbis vêm,
+  // para não taparem nenhum.
+  function criarCampo() {
+    const g = new T.Group(), sorte = aleatorio(8);
+    raiz.add(g);
+    salas[1] = { n: 1, cx: 0, grupo: g, objetos: [], porta: null, cesta: null, chapeu: null, outroRobo: null, presente: null, pessoa: null, geladeira: null, agua: null };
+    vila.focarSol = () => { };                  // (aqui não há sol: o desenho é o da cidade, sem espelho: ver desenhar)
+    camera.far = 200; voador.far = 340;
+    cena.fog = new T.Fog(0x0e1728, 40, 170);
+    luzGeral.color.set(0x9fb6e8); luzGeral.groundColor.set(0x1c2a22); luzGeral.intensity = 0.7;
+    const luar = new T.DirectionalLight(0xc3d4ff, 1.25);
+    luar.position.set(-34, 46, -20);
+    g.add(luar, luar.target);
+    // o céu, com estrelas, por dentro de uma esfera; e a lua
+    const ceu = texturaCanvas(1024, 512, (c, l, a) => {
+      const d = c.createLinearGradient(0, 0, 0, a);
+      d.addColorStop(0, '#040814'); d.addColorStop(0.42, '#0b1630'); d.addColorStop(0.5, '#1b2c4a'); d.addColorStop(1, '#1b2c4a');
+      c.fillStyle = d; c.fillRect(0, 0, l, a);
+    });
+    malha(g, new T.SphereGeometry(185, 32, 16), luminoso({ map: ceu, side: T.BackSide, fog: false }), 0, 0, 0).receiveShadow = false;
+    const estrelas = [];
+    for (let i = 0; i < 520; i++) {              // (pontos espalhados pela metade de cima do céu, um pouco aquém da esfera)
+      const giro = sorte() * 2 * Math.PI, alto = 0.06 + 0.94 * sorte(), raso = Math.sqrt(1 - alto * alto);
+      estrelas.push(170 * raso * Math.cos(giro), 170 * alto, 170 * raso * Math.sin(giro));
+    }
+    const pontos = new T.BufferGeometry();
+    pontos.setAttribute('position', new T.Float32BufferAttribute(estrelas, 3));
+    g.add(new T.Points(pontos, new T.PointsMaterial({ color: 0xdfe8ff, size: 1.7, sizeAttenuation: false, fog: false, toneMapped: false })));
+    const lua = malha(g, new T.CircleGeometry(8, 40), luminoso({ color: 0xf4f1df, fog: false }), -100, 118, -64);
+    lua.lookAt(0, 0, 0);
+    const halo = malha(g, new T.CircleGeometry(19, 40), luminoso({ color: 0x9fb6e8, transparent: true, opacity: 0.12, fog: false, depthWrite: false }), -99, 117, -63.4);
+    halo.lookAt(0, 0, 0);
+    // o chão: grama escura, de noite
+    const grama = texturaCanvas(256, 256, (c, l, a) => {
+      c.fillStyle = '#34432f'; c.fillRect(0, 0, l, a);
+      for (let i = 0; i < 2600; i++) { c.fillStyle = ['#2b3a28', '#3d4f36', '#27331f', '#465a3c'][Math.floor(sorte() * 4)]; c.fillRect(sorte() * l, sorte() * a, 1 + sorte() * 2, 2 + sorte() * 4); }
+    });
+    grama.wrapS = grama.wrapT = T.RepeatWrapping;
+    grama.repeat.set(70, 70);
+    malha(g, new T.CircleGeometry(180, 48), mat(0xffffff, { map: grama, roughness: 1 }), 0, 0, 0).rotation.x = -Math.PI / 2;
+    const pedra = mat(0x8b9097, { roughness: 0.92 });
+    malha(g, new T.CylinderGeometry(1.15, 1.25, 0.04, 36), mat(0x4b5057, { roughness: 0.95 }), 0, 0.02, 0);   // a laje em que o robô fica
+    const casca = mat(0x2a211b, { roughness: 1 });
+    const fincar = (raio, angulo) => { const p = new T.Group(); p.position.set(-Math.sin(angulo) * raio, 0, -Math.cos(angulo) * raio); p.rotation.y = angulo; g.add(p); return p; };
+    for (let k = 0; k < 8; k++) {
+      const meio = (k + 0.5) * GIRO;             // (o meio do vão entre dois lados)
+      const lapide = fincar(6.5 + sorte() * 5.5, meio + (sorte() - 0.5) * 0.2);
+      malha(lapide, caixaSuave(0.52, 0.9, 0.14, 0.05), pedra, 0, 0.44, 0).rotation.z = (sorte() - 0.5) * 0.16;
+      for (const longe of [15 + sorte() * 9, 30 + sorte() * 12]) {
+        const arvore = fincar(longe, meio + (sorte() - 0.5) * 0.3), alta = 3.2 + sorte() * 2.2;
+        malha(arvore, new T.CylinderGeometry(0.1, 0.22, alta, 8), casca, 0, alta / 2, 0);
+        for (let i = 0; i < 4; i++) {
+          const galho = malha(arvore, new T.CylinderGeometry(0.025, 0.07, 1.1 + sorte() * 0.9, 6), casca, 0, alta * (0.55 + 0.11 * i), 0);
+          galho.rotation.set((sorte() - 0.5) * 1.2, sorte() * 6.28, 0.7 + sorte() * 0.6);
+          galho.translateY(0.5);
+        }
+      }
+    }
+    fazSombra(g);
+    // a arma, na mão direita do robô: aparece embaixo, à direita, na imagem dele
+    const arma = new T.Group(), ferro = mat(0x22272e, { roughness: 0.45, metalness: 0.5 });
+    malha(arma, caixaSuave(0.075, 0.2, 0.09, 0.015), ferro, 0, -0.5, 0.02);
+    malha(arma, new T.CylinderGeometry(0.022, 0.026, 0.26, 12), ferro, 0, -0.7, -0.01);
+    malha(arma, new T.CylinderGeometry(0.03, 0.03, 0.03, 12), luminoso({ color: 0xffb347 }), 0, -0.835, -0.01);
+    bracoDireito.add(arma);
+    arma.traverse(o => { o.layers.set(1); o.layers.enable(0); });
+    g.add(rastro, clarao);
+  }
+  // O corpo de um zumbi: de pé, torto para a frente, com os braços estendidos. A frente dele é o -z,
+  // e a origem, o chão entre os pés. A pele brilha um pouco, para ele aparecer de longe, no escuro.
+  let pecasDoZumbi = null;
+  const corposLivres = [];
+  function corpoDeZumbi(k) {
+    if (corposLivres.length) { const c = corposLivres.pop(); c.grupo.visible = true; c.grupo.scale.setScalar(ZUMBI.porte); return c; }
+    const P = pecasDoZumbi || (pecasDoZumbi = {
+      perna: new T.BoxGeometry(0.17, 0.8, 0.19), tronco: new T.BoxGeometry(0.52, 0.62, 0.28), cabeca: new T.BoxGeometry(0.31, 0.31, 0.3), braco: new T.BoxGeometry(0.13, 0.13, 0.62), olho: new T.SphereGeometry(0.036, 10, 8), boca: new T.BoxGeometry(0.15, 0.045, 0.02),
+      pele: mat(0x8fcf72, { roughness: 0.9, emissive: 0x3f7a2a, emissiveIntensity: 0.55 }), calca: mat(0x39404d, { roughness: 1, emissive: 0x141821, emissiveIntensity: 0.5 }),
+      camisas: [0x7a4141, 0x4a5f7a, 0x6d6a45].map(cor => mat(cor, { roughness: 1, emissive: cor, emissiveIntensity: 0.18 })), brilho: luminoso({ color: 0xffe14a }), escuro: luminoso({ color: 0x1a0d0d }),
+    });
+    const grupo = new T.Group(), tronco = new T.Group(), pernas = [], bracos = [];
+    grupo.rotation.order = 'YXZ';
+    grupo.scale.setScalar(ZUMBI.porte);
+    for (const x of [-0.11, 0.11]) {
+      const perna = new T.Group();
+      perna.position.set(x, 0.8, 0);
+      malha(perna, P.perna, P.calca, 0, -0.4, 0);
+      grupo.add(perna);
+      pernas.push(perna);
+    }
+    tronco.position.set(0, 0.8, 0);
+    tronco.rotation.x = -0.2;
+    grupo.add(tronco);
+    malha(tronco, P.tronco, P.camisas[k % P.camisas.length], 0, 0.33, 0);
+    malha(tronco, P.cabeca, P.pele, 0, 0.82, -0.04).rotation.z = 0.12;
+    for (const x of [-0.078, 0.078]) malha(tronco, P.olho, P.brilho, x + 0.02, 0.86, -0.19);
+    malha(tronco, P.boca, P.escuro, 0.02, 0.74, -0.195);
+    for (const x of [-0.33, 0.33]) {
+      const braco = new T.Group();
+      braco.position.set(x, 0.56, 0);
+      malha(braco, P.braco, P.pele, 0, 0, -0.31);
+      tronco.add(braco);
+      bracos.push(braco);
+    }
+    sombraNoChao(grupo, 0.42, 0.01);
+    fazSombra(grupo);
+    salas[1].grupo.add(grupo);
+    return { grupo, tronco, pernas, bracos };
+  }
+  // Põe cada zumbi onde ele está nesta hora, andando; e o que levou o tiro, caindo.
+  function porZumbis() {
+    const z = zumbi, agora = hora(), t = z.fim !== null ? z.fim : agora;
+    for (const m of z.lista) {
+      const caindo = m.morreu === null ? 0 : (agora - m.morreu) / ZUMBI.caida;
+      if (caindo >= 1 || caindo < 0) { if (m.corpo) { m.corpo.grupo.visible = false; corposLivres.push(m.corpo); m.corpo = null; } continue; }
+      const c = m.corpo || (m.corpo = corpoDeZumbi(m.k)), d = distanciaDoZumbi(m, m.morreu === null ? t : m.morreu), v = ladoDoZumbi(m), passo = (ZUMBI.longe - d) * 3.3 + m.k;
+      c.grupo.position.set(v.fx * d, 0.035 * Math.abs(Math.sin(passo)), v.fz * d);
+      c.grupo.rotation.set(1.5 * Math.min(1, caindo * 1.6), m.faixa * GIRO + Math.PI, 0);   // (de frente para o robô; quem leva o tiro cai de costas)
+      c.grupo.scale.setScalar(ZUMBI.porte * (caindo > 0.7 ? Math.max(0.02, (1 - caindo) / 0.3) : 1));
+      c.pernas[0].rotation.x = 0.55 * Math.sin(passo);
+      c.pernas[1].rotation.x = -0.55 * Math.sin(passo);
+      c.bracos[0].rotation.x = 0.14 * Math.sin(passo * 0.5);
+      c.bracos[1].rotation.x = -0.14 * Math.sin(passo * 0.5 + 1);
+      c.tronco.rotation.z = 0.07 * Math.sin(passo * 0.5);
+    }
+    // o risco do tiro e o clarão dele: por uma fração de segundo
+    const tiro = z.tiro, idade = tiro ? performance.now() - tiro.visto : Infinity, aceso = idade < 140;
+    rastro.visible = aceso;
+    clarao.intensity = aceso ? 6 * (1 - idade / 140) : 0;
+    if (aceso) {
+      const a = tiro.lado * GIRO, fx = -Math.sin(a), fz = -Math.cos(a), de = new T.Vector3(fx * 0.75 + Math.cos(a) * 0.31, 0.86, fz * 0.75 - Math.sin(a) * 0.31), ate = new T.Vector3(fx * tiro.ate, 1.25, fz * tiro.ate);
+      rastro.position.copy(de).lerp(ate, 0.5);
+      rastro.lookAt(ate);
+      rastro.scale.set(1, 1, de.distanceTo(ate));
+      rastro.material.opacity = 0.95 * (1 - idade / 140);
+      clarao.position.copy(de);
+    }
+  }
+  const rastro = new T.Mesh(new T.CylinderGeometry(0.02, 0.02, 1, 6).rotateX(Math.PI / 2), luminoso({ color: 0xfff1a6, transparent: true, opacity: 0.95, depthWrite: false, fog: false }));
+  rastro.visible = false;
+  const clarao = new T.PointLight(0xffd27a, 0, 10, 1.6);
+  // A mira, no meio da imagem: é para lá que o tiro vai.
+  const cruz = new T.Mesh(new T.PlaneGeometry(1, 1), luminoso({ transparent: true, depthTest: false, depthWrite: false,
+    map: texturaCanvas(128, 128, (g, l) => {
+      g.lineCap = 'round';
+      for (const [cor, largura] of [['rgba(0, 0, 0, 0.6)', 11], ['rgba(255, 255, 255, 0.97)', 5]])   // (cada risco com uma beirada escura: aparece no céu e na grama)
+        for (const [x1, y1, x2, y2] of [[l / 2, 8, l / 2, 30], [l / 2, l - 8, l / 2, l - 30], [8, l / 2, 30, l / 2], [l - 8, l / 2, l - 30, l / 2]]) { g.strokeStyle = cor; g.lineWidth = largura; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
+    }) }));
+  cruz.renderOrder = 998;
+  cruz.layers.set(2);
+  cruz.visible = !!REGRAS.zumbis;
+  camera.add(cruz);
+  // A faixa do fim, no meio da imagem: um zumbi encostou; quantos caíram, e com quantos tiros.
+  const fimDosZumbis = { canvas: document.createElement('canvas') };
+  fimDosZumbis.canvas.width = 1600; fimDosZumbis.canvas.height = 300;
+  fimDosZumbis.textura = new T.CanvasTexture(fimDosZumbis.canvas);
+  fimDosZumbis.textura.colorSpace = T.SRGBColorSpace;
+  fimDosZumbis.malha = new T.Mesh(new T.PlaneGeometry(1, 1), luminoso({ map: fimDosZumbis.textura, transparent: true, depthTest: false, depthWrite: false }));
+  fimDosZumbis.malha.renderOrder = 1000;
+  fimDosZumbis.malha.layers.set(2);
+  fimDosZumbis.malha.visible = false;
+  camera.add(fimDosZumbis.malha);
+  function desenharFimDosZumbis() {
+    const z = zumbi, c = fimDosZumbis.canvas, g = c.getContext('2d'), L = c.width, A = c.height, novo = z.recorde && z.mortos > z.recorde.mortos;
+    g.clearRect(0, 0, L, A);
+    g.beginPath();
+    if (g.roundRect) g.roundRect(0, 0, L, A, 40); else g.rect(0, 0, L, A);
+    g.fillStyle = 'rgba(150, 30, 26, 0.94)'; g.fill();
+    g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = 'bold 118px Arial, sans-serif'; g.fillText('UM ZUMBI PEGOU VOCÊ!', L / 2, 104, L - 80);
+    g.font = 'bold 62px Arial, sans-serif';
+    g.fillText(`zumbis derrubados: ${z.mortos} · tiros: ${z.tiros}${novo ? ' · NOVO RECORDE!' : ''}`, L / 2, 226, L - 80);
+    fimDosZumbis.textura.needsUpdate = true;
+    fimDosZumbis.malha.visible = true;
+  }
+
   // ---------- botões ----------
   // Os botões do jogo. O teclado e o MCP apertam os mesmos, pelo mesmo nome, e é só isso
   // que o jogador fica sabendo: quais botões existem. O que cada um faz, ele descobre.
@@ -6176,8 +6546,10 @@
   };
   if (REGRAS.passoDeLado) Object.assign(BOTOES, { Q: () => mover('esquerda'), E: () => mover('direita') });   // desafio 4: um passo de lado, sem virar
   if (quebra) BOTOES.SAIR = () => desistirDoQuebra();   // desafio 7: desistir do quebra-cabeça
+  if (zumbi) for (const b of ['L', 'TAB', 'T']) BOTOES[b] = () => resposta(`apertar ${b}`, false, 'esse botão não faz nada aqui');   // desafio 8: só A, D, ESPACO e F servem
   function acionar(botao, texto) {
     atualizarCarro();                           // (se o carro está em viagem: onde ele está nesta hora)
+    atualizarZumbis();                          // (e os zumbis: os que já apareceram, e se algum já chegou)
     const acao = Object.prototype.hasOwnProperty.call(BOTOES, botao) && BOTOES[botao];
     return acao ? acao(texto) : resposta(`apertar ${botao}`, false, 'botão inexistente');
   }
@@ -6204,10 +6576,11 @@
   const quemJoga = { quem: 0, nome: '', modelo: '' }, contagem = { botoes: 0, imagens: 0, vitoria: null };   // (vitoria: as contas na hora em que o jogo foi vencido, para o pódio da lista de replays)
   // A versão das regras que mudam o que um botão faz, para a gravação antiga continuar igual
   // quando é assistida. 2: entre alvos do mesmo tipo, vale o mais central na imagem (ver ordemAntiga).
-  const VERSAO_DAS_REGRAS = 10;                 // (3: as portas que o jogador abre também fecham: ver portasNaoFecham; 4: o violeiro e o cachorro barram um canto da praça; 5: dá para entrar no carro; 6: na cidade, o S recua sem virar; 7: no coletivo, cada robô pede a sua missão na central; 8: o carro anda sozinho; 9: ele para para os robôs e pode ser chamado, e as casas 1 e 3 do coletivo revezam dois pedidos; 10: o que está num móvel aberto só é alvo se o robô o vê: ver aVista)
+  const VERSAO_DAS_REGRAS = 13;                 // (3: as portas que o jogador abre também fecham: ver portasNaoFecham; 4: o violeiro e o cachorro barram um canto da praça; 5: dá para entrar no carro; 6: na cidade, o S recua sem virar; 7: no coletivo, cada robô pede a sua missão na central; 8: o carro anda sozinho; 9: ele para para os robôs e pode ser chamado, e as casas 1 e 3 do coletivo revezam dois pedidos; 10: o que está num móvel aberto só é alvo se o robô o vê: ver aVista; 11: a poltrona da casa amarela foi para longe da cama, e o robô do desafio 4 começa na frente dela: ver POLTRONA_DO_QUARTO; 12: os móveis barram o robô com os cantos arredondados (ver noMovel) e, na cidade, o passo que não cabe inteiro vai até encostar (ver ateOnde); 13: no quebra-cabeça o robô não anda nem vira (ver quebraAnda))
   const gravando = !ASSISTINDO && GRAVACAO
     ? GRAVACAO.gravar(COLETIVO ? 'V' : DESAFIO, () => ({ versao: VERSAO_DAS_REGRAS, nome: COLETIVO ? 'coletivo' : quemJoga.nome, modelo: COLETIVO ? `${participantes.size} robôs, ${entregas} pedidos` : quemJoga.modelo, botoes: contagem.botoes, imagens: contagem.imagens, ganhou: estado.ganhou,
-      vitoria: contagem.vitoria || undefined, perdeu: estado.perdeu || undefined, assar: REGRAS.vila ? [ASSAR.pronto, ASSAR.queima] : undefined, sorte: COLETIVO ? sorte : quebra ? quebra.sorte : undefined,   // (sorte: o sorteio do começo, no coletivo: ver sortear; no quebra-cabeça, a partida: ver embaralharQuebra)
+      vitoria: contagem.vitoria || undefined, perdeu: estado.perdeu || undefined, assar: REGRAS.vila ? [ASSAR.pronto, ASSAR.queima] : undefined, sorte: COLETIVO ? sorte : quebra ? quebra.sorte : zumbi ? zumbi.sorte : undefined, pressa: zumbi && zumbi.pressa !== 1 ? zumbi.pressa : undefined,   // (sorte: o sorteio do começo, no coletivo: ver sortear; no quebra-cabeça, a partida: ver embaralharQuebra)
+      zumbis: zumbi ? { mortos: zumbi.mortos, tiros: zumbi.tiros, tempo: zumbi.comeco === null ? 0 : Math.round((zumbi.fim !== null ? zumbi.fim : hora()) - zumbi.comeco) } : undefined,   // (as contas dos zumbis, para a lista de replays e para o recorde)
       quebra: quebra && quebra.fim !== null ? Object.assign({ pontos: quebra.pontos, desistiu: quebra.desistiu }, quebra.contas) : undefined }))   // (o resultado do quebra-cabeça, para a lista de replays)
     : null;
   const NOME_DO_BOTAO = { ESPACO: 'Espaço', F: 'F · imagem' };
@@ -6252,6 +6625,11 @@
     if (quebra) {                               // no quebra-cabeça: as contas ao vivo (o relógio é acertado a cada meio segundo: ver quadro)
       linha('titulo', 'quebra-cabeça');
       elPlacar = pedaco('span', placarDoQuebra());
+      linha('linha', elPlacar);
+    }
+    if (zumbi) {                                // nos zumbis: quantos caíram, os tiros, quantos estão vindo e o recorde
+      linha('titulo', 'zumbis');
+      elPlacar = pedaco('span', placarDoZumbi());
       linha('linha', elPlacar);
     }
     if (intencoes.length) linha('titulo', 'o que pretende');
@@ -6302,7 +6680,7 @@
     let saida;
     horaDaJogada = Math.round(performance.now() - NASCEU);
     const t = horaDaJogada;
-    try { if (existe) tocarNoQuebra(); saida = acionar(botao, texto); } finally { horaDaJogada = null; }   // (o relógio do quebra-cabeça começa no primeiro botão)
+    try { if (existe) { tocarNoQuebra(); tocarNoZumbi(); } saida = acionar(botao, texto); } finally { horaDaJogada = null; }   // (o relógio do quebra-cabeça começa no primeiro botão)
     if (existe) {
       mostrarIntencao(botao, quer);
       if (botao === 'F') contagem.imagens++; else contagem.botoes++;
@@ -6913,11 +7291,13 @@
       case 'Digit5': case 'Numpad5': comecar(5); break;
       case 'Digit6': case 'Numpad6': comecar(6); break;
       case 'Digit7': case 'Numpad7': comecar(7); break;
+      case 'Digit8': case 'Numpad8': comecar(8); break;
     }
   });
 
   // ---------- início ----------
   if (REGRAS.vila) criarVila();                 // desafio 4: a vila inteira existe desde o começo
+  else if (REGRAS.zumbis) criarCampo();         // desafio 8: o campo dos zumbis
   else {
     const primeira = criarSala(1);
     if (REGRAS.portaManual) for (let n = 2; n <= REGRAS.salas; n++) criarSala(n);   // desafio 3: a cozinha já existe atrás da porta
@@ -6930,7 +7310,7 @@
   // resultado: o jogo acabou para quem joga? (no desafio 4 dá para perder: o bolo queima)
   // (verDe: põe a câmera de quem voa num ponto, olhando para outro: é de quem assiste e dos testes, e não muda nada no jogo)
   window.jogo = { apertar, comecar, mover, virar, pegar, levantar, escrever, frame, reiniciar, get estado() { return estado; }, salas, get itens() { return itens; }, desafio: COLETIVO ? 'V' : DESAFIO, vila, robos, som, entrar: entrarNoJogo, sair: sairDoJogo, diagnostico: () => ultima,
-    quebra, novidades: novidadesDoQuebra,       // (no quebra-cabeça: o estado dele, para os testes, e o recado do fim, que vai junto com a resposta do botão: ver ponte.js)
+    quebra, zumbi, novidades: () => zumbi ? novidadesDoZumbi() : novidadesDoQuebra(),       // (no quebra-cabeça: o estado dele, para os testes, e o recado do fim, que vai junto com a resposta do botão: ver ponte.js)
     resultado: () => estado.ganhou ? 'ganhou' : estado.perdeu ? 'perdeu' : '',
     verDe(x, y, z, paraX, paraY, paraZ) {
       const dx = paraX - x, dy = paraY - y, dz = paraZ - z;
@@ -6957,6 +7337,17 @@
     desenharQuer();
     if (elAjuda.classList.contains('solta')) elAjuda.hidden = true;
   }
+  if (zumbi) {                                  // nos zumbis: as contas no campo de quem assiste, desde o começo; e o recorde, que sai da lista das gravações (a melhor partida de uma iA com nome)
+    desenharQuer();
+    if (GRAVACAO && GRAVACAO.noServidor) GRAVACAO.listar().then(lista => {
+      for (const { id, resumo } of lista) {
+        const z = resumo.zumbis && typeof resumo.zumbis === 'object' ? resumo.zumbis : null, mortos = z ? Math.max(0, Math.round(Number(z.mortos)) || 0) : 0, nome = semControle(resumo.nome, 12);
+        if (String(resumo.desafio) !== '8' || !nome || mortos < 1 || (gravando && id === gravando.id) || id === GRAVACAO.assistindo) continue;
+        if (!zumbi.recorde || mortos > zumbi.recorde.mortos) zumbi.recorde = { mortos, nome };
+      }
+      desenharQuer();
+    }).catch(() => { });
+  }
   // Assistindo a uma gravação: os botões gravados são apertados de novo, na ordem, sem as
   // esperas de quem jogava — só com o tempo de ler a intenção de cada um. Para voltar a um
   // ponto anterior a página recarrega já nele (o jogo não sabe desfazer um botão): a página de
@@ -6970,6 +7361,10 @@
       if (assar[0] > 0 && assar[1] > assar[0]) { ASSAR.pronto = assar[0]; ASSAR.queima = assar[1]; }       // o tempo de forno que valia naquela partida
       if (COLETIVO && Number.isInteger(gravada.resumo.sorte) && gravada.resumo.sorte > 0) sortear(gravada.resumo.sorte);   // ...e o sorteio do começo (sem ele na gravação, fica a ordem de antes)
       if (quebra && Number.isInteger(gravada.resumo.sorte) && gravada.resumo.sorte >= 0) { embaralharQuebra(gravada.resumo.sorte); resposta('gravação', true, 'a partida dela'); }   // ...a figura e as peças daquela partida...
+      if (zumbi) sortearZumbis(Number(gravada.resumo.sorte), Number(gravada.resumo.pressa));                            // ...de que lado vinha cada zumbi, e com que pressa...
+      if (!(Number(gravada.resumo.versao) >= 13)) quebraAnda = true;                                                    // ...o robô do quebra-cabeça, que andava e virava...
+      if (!(Number(gravada.resumo.versao) >= 12)) cantosVivos = passoInteiro = true;                                    // ...os móveis, que barravam com os cantos vivos, e o passo, que ou cabia inteiro ou não saía...
+      if (!(Number(gravada.resumo.versao) >= 11) && vila.poltronaAntiga) vila.poltronaAntiga();                          // ...a poltrona da casa amarela, que ficava no meio da parede, perto da cama...
       if (!(Number(gravada.resumo.versao) >= 10)) semVisada = true;                                                    // ...o que estava num móvel aberto, que era alvo mesmo tapado pela porta...
       if (!(Number(gravada.resumo.versao) >= 9)) {                                                                     // ...os pontos do carro, que não existiam, o carro, que não parava, e o rodízio dos pedidos...
         carroNaoPara = semRodizio = true;
@@ -6998,6 +7393,7 @@
         // partida os dois tenham vindo colados (a iA que aperta um botão e já pede a imagem): senão o botão passava sem dar para ver o
         // que ele fez, e só se lia o pedido da imagem. Assim há uma pausa no botão e outra na imagem.
         espera(ev, intervalo, anterior) {
+          if (zumbi) return Math.max(0, Number(intervalo) || 0);   // (nos zumbis o tempo é o de verdade: eles andam entre um botão e o outro)
           const ler = (anterior.b === 'F' ? 500 : 900) + 35 * semControle(anterior.q, 140).length;
           return anterior.e === 'botao' && anterior.q && ev.r === anterior.r ? ler : Math.min(intervalo, ler);
         },
@@ -7023,9 +7419,10 @@
           return;
         }
         if (ev.e === 'quem') { quemJoga.nome = semControle(ev.nome, 12); quemJoga.modelo = semControle(ev.modelo, 24); desenharQuer(); return; }   // quem estava jogando, na tela como ao vivo
+        if (zumbi && ev.e === 'fim') { horaGravada = Math.max(0, Number(ev.t) || 0); atualizarZumbis(); return; }   // (nos zumbis: a hora em que um deles encostou no robô)
         if (ev.e !== 'botao') return;
         horaGravada = horaDaJogada = Math.max(0, Number(ev.t) || 0);     // o botão vale na hora em que foi apertado ao vivo
-        try { tocarNoQuebra(); if (ev.b !== 'F') acionar(String(ev.b), ev.x); } finally { horaDaJogada = null; }
+        try { tocarNoQuebra(); tocarNoZumbi(); if (ev.b !== 'F') acionar(String(ev.b), ev.x); else atualizarZumbis(); } finally { horaDaJogada = null; }
         mostrarIntencao(String(ev.b), semControle(ev.q, 140));
       }
       ajustarTamanho(true);                     // (o painel da gravação vai para o lugar que tem no arranjo da página: ver repartir)

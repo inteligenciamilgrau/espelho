@@ -57,7 +57,7 @@
   <!-- O pódio dos desafios 1 a 7 (o script preenche: ver "o pódio"). Não há pódio da vila nem do Galinha Pong. -->
   <details id="podio" hidden>
     <summary>🏆 Pódio dos desafios</summary>
-    <p class="dica">De cada desafio, as três iAs que venceram com menos movimentos (os botões apertados até a vitória, sem contar os pedidos de imagem); no empate, a que levou menos tempo. Vale a melhor partida de cada iA, e as partidas do teclado, sem nome, não entram. No quebra-cabeça vale a pontuação. Um clique num degrau abre a partida.</p>
+    <p class="dica">De cada desafio, as três iAs que venceram com menos movimentos (os botões apertados até a vitória, sem contar os pedidos de imagem); no empate, a que levou menos tempo. Vale a melhor partida de cada iA, e as partidas do teclado, sem nome, não entram. No quebra-cabeça vale a pontuação e, nos zumbis, quantos foram derrubados (é o recorde). Um clique num degrau abre a partida.</p>
     <div id="podios"></div>
   </details>
   <div id="lista"></div>
@@ -70,7 +70,7 @@
   'use strict';
   const gravacao = window.gravacao;
   const elLista = document.getElementById('lista'), elVazio = document.getElementById('vazio'), elConta = document.getElementById('conta');
-  const JOGOS = { 1: 'Desafio 1', 2: 'Desafio 2', 3: 'Desafio 3', 4: 'Desafio 4', 5: 'Desafio 5', 6: 'Desafio 6', 7: 'Quebra-cabeça', V: 'Vila coletiva', M: 'Galinha Pong', T: 'Treino' };
+  const JOGOS = { 1: 'Desafio 1', 2: 'Desafio 2', 3: 'Desafio 3', 4: 'Desafio 4', 5: 'Desafio 5', 6: 'Desafio 6', 7: 'Quebra-cabeça', 8: 'Zumbis', V: 'Vila coletiva', M: 'Galinha Pong', T: 'Treino' };
   // Tudo o que vem de uma gravação é tratado como texto: os nomes e os modelos são das iAs.
   const texto = (v, letras) => Array.from(String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').trim()).slice(0, letras).join('');
   const numero = v => Math.max(0, Math.round(Number(v)) || 0);
@@ -110,7 +110,10 @@
       detalhes.push(tantos(resumo.botoes, 'botão', 'botões'), tantos(resumo.imagens, 'imagem', 'imagens'), `ao vivo durou ${quantoDurou(resumo.duracao)}`);
       const q = resumo.quebra && typeof resumo.quebra === 'object' ? resumo.quebra : null;   // o resultado do quebra-cabeça (desafio 7): a pontuação e as contas
       if (q) detalhes.push(q.desistiu === true ? 'desistiu' : 'montou', `${Math.min(100, numero(q.pontos))} pontos`, `${Math.min(9, numero(q.certas))} de 9 certas`, tantos(q.jogadas, 'peça colocada', 'peças colocadas'), tantos(q.giros, 'giro', 'giros'), `tempo ${quantoDurou(q.tempo)}`);
-      else detalhes.push(resumo.ganhou === true ? 'venceu' : 'não terminou');
+      else if (desafio === '8') {               // os zumbis: quantos caíram e com quantos tiros
+        const z = resumo.zumbis && typeof resumo.zumbis === 'object' ? resumo.zumbis : {};
+        detalhes.push(tantos(z.mortos, 'zumbi derrubado', 'zumbis derrubados'), tantos(z.tiros, 'tiro', 'tiros'), resumo.perdeu === true ? 'um zumbi encostou' : 'não terminou');
+      } else detalhes.push(resumo.ganhou === true ? 'venceu' : 'não terminou');
     }
     elemento(corpo, 'div', detalhes.filter(Boolean).join(' · '), 'linha');
     const apagar = elemento(item, 'div', 'apagar', 'apagar');
@@ -133,14 +136,20 @@
   // ver jogo.js); a gravação antiga, que não as traz, entra com as contas da partida inteira, que
   // podem ter um ou outro botão apertado depois da vitória. No quebra-cabeça (7) a ordem é a da
   // pontuação, que já junta peças, giros e tempo; no empate, menos tempo.
+  // Nos zumbis (8) não há vitória: é o recorde — quem derrubou mais; no empate, quem deu menos tiros.
   // Cada iA (o nome de guerra com o modelo) entra uma vez só, com a melhor partida dela. Partida
   // sem nome é do teclado: não entra. A vila e o Galinha Pong não têm pódio.
   const elPodio = document.getElementById('podio'), elPodios = document.getElementById('podios');
-  const NO_PODIO = ['1', '2', '3', '4', '5', '6', '7'], CHAVE_DO_PODIO = 'replays.podio';
+  const NO_PODIO = ['1', '2', '3', '4', '5', '6', '7', '8'], CHAVE_DO_PODIO = 'replays.podio';
   const relogio = ms => { const s = Math.round(numero(ms) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   function feito({ id, resumo }) {
     const desafio = String(resumo.desafio), nome = texto(resumo.nome, 12), modelo = texto(resumo.modelo, 24);
-    if (!NO_PODIO.includes(desafio) || resumo.ganhou !== true || !nome) return null;
+    if (!NO_PODIO.includes(desafio) || !nome) return null;
+    if (desafio === '8') {
+      const z = resumo.zumbis && typeof resumo.zumbis === 'object' ? resumo.zumbis : null, mortos = z ? numero(z.mortos) : 0, tiros = z ? numero(z.tiros) : 0;
+      return mortos < 1 ? null : { id, desafio, nome, modelo, ordem: [-mortos, tiros], conta: [`${mortos} ${mortos === 1 ? 'zumbi' : 'zumbis'}`, `${tiros} ${tiros === 1 ? 'tiro' : 'tiros'}`] };
+    }
+    if (resumo.ganhou !== true) return null;
     if (desafio === '7') {
       const q = resumo.quebra && typeof resumo.quebra === 'object' ? resumo.quebra : null;
       if (!q || q.desistiu === true) return null;
@@ -170,7 +179,7 @@
       const degraus = elemento(cartao, 'div', '', 'degraus');
       tres.forEach((f, i) => {
         const lugar = elemento(degraus, 'div', '', 'lugar l' + (i + 1));
-        lugar.title = `${i + 1}º lugar: ${f.nome}${f.modelo ? ' (' + f.modelo + ')' : ''} — ${f.conta.join(', em ')}. Clique para assistir.`;
+        lugar.title = `${i + 1}º lugar: ${f.nome}${f.modelo ? ' (' + f.modelo + ')' : ''} — ${f.conta.join(', ')}. Clique para assistir.`;
         elemento(lugar, 'div', f.nome, 'quem laranja');
         elemento(lugar, 'div', f.modelo || '—', 'modelo');
         elemento(lugar, 'div', f.conta[0], 'conta');
