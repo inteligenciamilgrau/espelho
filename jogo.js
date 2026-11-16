@@ -198,10 +198,10 @@
     },
     9: {
       // As missões: o campo dos zumbis, agora com o robô andando. Há várias missões (atravessar o campo do
-      // ponto A ao ponto B, buscar uma caixa e voltar, derrubar todos os zumbis), cada uma com dez níveis
+      // abrigo ao gerador, buscar uma caixa de remédios e voltar, derrubar todos os zumbis), cada uma com dez níveis
       // de dificuldade (ver "as missões"). A arma, as balas e o giro com tempo são os do desafio 8.
       mensagem: 'Cumpra a missão. Nenhum zumbi pode encostar em você.',
-      inicio: { z: 0, rumo: 0 },                // no ponto A, olhando para o lado do ponto B
+      inicio: { z: 0, rumo: 0 },                // na frente do abrigo, de costas para ele, olhando para o campo
       bracoCaido: false,
       espelhoDisfarcado: false,
       salas: 1,
@@ -6773,13 +6773,14 @@
   // ---------- as missões (desafio 9) ----------
   // O campo dos zumbis, agora com o robô andando, e com uma história: é o apocalipse zumbi, e o robô é
   // de um abrigo de sobreviventes. O campo é cercado: 28 m de largura por 56 m de comprimento. O abrigo
-  // fica numa ponta: é o ponto A, onde o robô começa. O ponto B fica na outra, a 44 m, e é o lugar aonde
-  // é preciso ir para resolver o problema de cada missão (ver MISSOES). Pelo campo há pedras, árvores
-  // secas e lápides, que barram o caminho, e zumbis.
+  // fica numa ponta, e o robô começa na frente dele. Na outra ponta, a 44 m, fica o lugar aonde é preciso
+  // ir para resolver o problema de cada missão (ver MISSOES): o gerador, ou o posto médico. Pelo campo
+  // há pedras, árvores secas e lápides, que barram o caminho, e zumbis. Os lugares são chamados pelo
+  // que são: não há "ponto A" nem "ponto B" em nada do que a iA lê ou vê.
   //
-  //   1, o gerador:  o gerador que dá luz ao abrigo parou, e fica no ponto B: chegar a ele o religa.
-  //   2, o remédio:  há um ferido no abrigo, e a caixa de remédios está no posto médico abandonado, no
-  //                  ponto B: ir até lá, pegar a caixa (basta chegar nela) e trazê-la ao abrigo. Quando
+  //   1, o gerador:  o gerador que dá luz ao abrigo parou, do outro lado do campo: chegar a ele o religa.
+  //   2, o remédio:  há um ferido no abrigo, e a caixa de remédios está no posto médico abandonado, do
+  //                  outro lado: ir até lá, pegar a caixa (basta chegar nela) e trazê-la ao abrigo. Quando
   //                  o robô pega a caixa, o alarme do posto dispara e todos os zumbis vêm atrás dele.
   //   3, a limpeza:  um grupo de sobreviventes vai atravessar o campo: derrubar todos os zumbis antes.
   //
@@ -6816,11 +6817,11 @@
   const CAMPANHA = {
     tique: 50,                                  // de quanto em quanto tempo a conta anda (ms)
     passo: 300, passos: 10,                     // quanto leva um passo do robô (ms), e quantos ele dá de uma vez, no máximo
-    x: 14, z1: -50, z2: 6,                      // até onde se anda no campo: x de -14 a 14; z de -50 (atrás do ponto B) a 6 (atrás do A)
-    longe: 44,                                  // do ponto A ao ponto B (m)
+    x: 14, z1: -50, z2: 6,                      // até onde se anda no campo: x de -14 a 14; z de -50 (atrás do gerador ou do posto) a 6 (atrás do abrigo)
+    longe: 44,                                  // da frente do abrigo ao lugar da missão, do outro lado do campo (m)
     alcance: 14, cone: Math.PI / 8,             // o tiro: até onde vai (m), e quanto abre para cada lado (22,5°)
     alerta: 4,                                  // a caminhada para se um zumbi que estava mais longe chega a menos disso (m)
-    toque: 1.0, chegada: 1.2,                   // a que distância um zumbi encosta no robô; e a que distância do ponto o robô chegou nele
+    toque: 1.0, chegada: 1.2,                   // a que distância um zumbi encosta no robô; e a que distância do lugar o robô chegou a ele
     mapa: 20,                                   // o raio do mapa (m)
     vaga: 0.4, some: 2,                         // o zumbi que anda à toa vai a 40% da velocidade; o que persegue desiste a 2 vezes a distância a que vê
     obstaculos: 18,                             // quantas pedras, árvores e lápides há no campo
@@ -6830,16 +6831,16 @@
     visao: [6, 7, 8, 9, 10, 11, 12, 13, 14, 16],
     ouvido: [14, 15, 16, 18, 20, 22, 24, 26, 28, 30],   // (nunca menos que o alcance do tiro: o zumbi em que dá para atirar ouve o tiro)
   };
-  // A história: é o apocalipse zumbi, e o robô é de um abrigo de sobreviventes, que fica numa ponta do campo (o ponto A).
-  // Cada missão é um problema do abrigo, e o ponto B, na outra ponta, é o lugar aonde é preciso ir para resolvê-lo:
+  // A história: é o apocalipse zumbi, e o robô é de um abrigo de sobreviventes, que fica numa ponta do campo.
+  // Cada missão é um problema do abrigo, que se resolve indo a um lugar na outra ponta:
   // na missão 1, o gerador que dá luz ao abrigo, que parou; na 2, o posto médico abandonado, onde há uma caixa de remédios.
   // (nome: como a missão se chama; historia: o que quem joga no teclado lê na página; feito e faixa: o que a iA lê, e o que a imagem diz, quando a missão é cumprida)
   const MISSOES = {
-    1: { nome: 'o gerador', historia: 'O gerador que dá luz ao abrigo parou. Atravesse o campo e chegue ao gerador (ponto B) para religá-lo.', feito: 'O gerador voltou a funcionar: o abrigo tem luz de novo.', faixa: 'A LUZ VOLTOU!' },
-    2: { nome: 'o remédio', historia: 'Há um ferido no abrigo. Busque a caixa de remédios no posto médico (ponto B) e traga-a ao abrigo (ponto A).', feito: 'A caixa de remédios chegou ao abrigo.', faixa: 'O REMÉDIO CHEGOU!' },
+    1: { nome: 'o gerador', historia: 'O gerador que dá luz ao abrigo parou. Atravesse o campo e chegue ao gerador para religá-lo.', feito: 'O gerador voltou a funcionar: o abrigo tem luz de novo.', faixa: 'A LUZ VOLTOU!' },
+    2: { nome: 'o remédio', historia: 'Há um ferido no abrigo. Busque a caixa de remédios no posto médico, do outro lado do campo, e traga-a ao abrigo.', feito: 'A caixa de remédios chegou ao abrigo.', faixa: 'O REMÉDIO CHEGOU!' },
     3: { nome: 'a limpeza', historia: 'Um grupo de sobreviventes vai atravessar o campo para chegar ao abrigo. Derrube todos os zumbis antes.', feito: 'O campo está livre: não sobrou nenhum zumbi.', faixa: 'O CAMPO ESTÁ LIVRE!' },
   };
-  // (N: os números do nível; acaso: a sorte do campo; k: quantos tiques já foram; andar: a caminhada em curso, ou null; alvo: 'A', 'B' ou null — o ponto a que é preciso chegar)
+  // (N: os números do nível; acaso: a sorte do campo; k: quantos tiques já foram; andar: a caminhada em curso, ou null; A: a frente do abrigo; B: a frente do gerador ou do posto; alvo: 'A', 'B' ou null — a qual dos dois é preciso chegar agora)
   const campanha = REGRAS.missoes ? { m: 1, nivel: 1, N: null, acaso: null, grupo: null, obstaculos: [], zumbis: [], k: 0, andar: null, A: { x: 0, z: 0 }, B: { x: 0, z: -CAMPANHA.longe }, alvo: null, caixa: null, comCaixa: false, passos: 0, recorde: null, marcos: {} } : null;
   let limiteDaConta = () => Infinity;           // (assistindo a uma gravação: a hora do próximo acontecimento gravado: ver o fim do arquivo)
   const noCampo = (x, z) => Math.abs(x) <= CAMPANHA.x + 1e-9 && z >= CAMPANHA.z1 - 1e-9 && z <= CAMPANHA.z2 + 1e-9;
@@ -6853,10 +6854,10 @@
     zumbi.novidades.push(recado);
     if (zumbi.novidades.length > 5) zumbi.novidades.shift();
   }
-  // O que falta fazer, em duas partes: a ordem e a conta (a distância até o ponto, ou quantos zumbis restam).
+  // O que falta fazer, em duas partes: a ordem e a conta (a distância até o lugar, ou quantos zumbis restam).
   function objetivoDaCampanha() {
     const c = campanha, alvo = c.alvo ? c[c.alvo] : null, falta = alvo ? `${Math.round(Math.hypot(estado.x - alvo.x, estado.z - alvo.z))} m` : '';
-    return c.m === 3 ? ['derrube todos os zumbis', `restam ${vivosDaCampanha().length}`] : c.m === 2 ? (c.comCaixa ? ['leve os remédios ao abrigo (ponto A)', falta] : ['busque os remédios no posto (ponto B)', falta]) : ['religue o gerador (ponto B)', falta];
+    return c.m === 3 ? ['derrube todos os zumbis', `restam ${vivosDaCampanha().length}`] : c.m === 2 ? (c.comCaixa ? ['leve os remédios ao abrigo', falta] : ['busque os remédios no posto médico', falta]) : ['religue o gerador', falta];
   }
   // O que quem assiste lê no campo de quem joga, na página (a iA não vê).
   const placarDaCampanha = () => {
@@ -6897,33 +6898,22 @@
       else arvoreSeca(g, (sorte() * 2 - 1) * (X + 9), i % 4 ? z2 + 2.5 + sorte() * 9 : z1 - 2.5 - sorte() * 13, sorte, 0.22);
     }
   }
-  // O marco de um ponto: um aro no chão, um facho de luz que começa acima da cabeça do robô (de dentro
-  // dele não se vê nada) e, no alto, uma placa com a letra, virada para os quatro lados. O marco do
-  // ponto a que é preciso chegar fica verde; o outro, apagado (ver acenderMarcos).
-  function criarMarco(letra, x, z) {
+  // O sinal do lugar aonde é preciso chegar: um aro verde no chão e um facho de luz verde, que começa acima da cabeça do robô
+  // (de dentro dele não se vê nada). Há um na frente do abrigo e outro na frente do gerador ou do posto médico; só aparece o
+  // do lugar aonde é preciso chegar agora (ver acenderMarcos). Os lugares não têm letra nem número: cada um é o que é.
+  // (Por dentro, campanha.A é a frente do abrigo, onde o robô começa, e campanha.B, a frente do gerador ou do posto.)
+  function criarMarco(x, z) {
     const g = new T.Group();
     g.position.set(x, 0, z);
-    const facho = malha(g, new T.CylinderGeometry(0.4, 0.4, 16, 20, 1, true), luminoso({ color: 0x4dff9a, transparent: true, opacity: 0.3, depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending }), 0, 10.4, 0);
+    const facho = malha(g, new T.CylinderGeometry(0.4, 0.4, 16, 20, 1, true), luminoso({ color: 0x4dff9a, transparent: true, opacity: 0.34, depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending }), 0, 10.4, 0);
     const aro = malha(g, new T.RingGeometry(0.95, 1.2, 40), luminoso({ color: 0x4dff9a, transparent: true, opacity: 0.9, depthWrite: false, side: T.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 0, 0.05, 0);
     aro.rotation.x = -Math.PI / 2;
-    const face = luminoso({ map: texturaCanvas(128, 128, (c, l) => {
-      c.fillStyle = '#0d141b'; c.fillRect(0, 0, l, l);
-      c.lineWidth = 10; c.strokeStyle = '#4dff9a'; c.strokeRect(5, 5, l - 10, l - 10);
-      c.fillStyle = '#ffffff'; c.font = 'bold 100px Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText(letra, l / 2, l / 2 + 6);
-    }) }), escuro = luminoso({ color: 0x0d141b });
-    const placa = malha(g, new T.BoxGeometry(0.95, 0.95, 0.95), [face, face, escuro, escuro, face, face], 0, 3.1, 0);
-    for (const m of [facho, aro, placa]) m.receiveShadow = false;
+    facho.receiveShadow = aro.receiveShadow = false;
     campanha.grupo.add(g);
-    return { facho, aro, face };
+    return g;
   }
   function acenderMarcos() {
-    for (const letra of Object.keys(campanha.marcos)) {
-      const m = campanha.marcos[letra], aceso = campanha.alvo === letra;
-      m.facho.material.color.set(aceso ? 0x4dff9a : 0x7f93b5); m.facho.material.opacity = aceso ? 0.34 : 0.06;
-      m.aro.material.color.set(aceso ? 0x4dff9a : 0x7f93b5); m.aro.material.opacity = aceso ? 0.9 : 0.28;
-      m.face.color.set(aceso ? 0xffffff : 0x7a8492);
-    }
+    for (const qual of Object.keys(campanha.marcos)) campanha.marcos[qual].visible = campanha.alvo === qual;
   }
   // As construções da história. Cada uma devolve o que nela acende.
   const placaEscrita = (texto, l, a, cor) => luminoso({ map: texturaCanvas(l, a, (c, L, A) => {
@@ -6932,7 +6922,7 @@
     c.fillStyle = '#ffffff'; c.font = `bold ${Math.round(A * 0.64)}px Arial, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(texto, L / 2, A * 0.55, L - 30);
   }) });
-  // O abrigo dos sobreviventes, atrás do ponto A: uma casamata de concreto, com a porta virada para o campo, sacos de areia
+  // O abrigo dos sobreviventes, atrás de onde o robô começa: uma casamata de concreto, com a porta virada para o campo, sacos de areia
   // e uma antena. Com luz, as frestas e a lâmpada da porta ficam acesas; sem luz (a missão do gerador, até ele voltar), não.
   const Z_DO_ABRIGO = 4.1;
   function criarAbrigo(pai) {
@@ -6954,7 +6944,7 @@
     pai.add(g);
     return { acender(ligada) { fresta.emissiveIntensity = ligada ? 1.7 : 0; bulbo.color.set(ligada ? 0xffe2b0 : 0x3a3f46); luz.intensity = ligada ? 14 : 0; placa.color.setScalar(ligada ? 1 : 0.5); } };
   }
-  // O gerador (missão 1), atrás do ponto B: a máquina, com a luz de estado (vermelha, parado; verde, funcionando), e o poste do holofote.
+  // O gerador (missão 1), do outro lado do campo: a máquina, com a luz de estado (vermelha, parado; verde, funcionando), e o poste do holofote.
   function criarGerador(pai, x, z) {
     const g = new T.Group(), ferro = mat(0x2f353c, { roughness: 0.6, metalness: 0.4 }), piloto = luminoso({ color: 0xff3b30 }), foco = luminoso({ color: 0x4a4f56 });
     g.position.set(x, 0, z);
@@ -6973,7 +6963,7 @@
     pai.add(g);
     return { ligar(ligado) { piloto.color.set(ligado ? 0x34e36a : 0xff3b30); foco.color.set(ligado ? 0xfff6dc : 0x4a4f56); luz.intensity = ligado ? 34 : 0; } };
   }
-  // O posto médico abandonado (missão 2), atrás do ponto B: uma cabana com a cruz vermelha e, no telhado, a sirene do alarme.
+  // O posto médico abandonado (missão 2), do outro lado do campo: uma cabana com a cruz vermelha e, no telhado, a sirene do alarme.
   function criarPosto(pai, x, z) {
     const g = new T.Group(), sirene = luminoso({ color: 0x5a1512 });
     g.position.set(x, 0, z);
@@ -6993,7 +6983,7 @@
     return { alarmar(tocando) { sirene.color.set(tocando ? 0xff4d3d : 0x5a1512); luz.intensity = tocando ? 30 : 0; } };
   }
   // Monta a missão `m` no nível `nivel`: o campo (os obstáculos e os zumbis, sorteados com a sorte da
-  // partida), os marcos dos pontos e a caixa, e tudo o mais no começo. É chamada quando a página abre
+  // partida), as construções, o sinal do lugar aonde chegar e a caixa, e tudo o mais no começo. É chamada quando a página abre
   // e, assistindo a uma gravação, de novo, com a missão e o nível dela (ver o fim do arquivo).
   function prepararCampanha(m, nivel) {
     const c = campanha, z = zumbi;
@@ -7012,13 +7002,13 @@
     Object.assign(z, { mortos: 0, tiros: 0, comeco: null, fim: null, novidades: [], tiro: null, mapa: null, balas: ZUMBI.pente, pronta: null, giro: null });
     Object.assign(estado, { x: REGRAS.inicio.x || 0, z: REGRAS.inicio.z, rumo: REGRAS.inicio.rumo, ganhou: false, perdeu: false });
     fimDosZumbis.malha.visible = false;
-    c.B = { x: Math.round((c.acaso() * 2 - 1) * 9), z: -CAMPANHA.longe };   // (o ponto B não fica sempre bem em frente)
-    // os obstáculos: longe dos dois pontos, e com lugar para passar entre um e outro
+    c.B = { x: Math.round((c.acaso() * 2 - 1) * 9), z: -CAMPANHA.longe };   // (o gerador, ou o posto, não fica sempre bem em frente do abrigo)
+    // os obstáculos: longe do abrigo e do lugar da missão, e com espaço para passar entre um e outro
     const TIPOS = [['pedra', 0.9, 1.4], ['pedra', 0.6, 0.9], ['árvore', 0.3, 0.38], ['lápide', 0.4, 0.45]];   // o nome, e o raio (do menor ao maior)
     for (let tentativas = 0; c.obstaculos.length < CAMPANHA.obstaculos && tentativas < 800; tentativas++) {
       const tipo = TIPOS[Math.floor(c.acaso() * TIPOS.length)], r = tipo[1] + c.acaso() * (tipo[2] - tipo[1]);
       const x = (c.acaso() * 2 - 1) * (CAMPANHA.x - 1.5), zz = CAMPANHA.z1 + 2 + c.acaso() * (CAMPANHA.z2 - CAMPANHA.z1 - 4), giro = c.acaso() * 6.28, alto = c.acaso();
-      if (Math.hypot(x - c.A.x, zz - c.A.z) < r + 3 || (zz > 1 && Math.abs(x) < 5.8) || Math.hypot(x - c.B.x, zz - c.B.z) < r + 5) continue;   // (nem junto dos pontos, nem em cima do abrigo, atrás do A, ou do que há atrás do B)
+      if (Math.hypot(x - c.A.x, zz - c.A.z) < r + 3 || (zz > 1 && Math.abs(x) < 5.8) || Math.hypot(x - c.B.x, zz - c.B.z) < r + 5) continue;   // (nem onde o robô começa ou aonde tem de chegar, nem em cima do abrigo, do gerador ou do posto)
       if (c.obstaculos.some(o => Math.hypot(x - o.x, zz - o.z) < r + o.r + 1.6)) continue;
       c.obstaculos.push({ nome: tipo[0], x, z: zz, r, giro, alto });
     }
@@ -7026,7 +7016,7 @@
     for (const x of [-2.25, -0.75, 0.75, 2.25]) c.obstaculos.push({ nome: 'abrigo', x, z: Z_DO_ABRIGO, r: 1.75, predio: true });
     if (c.m === 1) c.obstaculos.push({ nome: 'gerador', x: c.B.x, z: c.B.z - 2.7, r: 1.2, predio: true });
     if (c.m === 2) for (const x of [-0.8, 0.8]) c.obstaculos.push({ nome: 'posto', x: c.B.x + x, z: c.B.z - 3.1, r: 1.35, predio: true });
-    // os zumbis: longe do ponto A (mais do que eles veem), fora dos obstáculos e uns longe dos outros
+    // os zumbis: longe de onde o robô começa (mais do que eles veem), fora dos obstáculos e uns longe dos outros
     const longeDeA = Math.max(9, c.N.visao + 3.5);
     for (let tentativas = 0; c.zumbis.length < c.N.zumbis && tentativas < 4000; tentativas++) {
       const x = (c.acaso() * 2 - 1) * (CAMPANHA.x - 1), zz = CAMPANHA.z1 + 1 + c.acaso() * (CAMPANHA.z2 - CAMPANHA.z1 - 2), rumo = c.acaso() * 6.28, pausa = Math.floor(c.acaso() * 60);
@@ -7046,12 +7036,12 @@
       } else if (o.nome === 'árvore') arvoreSeca(c.grupo, o.x, o.z, aleatorio(500 + i * 37), 0.26);
       else malha(c.grupo, tampo, laje, o.x, 0.44, o.z).rotation.set(0, o.giro, (o.alto - 0.5) * 0.16);
     });
-    c.marcos.A = criarMarco('A', c.A.x, c.A.z);
-    if (c.m !== 3) c.marcos.B = criarMarco('B', c.B.x, c.B.z);
+    c.marcos.A = criarMarco(c.A.x, c.A.z);
+    if (c.m !== 3) c.marcos.B = criarMarco(c.B.x, c.B.z);
     c.abrigo = criarAbrigo(c.grupo);
     c.abrigo.acender(c.m !== 1);                // (na missão do gerador o abrigo está sem luz, até o gerador voltar a funcionar)
     if (c.m === 1) c.gerador = criarGerador(c.grupo, c.B.x, c.B.z - 2.7);
-    if (c.m === 2) {                            // o posto médico e, na frente dele, no ponto B, a caixa de remédios: branca, com a cruz vermelha
+    if (c.m === 2) {                            // o posto médico e, na frente dele, a caixa de remédios: branca, com a cruz vermelha
       c.posto = criarPosto(c.grupo, c.B.x, c.B.z - 3.1);
       c.caixa = new T.Group();
       malha(c.caixa, caixaSuave(0.56, 0.42, 0.42, 0.04), mat(0xe6e9e3, { roughness: 0.8, emissive: 0x4a4c48, emissiveIntensity: 0.5 }), 0, 0.21, 0);
@@ -7166,7 +7156,7 @@
       const a = c.andar, alvo = c.alvo ? c[c.alvo] : null, fim = motivo => { c.andar = null; if (motivo) notar(Object.assign({ passos: tantosPassos(a.feitos), pedidos: a.pedidos }, motivo)); };
       estado.x = a.para.x; estado.z = a.para.z;
       a.feitos++; c.passos++;
-      if (alvo && Math.hypot(estado.x - alvo.x, estado.z - alvo.z) <= CAMPANHA.chegada) {   // chegou ao ponto
+      if (alvo && Math.hypot(estado.x - alvo.x, estado.z - alvo.z) <= CAMPANHA.chegada) {   // chegou ao lugar
         if (c.m === 2 && !c.comCaixa) { pegarCaixa(); fim({ tipo: 'pegouCaixa' }); return; }
         fim(null);
         acabarCampanha(T, true);
@@ -7315,7 +7305,7 @@
   colchetes.layers.set(2);
   colchetes.visible = !!REGRAS.missoes;
   camera.add(colchetes);
-  // A faixa do alto da imagem: a missão e o nível, o que falta fazer (com a distância até o ponto, ou
+  // A faixa do alto da imagem: a missão e o nível, o que falta fazer (com a distância até o lugar, ou
   // quantos zumbis restam) e quantos zumbis já caíram.
   const ordem = { canvas: document.createElement('canvas'), chave: null };
   ordem.canvas.width = 1900; ordem.canvas.height = 104;
@@ -7353,7 +7343,8 @@
   // Ponto vermelho: zumbi que vem atrás do robô; roxo: zumbi que ouviu um tiro e vai para o lugar do
   // barulho; laranja: zumbi que não percebeu nada; de beirada amarela, o que o tiro derrubaria agora. As bolinhas na beirada do mapa são os zumbis que estão mais longe,
   // cada uma do lado em que ele está. As manchas cinzentas são os obstáculos, e a linha clara, a cerca.
-  // O disco verde com a letra é o ponto a que é preciso chegar: fora do mapa, fica na beirada.
+  // O disco verde é o lugar aonde é preciso chegar (com uma casa, um raio ou uma cruz: o abrigo, o
+  // gerador ou o posto médico): fora do mapa, fica na beirada.
   function desenharMapaDaCampanha() {
     const c = campanha, z = zumbi, L = 512, M = L / 2, R = 214, E = R / CAMPANHA.mapa;   // (E: pontos do desenho por metro)
     radar.malha.visible = true;
@@ -7389,13 +7380,17 @@
     g.restore();
     g.lineWidth = 3; g.strokeStyle = CLARO + '0.6)';                        // o aro dos 20 m
     g.beginPath(); g.arc(M, M, R, 0, Math.PI * 2); g.stroke();
-    if (o) {                                                                // o ponto a que é preciso chegar
-      const q = o.d <= CAMPANHA.mapa - 1.2 ? o : naBeira(o, R - 2);
-      g.beginPath(); g.arc(q.x, q.y, 23, 0, Math.PI * 2);
+    if (o) {                                                                // o lugar aonde é preciso chegar: um disco verde com o desenho dele
+      const q = o.d <= CAMPANHA.mapa - 1.2 ? o : naBeira(o, R - 2), x = q.x, y = q.y;
+      g.beginPath(); g.arc(x, y, 23, 0, Math.PI * 2);
       g.fillStyle = '#34e36a'; g.fill();
       g.lineWidth = 4; g.strokeStyle = '#06210f'; g.stroke();
-      g.font = 'bold 32px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#06210f';
-      g.fillText(c.alvo, q.x, q.y + 2);
+      g.fillStyle = '#06210f';
+      g.beginPath();
+      if (c.alvo === 'A') { g.moveTo(x - 14, y - 1); g.lineTo(x, y - 14); g.lineTo(x + 14, y - 1); g.lineTo(x + 9, y - 1); g.lineTo(x + 9, y + 11); g.lineTo(x - 9, y + 11); g.lineTo(x - 9, y - 1); }   // o abrigo: uma casa
+      else if (c.m === 1) { g.moveTo(x + 3, y - 14); g.lineTo(x - 9, y + 2); g.lineTo(x - 1, y + 2); g.lineTo(x - 4, y + 14); g.lineTo(x + 9, y - 3); g.lineTo(x + 1, y - 3); }                             // o gerador: um raio
+      else { g.rect(x - 4, y - 13, 8, 26); g.rect(x - 13, y - 4, 26, 8); }                                                                                                                              // o posto médico: uma cruz
+      g.closePath(); g.fill();
     }
     for (const q of z.mapa) {                                               // os zumbis que estão fora do mapa: uma bolinha na beirada
       if (q.d <= CAMPANHA.mapa) continue;

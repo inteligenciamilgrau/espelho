@@ -12,7 +12,7 @@ O jogo tem nove desafios. Os três primeiros começam no mesmo quarto; os três 
 - **Desafio 6:** a mesma cidade, da casa azul.
 - **Desafio 7:** um quebra-cabeça de 9 peças, numa parede. A iA escolhe cada peça, gira e põe no quadro de 3 x 3; no fim o jogo dá uma pontuação de 0 a 100. Veja [Desafio 7](#desafio-7-o-quebra-cabeça).
 - **Desafio 8:** os zumbis. O robô fica parado no meio de um campo, de noite, e os zumbis vêm de longe, de todos os lados, cada um mais depressa que o anterior. Nenhum pode encostar nele: a iA só vira, atira e recarrega a arma, em tempo real, com um mapa na imagem que mostra onde eles estão. O jogo conta quantos ela derruba, e há um recorde. Veja [Desafio 8](#desafio-8-os-zumbis).
-- **Desafio 9:** as missões. O mesmo campo de zumbis, agora cercado e com o robô andando. São três missões — atravessar o campo do ponto A ao ponto B, buscar uma caixa no ponto B e trazê-la de volta, e derrubar todos os zumbis —, cada uma com dez níveis de dificuldade, que a iA escolhe ao começar e vai subindo. Veja [Desafio 9](#desafio-9-as-missões).
+- **Desafio 9:** as missões. O mesmo campo de zumbis, agora cercado e com o robô andando. É o apocalipse zumbi, e o robô é de um abrigo de sobreviventes. São três missões — atravessar o campo para religar o gerador que dá luz ao abrigo, buscar uma caixa de remédios no posto médico e trazê-la de volta, e derrubar todos os zumbis —, cada uma com dez níveis de dificuldade, que a iA escolhe ao começar e vai subindo. Veja [Desafio 9](#desafio-9-as-missões).
 - **Vila coletiva (Desafio V):** a mesma cidade, com até quatro robôs ao mesmo tempo, cada um de uma iA. Eles entram e saem quando querem, sem o jogo recomeçar, e na praça há uma central de pedidos. Veja [Vila coletiva: várias iAs na mesma cidade](#vila-coletiva-várias-ias-na-mesma-cidade).
 
 E outro jogo, em outro cenário:
@@ -675,13 +675,13 @@ No replay o tempo é o de verdade — os zumbis andam entre um botão e o outro,
 
 ### Desafio 9: as missões
 
-**A história.** É o apocalipse zumbi, e o robô é de um abrigo de sobreviventes. O abrigo fica numa ponta de um campo cercado, tomado por zumbis: é o **ponto A**, onde o robô começa, de costas para a casamata de concreto (com a placa "ABRIGO", os sacos de areia e a antena). Cada missão é um problema do abrigo, e o **ponto B**, na outra ponta do campo, a 44 metros (não bem em frente: um pouco para um lado), é o lugar aonde é preciso ir para resolvê-lo.
+**A história.** É o apocalipse zumbi, e o robô é de um abrigo de sobreviventes. O abrigo fica numa ponta de um campo cercado, tomado por zumbis, e o robô começa na frente dele, de costas para a casamata de concreto (com a placa "ABRIGO", os sacos de areia e a antena). Cada missão é um problema do abrigo, que se resolve indo a um lugar na outra ponta do campo, a 44 metros (não bem em frente: um pouco para um lado). Os lugares são chamados pelo que são — o abrigo, o gerador, o posto médico —, sem letra nem número.
 
 | Missão | O problema | O que fazer |
 |---|---|---|
-| 1, o gerador | O gerador que dá luz ao abrigo parou, e ele fica na outra ponta do campo (ponto B). O abrigo está às escuras | Atravessar o campo e chegar ao gerador, para religá-lo. Quando o robô chega, a luz de estado do gerador passa de vermelha a verde, o holofote dele acende, e as frestas e a lâmpada do abrigo também |
-| 2, o remédio | Há um ferido no abrigo, e a caixa de remédios está no posto médico abandonado (ponto B) | Ir até o posto, pegar a caixa (basta chegar a ela: ela vai nas costas do robô) e trazê-la ao abrigo (ponto A). Quando o robô pega a caixa, o alarme do posto dispara e **todos** os zumbis do campo passam a vir atrás dele, sem desistir |
-| 3, a limpeza | Um grupo de sobreviventes vai atravessar o campo para chegar ao abrigo | Derrubar todos os zumbis do campo (aqui não há ponto B) |
+| 1, o gerador | O gerador que dá luz ao abrigo parou, e ele fica na outra ponta do campo. O abrigo está às escuras | Atravessar o campo e chegar ao gerador, para religá-lo. Quando o robô chega, a luz de estado do gerador passa de vermelha a verde, o holofote dele acende, e as frestas e a lâmpada do abrigo também |
+| 2, o remédio | Há um ferido no abrigo, e a caixa de remédios está no posto médico abandonado, na outra ponta do campo | Ir até o posto, pegar a caixa (basta chegar a ela: ela vai nas costas do robô) e trazê-la ao abrigo. Quando o robô pega a caixa, o alarme do posto dispara e **todos** os zumbis do campo passam a vir atrás dele, sem desistir |
+| 3, a limpeza | Um grupo de sobreviventes vai atravessar o campo para chegar ao abrigo | Derrubar todos os zumbis do campo (aqui não há aonde chegar) |
 
 O campo tem 28 metros de largura por 56 de comprimento. Além das construções da história, há nele 18 obstáculos — pedras, árvores secas e lápides —, que barram o caminho, e os zumbis. **Nenhum zumbi pode encostar no robô:** se um encosta, a missão falha.
 
@@ -707,13 +707,13 @@ Isso faz do tiro uma decisão: ele derruba um zumbi e chama os outros para onde 
 **Os botões.**
 
 - **`W`** anda um passo (meio metro) para a frente e **`S`**, um para trás; **`Q`** e **`E`** andam um passo de lado. Nenhum deles vira o robô. Com um número de 2 a 10 no parâmetro `texto`, o robô dá esse número de passos de uma vez.
-- **Andar leva tempo:** 0,3 segundo por passo, pelo relógio do jogo, e a resposta do botão só chega quando o robô para — ela diz quantos passos ele deu ("O robô andou 7 passos de 10 e parou: há uma árvore no caminho."). A caminhada para sozinha em três casos: algo barra o caminho (um obstáculo ou a cerca); um zumbi que estava mais longe chega a menos de 4 metros; ou o robô chega ao ponto. Assim a iA pode mandar dez passos de uma vez sem andar de olhos fechados para cima de um zumbi.
+- **Andar leva tempo:** 0,3 segundo por passo, pelo relógio do jogo, e a resposta do botão só chega quando o robô para — ela diz quantos passos ele deu ("O robô andou 7 passos de 10 e parou: há uma árvore no caminho."). A caminhada para sozinha em três casos: algo barra o caminho (um obstáculo ou a cerca); um zumbi que estava mais longe chega a menos de 4 metros; ou o robô chega ao lugar da missão. Assim a iA pode mandar dez passos de uma vez sem andar de olhos fechados para cima de um zumbi.
 - **`A` e `D`** viram 45°, e cada giro leva meio segundo, como no Desafio 8.
 - **`ESPACO`** atira para onde o robô olha. O tiro acerta o zumbi mais próximo que estiver **entre as duas marcas da mira** — até 22,5° para cada lado do meio da imagem —, a **até 14 metros**. Como o robô vira de 45° em 45°, todo zumbi fica na mira de algum lado. O barulho do tiro atrai os zumbis que o ouvem para o lugar de onde ele veio (veja acima).
 - **`L`** recarrega a arma: 6 balas, 3 segundos, como no Desafio 8 (andar e virar durante a recarga, pode).
 - **`F`** devolve a imagem. `TAB` e `T` não fazem nada.
 
-**O que aparece na imagem.** No alto, a faixa da missão: a missão e o nível, o que falta fazer (com a distância até o ponto, ou quantos zumbis restam) e quantos zumbis já caíram. No meio, a mira com as duas marcas. Embaixo, as balas. No canto de baixo, à esquerda, **o mapa**: o campo visto de cima, 20 metros em volta do robô, que é a seta do meio e está sempre olhando para cima.
+**O que aparece na imagem.** No alto, a faixa da missão: a missão e o nível, o que falta fazer (por exemplo, "RELIGUE O GERADOR: 37 m", com a distância até lá, ou quantos zumbis restam) e quantos zumbis já caíram. No meio, a mira com as duas marcas. Embaixo, as balas. No canto de baixo, à esquerda, **o mapa**: o campo visto de cima, 20 metros em volta do robô, que é a seta do meio e está sempre olhando para cima.
 
 | No mapa | O que é |
 |---|---|
@@ -725,15 +725,15 @@ Isso faz do tiro uma decisão: ele derruba um zumbi e chama os outros para onde 
 | Bolinhas na beirada do mapa | Zumbis a mais de 20 metros, cada uma do lado em que ele está |
 | Manchas cinzentas | Obstáculos (e as construções: o abrigo, o gerador, o posto médico) |
 | Linha clara | A cerca |
-| Disco verde com a letra | O ponto aonde é preciso chegar (fora do mapa, fica na beirada, do lado em que ele está) |
+| Disco verde | O lugar aonde é preciso chegar, com o desenho dele: um raio (o gerador), uma cruz (o posto médico) ou uma casa (o abrigo). Fora do mapa, fica na beirada, do lado em que ele está |
 
-No campo, cada ponto tem um aro no chão, um facho de luz e uma placa com a letra; o do ponto aonde é preciso chegar é verde. Atrás do ponto A fica o abrigo; atrás do ponto B, o gerador (missão 1) ou o posto médico (missão 2), cada um com a sua placa.
+No campo, o lugar aonde é preciso chegar tem um aro verde no chão e um facho de luz verde, que se vê de longe: fica na frente do gerador, do posto médico ou, na volta com a caixa, do abrigo. Cada construção tem a sua placa ("ABRIGO", "GERADOR", "POSTO MÉDICO").
 
 **O fim.** Missão cumprida: a imagem ganha uma faixa verde ("MISSÃO CUMPRIDA: A LUZ VOLTOU!", "O REMÉDIO CHEGOU!" ou "O CAMPO ESTÁ LIVRE!") e a resposta diz, por exemplo, `Parabéns! Você conseguiu! O gerador voltou a funcionar: o abrigo tem luz de novo. Missão 1, nível 2: cumprida em 1:23. Zumbis derrubados: 3. Tiros: 5. Para subir a dificuldade, chame comecar com o desafio 9, a missão 1 e o nível 3.` (e o recorde da missão, quando há). Se um zumbi encosta: faixa vermelha e `Um zumbi encostou em você: a missão falhou.`, com as contas.
 
 **O recorde de cada missão** é o nível mais alto em que uma iA com nome a cumpriu, entre as gravações guardadas. Quem assiste o vê no campo de quem joga; na aba de replays, cada missão tem o seu pódio (o nível mais alto e, no empate, o menor tempo).
 
-**O campo é sempre o mesmo** em cada missão e em cada nível, para a comparação entre as iAs valer: os obstáculos, os zumbis e o lugar do ponto B saem de um sorteio com a semente fixa. `&sorte=N` no endereço escolhe outro, e `&pressa=N` faz tudo andar N vezes mais depressa (é para testar).
+**O campo é sempre o mesmo** em cada missão e em cada nível, para a comparação entre as iAs valer: os obstáculos, os zumbis e o lugar do gerador (ou do posto) saem de um sorteio com a semente fixa. `&sorte=N` no endereço escolhe outro, e `&pressa=N` faz tudo andar N vezes mais depressa (é para testar).
 
 **Como o jogo conta o tempo.** No Desafio 8, onde cada zumbi está é uma conta feita com a hora. Aqui não dá: os zumbis perseguem o robô, que anda. Então o jogo anda de tique em tique (50 ms): cada tique acontece numa hora certa do relógio, contada do primeiro botão, e cada botão vale depois de todos os tiques até a hora dele. É isso que deixa o replay refazer a partida igual. Os números da missão estão todos juntos no começo do bloco das missões, em `jogo.js` (`CAMPANHA` e `MISSOES`); quem mudar um deles tem de mudar também o texto de início do desafio, em `ferramentas.json`.
 
