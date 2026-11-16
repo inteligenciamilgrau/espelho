@@ -257,6 +257,7 @@ function Concluir($a, [byte[]]$corpo, $req) {
     $script:avisouVitoria = $false
     if ($espera) { $texto = $config.respostaEspera }
     else { $texto = $config.desafios.PSObject.Properties[$a.argumentos[0]].Value.respostaComecar }
+    if (@($a.argumentos).Count -ge 5) { $texto = ([string]$texto).Replace('{missao}', [string]$a.argumentos[3]).Replace('{nivel}', [string]$a.argumentos[4]) }   # (o desafio com missoes: qual comecou, e em que nivel)
   } elseif ($corpo -and $corpo.Length) {      # o botao devolveu uma imagem (o frame)
     $imagem = [Convert]::ToBase64String($corpo)
   } elseif ($DESAFIOS -ccontains $inicio) {   # a partida comecou agora: no lugar do "recebido", o texto de inicio
@@ -468,6 +469,19 @@ function TratarMcp($ctx, [string]$sufixo) {
                 $doModelo = if ($modelo) { ([string]$config.respostaConfirmarModelo).Replace('{modelo}', ($modelo -replace '[{}]', '')) } else { '' }
                 $pergunta = ([string]$config.respostaConfirmarNome).Replace('{modelo}', $doModelo).Replace('{nome}', $nomeDeGuerra)
               }
+            }
+          }
+          # Um desafio com missoes (o 9): a missao e o nivel pedidos vao junto para a pagina, depois do
+          # modelo. Sem dizer, valem a missao 1 e o nivel 1. As missoes que existem e quantos niveis ha
+          # estao em ferramentas.json, com a frase de cada recusa.
+          if (-not $invalido -and -not $pergunta) {
+            $d = $config.desafios.PSObject.Properties[$argumentos[0]].Value
+            if ($d.missoes) {
+              $missao = ([string]$a.missao).Trim(); if (-not $missao) { $missao = '1' }
+              $nivel = ([string]$a.nivel).Trim(); if (-not $nivel) { $nivel = '1' }
+              if (@($d.missoes) -cnotcontains $missao) { $invalido = [string]$d.respostaSemMissao }
+              elseif ($nivel -cnotmatch '^[0-9]{1,2}$' -or [int]$nivel -lt 1 -or [int]$nivel -gt [int]$d.niveis) { $invalido = [string]$d.respostaSemNivel }
+              else { $argumentos += @($missao, [string][int]$nivel) }
             }
           }
         }

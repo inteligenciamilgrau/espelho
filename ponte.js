@@ -102,12 +102,12 @@
       if (resposta.status !== 200) continue;     // ninguém pediu nada: pendura de novo
 
       const c = await resposta.json();
-      if (c.comando === 'comecar') {             // começa o desafio pedido: [desafio, nome de guerra, modelo]
+      if (c.comando === 'comecar') {             // começa o desafio pedido: [desafio, nome de guerra, modelo] (no desafio 9, mais dois: a missão e o nível)
         const desafio = String(c.args[0]);
         // (A vila coletiva, V, é como a quadra: se a página já está nela, a iA só entra, sem recarregar nada.)
         if (desafio !== 'M' && desafio !== 'T' && desafio !== 'C' && desafio !== 'V') {   // desafios 1 a 6: responde e recarrega a página no desafio
           await concluir(c.id, c.quem, null);
-          if (jogo.comecar(desafio, c.quem, null, c.args[1] || '', c.args[2] || '')) return;   // o nome e o modelo vão junto: a página nova mostra quem está jogando
+          if (jogo.comecar(desafio, c.quem, null, c.args[1] || '', c.args[2] || '', c.args[3], c.args[4])) return;   // o nome e o modelo vão junto: a página nova mostra quem está jogando (e, no desafio 9, a missão e o nível pedidos)
           continue;
         }
         // Na quadra, a resposta pode demorar: no desafio M a iA aguarda o outro jogador. (Na vila coletiva ela entra na hora.)

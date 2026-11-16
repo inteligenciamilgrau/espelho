@@ -3051,7 +3051,7 @@
   //   este desafio, pedido por uma iA que não estava jogando: ela entra. No desafio M, se o
   //                   outro jogador ainda não entrou, a chamada fica aguardando por ele.
   //   este desafio, pedido por quem já estava (ou pelo teclado): começa uma partida nova.
-  function comecar(desafio, quem, cmd, nome, modelo) {
+  function comecar(desafio, quem, cmd, nome, modelo, missao, nivel) {   // (missao e nivel: só no desafio 9, de jogo.js; vão no endereço da página nova)
     if (ASSISTINDO) return false;                // numa gravação ninguém começa nada
     desafio = String(desafio);
     const deIA = conexao(quem);
@@ -3065,6 +3065,7 @@
       const p = new URLSearchParams();
       p.set('desafio', desafio);
       for (const chave of ['depurar', 'bot']) if (ENDERECO.has(chave)) p.set(chave, ENDERECO.get(chave));
+      if (desafio === '9') for (const [chave, valor] of [['missao', missao], ['nivel', nivel]]) if (/^[0-9]{1,2}$/.test(String(valor == null ? '' : valor))) p.set(chave, String(valor));
       try {                                      // o recado para a página nova (ver o fim deste arquivo)
         if (arena && deIA) sessionStorage.setItem('quadra.entrada', JSON.stringify({ quem, cmd: cmd || 0, nome: nome || '', modelo: modelo || '' }));
         else sessionStorage.removeItem('quadra.entrada');
