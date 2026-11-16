@@ -129,6 +129,8 @@
         // (o que mais importa vem primeiro: a linha é cortada quando não cabe)
         detalhes.unshift(`missão ${g.m} (${MISSOES[g.m]}), nível ${g.nivel}`, g.cumprida ? `cumprida em ${relogio(g.tempo)}` : resumo.perdeu === true ? `um zumbi encostou aos ${relogio(g.tempo)}` : 'não terminou', tantos(g.mortos, 'zumbi derrubado', 'zumbis derrubados'), tantos(g.tiros, 'tiro', 'tiros'));
       } else detalhes.push(resumo.ganhou === true ? 'venceu' : 'não terminou');
+      // (durante a partida, alguém pediu um arquivo do jogo sem ser a página: pode ter sido a iA lendo o código, em vez de jogar)
+      if (numero(resumo.alertas)) detalhes.unshift('⚠ tentaram ler o código do jogo durante a partida');
     }
     elemento(corpo, 'div', detalhes.filter(Boolean).join(' · '), 'linha');
     const apagar = elemento(item, 'div', 'apagar', 'apagar');

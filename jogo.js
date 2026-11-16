@@ -218,9 +218,10 @@
   // Variante para experimentar sem mexer no código: ...?desafio=2&disfarce
   if (ENDERECO.has('disfarce')) REGRAS.espelhoDisfarcado = true;
 
-  // Nos desafios 1 a 3 o robô só anda para onde está olhando: ir para trás é dar meia-volta e então o passo.
-  // (Na cidade — desafios 4 a 6 e a vila coletiva — é diferente: para os lados e para trás ele dá o passo
-  // sem virar, e continua olhando para onde olhava. Ver mover.)
+  // O passo para trás (o botão S) é dado sem virar: o robô recua e continua olhando para onde olhava. É assim em todos os
+  // desafios — na cidade desde a versão 6 das regras, e nas salas dos desafios 1 a 3 desde a 16. Antes disso o S dava
+  // meia-volta e então o passo, e as gravações de antes são assistidas assim (ver reComMeiaVolta e meiaVoltaNasSalas):
+  // é para elas que este quadro ainda existe. (Nas salas não há passo de lado; na cidade, sim: ver mover.)
   // Valor = quantos giros de 45° antes do passo. (Virar para os lados é outro comando.)
   const GIRO_DA_DIRECAO = { 'frente': 0, 'tras': 4 };
 
@@ -1570,6 +1571,7 @@
   // janelas, o resto dentro da lataria; assento: onde fica o corpo dele, em metros para a frente do meio do carro; olho: e os olhos)
   const CARRO = { meio: 1.65, lado: 0.73, folga: 0.6, raio: 0.8, saida: 1.55, descida: 1.14, passo: 11, banco: 0.14, assento: -0.03, olho: 0.15 };
   let reComMeiaVolta = false;                   // (assistindo a uma gravação de antes de o S, na cidade, recuar sem virar: ver o fim do arquivo)
+  let meiaVoltaNasSalas = false;                // (...e a uma de antes de o S recuar sem virar também nas salas dos desafios 1 a 3)
   let pedidosDeTodos = false;                   // (assistindo a uma gravação do coletivo de antes de cada robô ter a sua missão: qualquer um atendia qualquer casa)
   let semCarro = false;                         // (assistindo a uma gravação de antes de o carro ser um alvo: ver o fim do arquivo)
   let prazoFixo = false;                        // (assistindo a uma gravação do coletivo da versão 7: a missão tinha um prazo fixo, de 8 minutos)
@@ -4648,7 +4650,8 @@
     if (zumbi || (quebra && !quebraAnda)) return resposta(`mover ${direcao}`, false, 'o robô não sai do lugar');   // (nos zumbis ele só vira e atira; no quebra-cabeça fica de frente para a parede)
     if (estado.dirigindo) return carroManual ? dirigir(direcao) : resposta(`mover ${direcao}`, false, 'o carro anda sozinho: escolha um destino');   // dentro do carro, quem anda é ele
     // (na cidade, o passo para trás é como o de lado: o robô recua sem virar. Numa gravação de antes disso, ele dava meia-volta: ver reComMeiaVolta)
-    const lado = REGRAS.passoDeLado ? { esquerda: 2, direita: -2, tras: reComMeiaVolta ? undefined : 4 }[direcao] : undefined, giro = lado === undefined ? GIRO_DA_DIRECAO[direcao] : 0;
+    // (nas salas dos desafios 1 a 3 é igual: o S recua sem virar. Era meia-volta e um passo até a versão 15 das regras: ver meiaVoltaNasSalas)
+    const lado = (REGRAS.passoDeLado ? { esquerda: 2, direita: -2, tras: reComMeiaVolta ? undefined : 4 } : { tras: meiaVoltaNasSalas ? undefined : 4 })[direcao], giro = lado === undefined ? GIRO_DA_DIRECAO[direcao] : 0;
     if (giro === undefined) return resposta(`mover ${direcao}`, false, 'direção inválida');
     escolhido = undefined;                      // mexeu-se: a escolha do alvo volta ao mais óbvio
     estado.rumo += giro;                        // vira mesmo que o passo acabe bloqueado
@@ -7473,9 +7476,9 @@
   const quemJoga = { quem: 0, nome: '', modelo: '' }, contagem = { botoes: 0, imagens: 0, vitoria: null };   // (vitoria: as contas na hora em que o jogo foi vencido, para o pódio da lista de replays)
   // A versão das regras que mudam o que um botão faz, para a gravação antiga continuar igual
   // quando é assistida. 2: entre alvos do mesmo tipo, vale o mais central na imagem (ver ordemAntiga).
-  const VERSAO_DAS_REGRAS = 15;                 // (3: as portas que o jogador abre também fecham: ver portasNaoFecham; 4: o violeiro e o cachorro barram um canto da praça; 5: dá para entrar no carro; 6: na cidade, o S recua sem virar; 7: no coletivo, cada robô pede a sua missão na central; 8: o carro anda sozinho; 9: ele para para os robôs e pode ser chamado, e as casas 1 e 3 do coletivo revezam dois pedidos; 10: o que está num móvel aberto só é alvo se o robô o vê: ver aVista; 11: a poltrona da casa amarela foi para longe da cama, e o robô do desafio 4 começa na frente dela: ver POLTRONA_DO_QUARTO; 12: os móveis barram o robô com os cantos arredondados (ver noMovel) e, na cidade, o passo que não cabe inteiro vai até encostar (ver ateOnde); 13: no quebra-cabeça o robô não anda nem vira (ver quebraAnda); 14: os zumbis andam mais depressa, a arma tem um pente de balas, que é preciso recarregar, e a imagem tem o mapa dos zumbis e as balas (ver ZUMBI_ANTES, recarregar e desenharRadar); 15: nos zumbis, virar leva tempo (ver ZUMBI.giro))
+  const VERSAO_DAS_REGRAS = 16;                 // (16: nas salas dos desafios 1 a 3, o S recua sem virar, como na cidade: ver meiaVoltaNasSalas; 3: as portas que o jogador abre também fecham: ver portasNaoFecham; 4: o violeiro e o cachorro barram um canto da praça; 5: dá para entrar no carro; 6: na cidade, o S recua sem virar; 7: no coletivo, cada robô pede a sua missão na central; 8: o carro anda sozinho; 9: ele para para os robôs e pode ser chamado, e as casas 1 e 3 do coletivo revezam dois pedidos; 10: o que está num móvel aberto só é alvo se o robô o vê: ver aVista; 11: a poltrona da casa amarela foi para longe da cama, e o robô do desafio 4 começa na frente dela: ver POLTRONA_DO_QUARTO; 12: os móveis barram o robô com os cantos arredondados (ver noMovel) e, na cidade, o passo que não cabe inteiro vai até encostar (ver ateOnde); 13: no quebra-cabeça o robô não anda nem vira (ver quebraAnda); 14: os zumbis andam mais depressa, a arma tem um pente de balas, que é preciso recarregar, e a imagem tem o mapa dos zumbis e as balas (ver ZUMBI_ANTES, recarregar e desenharRadar); 15: nos zumbis, virar leva tempo (ver ZUMBI.giro))
   const gravando = !ASSISTINDO && GRAVACAO
-    ? GRAVACAO.gravar(COLETIVO ? 'V' : DESAFIO, () => ({ versao: VERSAO_DAS_REGRAS, nome: COLETIVO ? 'coletivo' : quemJoga.nome, modelo: COLETIVO ? `${participantes.size} robôs, ${entregas} pedidos` : quemJoga.modelo, botoes: contagem.botoes, imagens: contagem.imagens, ganhou: estado.ganhou,
+    ? GRAVACAO.gravar(COLETIVO ? 'V' : DESAFIO, () => ({ versao: VERSAO_DAS_REGRAS, nome: COLETIVO ? 'coletivo' : quemJoga.nome, modelo: COLETIVO ? `${participantes.size} robôs, ${entregas} pedidos` : quemJoga.modelo, botoes: contagem.botoes, imagens: contagem.imagens, ganhou: estado.ganhou, alertas: contagem.alertas || undefined,   // (alertas: quantas vezes alguém pediu um arquivo do jogo sem ser a página, durante a partida: ver anotarAlerta)
       vitoria: contagem.vitoria || undefined, perdeu: estado.perdeu || undefined, assar: REGRAS.vila ? [ASSAR.pronto, ASSAR.queima] : undefined, sorte: COLETIVO ? sorte : quebra ? quebra.sorte : zumbi ? zumbi.sorte : undefined, pressa: zumbi && zumbi.pressa !== 1 ? zumbi.pressa : undefined,   // (sorte: o sorteio do começo, no coletivo: ver sortear; no quebra-cabeça, a partida: ver embaralharQuebra)
       zumbis: zumbi && !campanha ? { mortos: zumbi.mortos, tiros: zumbi.tiros, tempo: zumbi.comeco === null ? 0 : Math.round((zumbi.fim !== null ? zumbi.fim : hora()) - zumbi.comeco) } : undefined,   // (as contas dos zumbis, para a lista de replays e para o recorde)
       missao: campanha ? resumoDaCampanha() : undefined,   // (nas missões: qual missão, o nível, se foi cumprida e as contas)
@@ -7563,6 +7566,14 @@
     const antes = JSON.parse(sessionStorage.getItem('desafio.quem'));
     if (antes && Number.isInteger(antes.quem) && antes.quem > 0) apresentar(antes.quem, antes.nome, antes.modelo);
   } catch (e) { }
+  // O servidor recusou um pedido de arquivo do jogo que não veio desta página — pode ser a iA tentando ler o código, em vez
+  // de jogar (ver ponte.js e, no servidor, "a credencial da página"). Quem assiste vê o aviso na página; aqui o caso fica
+  // anotado na gravação da partida, e a lista de replays o mostra. Não muda nada no jogo.
+  function anotarAlerta(lista) {
+    if (ASSISTINDO || !Array.isArray(lista)) return;
+    contagem.alertas = (contagem.alertas || 0) + lista.length;
+    if (gravando) for (const a of lista) gravando.anotar('alerta', { arquivo: semControle(a && a.arquivo, 40), agente: semControle(a && a.agente, 60) });
+  }
   // Aperta um botão. `quem` é a conexão da iA que apertou (o teclado não manda nada).
   function apertar(botao, texto, quem, nome, modelo, intencao) {
     if (ASSISTINDO) return undefined;           // numa gravação ninguém joga
@@ -8217,7 +8228,7 @@
   // resultado: o jogo acabou para quem joga? (no desafio 4 dá para perder: o bolo queima)
   // (verDe: põe a câmera de quem voa num ponto, olhando para outro: é de quem assiste e dos testes, e não muda nada no jogo)
   window.jogo = { apertar, comecar, mover, virar, pegar, levantar, escrever, frame, reiniciar, get estado() { return estado; }, salas, get itens() { return itens; }, desafio: COLETIVO ? 'V' : DESAFIO, vila, robos, som, entrar: entrarNoJogo, sair: sairDoJogo, diagnostico: () => ultima,
-    quebra, zumbi, campanha, novidades: () => zumbi ? novidadesDoZumbi() : novidadesDoQuebra(),       // (no quebra-cabeça: o estado dele, para os testes, e o recado do fim, que vai junto com a resposta do botão: ver ponte.js)
+    quebra, zumbi, campanha, alerta: anotarAlerta, novidades: () => zumbi ? novidadesDoZumbi() : novidadesDoQuebra(),       // (no quebra-cabeça: o estado dele, para os testes, e o recado do fim, que vai junto com a resposta do botão: ver ponte.js)
     resultado: () => estado.ganhou ? 'ganhou' : estado.perdeu ? 'perdeu' : '',
     verDe(x, y, z, paraX, paraY, paraZ) {
       const dx = paraX - x, dy = paraY - y, dz = paraZ - z;
@@ -8285,6 +8296,7 @@
         prepararCampanha(g.m, g.nivel);
         limiteDaConta = () => fita.i < fita.eventos.length ? Number(fita.eventos[fita.i].t) || 0 : campanha.andar ? Infinity : horaDoTique(campanha.k);   // (depois do último acontecimento — a partida que ficou sem terminar — o robô acaba a caminhada em que estava, e a conta para ali)
       }
+      if (!(Number(gravada.resumo.versao) >= 16)) meiaVoltaNasSalas = true;                                             // ...o S, que nas salas dos desafios 1 a 3 dava meia-volta antes do passo...
       if (zumbi && !(Number(gravada.resumo.versao) >= 15)) ZUMBI.giro = 0;                                             // ...o robô dos zumbis, que virava na hora...
       if (zumbi && !(Number(gravada.resumo.versao) >= 14)) { Object.assign(ZUMBI, ZUMBI_ANTES); zumbi.balas = ZUMBI.pente; semMapaDosZumbis = true; }   // ...os zumbis, que eram mais lentos, as balas, que não acabavam, e a imagem, que não tinha o mapa nem as balas...
       if (!(Number(gravada.resumo.versao) >= 13)) quebraAnda = true;                                                    // ...o robô do quebra-cabeça, que andava e virava...

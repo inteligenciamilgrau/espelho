@@ -7,8 +7,10 @@
 # As iAs so conhecem o endereco do MCP. A pagina do jogo, os arquivos dela (o codigo do jogo)
 # e a ponte ficam atras de um endereco com uma chave secreta: quem so tem o endereco do MCP
 # nao chega a arquivo nenhum -- nao consegue ler o codigo para descobrir como se ganha, nem se
-# passar pela pagina. (Isso so segura quem chega pela rede. Uma iA com acesso aos arquivos ou
-# ao terminal deste computador acha a pasta do projeto do mesmo jeito: ver o README.)
+# passar pela pagina. E o endereco com a chave sozinho tambem nao basta: a pagina so e entregue
+# ao navegador que este servidor abriu (ver "a credencial da pagina"). (Isso segura quem chega
+# pela rede e quem le o endereco na tela. Uma iA com acesso aos arquivos ou ao terminal deste
+# computador ainda acha a pasta do projeto: ver o README.)
 #
 # O jogo roda no navegador. Este servidor so faz a ponte: cada botao que a iA aperta vira um
 # comando para a pagina (/ponte), que aperta o mesmo botao em window.jogo e avisa quando acabou.
@@ -74,6 +76,33 @@ if (-not $SemChave) {
   }
 }
 $RAIZ = if ($CHAVE) { "/jogo-$CHAVE" } else { '' }     # o endereco em que a pagina do jogo mora
+
+# A credencial da pagina. A chave fica a vista na barra de enderecos do navegador: uma iA com
+# acesso ao terminal deste computador fotografou a tela, leu o endereco e baixou o codigo do
+# jogo (aconteceu). Por isso o endereco sozinho nao basta: os arquivos da pagina, a ponte e as
+# gravacoes so sao entregues ao navegador que tem a credencial -- um cookie que o servidor da a
+# quem chega pelo endereco de entrada (?entrada=...), que vale uma vez so, por dois minutos, e
+# que o proprio servidor abre ao ligar. Pedido sem a credencial e recusado, e vira um alerta, na
+# janela do servidor e na pagina do jogo (ver Alertar). A credencial fica guardada ao lado da
+# chave: o navegador que ja a tem continua valendo quando o servidor liga de novo.
+# (Continua nao sendo uma garantia: quem tem o terminal acha a pasta do projeto. Ver o README.)
+$CREDENCIAL = ''
+if ($RAIZ) {
+  $guardada = Join-Path $env:LOCALAPPDATA 'espelho-jogo\pagina.txt'
+  try { $CREDENCIAL = ([IO.File]::ReadAllText($guardada)).Trim() } catch { }
+  if ($CREDENCIAL -cnotmatch '^[a-f0-9]{32}$') {
+    $CREDENCIAL = [guid]::NewGuid().ToString('N')
+    try { [void](New-Item -ItemType Directory -Force (Split-Path $guardada)); [IO.File]::WriteAllText($guardada, $CREDENCIAL) } catch { }
+  }
+}
+# (Cuidado: no PowerShell, $senha e $SENHA sao a mesma variavel. Os nomes daqui nao se repetem nas funcoes.)
+$SENHA_DE_ENTRADA = [guid]::NewGuid().ToString('N')    # a senha do endereco de entrada, desta vez
+$ENTRADA_VALE_ATE = (Get-Date).AddMinutes(2)
+$NOME_DO_COOKIE = 'espelho_pagina'
+# O que quem chega sem a credencial ve (um navegador que o servidor nao abriu).
+$PAGINA_RECUSADA = $utf8.GetBytes('<!doctype html><meta charset="utf-8"><title>Jogo</title><body style="font:16px system-ui,sans-serif;margin:40px;max-width:560px"><h3>Esta p&aacute;gina s&oacute; abre no navegador que o servidor do jogo abriu.</h3><p>Feche a janela do servidor e ligue de novo (iniciar-mcp.bat): ele abre a p&aacute;gina do jogo sozinho.</p></body>')
+# Os arquivos do projeto, pelo nome: pedir um deles fora do endereco da pagina tambem e um alerta.
+$NOMES_DO_PROJETO = 'index.html', 'jogo.js', 'arena.js', 'ponte.js', 'gravacao.js', 'replays.html', 'three.min.js', 'ferramentas.json', 'servidor.ps1', 'README.md', 'iniciar-mcp.bat'
 $LIMITE_CONEXOES = 500    # quantas iAs diferentes o servidor guarda de memoria
 $HOSTS = "localhost:$Porta", "127.0.0.1:$Porta"      # os unicos nomes pelos quais o servidor atende
 $LIMITE_CORPO = 8MB       # maior pedido aceito (um frame em PNG tem menos de 1 MB)
@@ -98,6 +127,9 @@ $script:nomes = New-Object System.Collections.Hashtable      # os nomes de guerr
 $script:propostas = New-Object System.Collections.Hashtable  # nomes de guerra propostos e ainda nao confirmados: sessao -> lista (ver 'comecar')
 $script:proximaConexao = 0
 $script:desafioAtual = ''   # o ultimo desafio que alguem pediu
+$script:entradaUsada = $false   # o endereco de entrada ja foi usado (ele vale uma vez so)
+$script:alertas = New-Object System.Collections.ArrayList   # os alertas que a pagina do jogo ainda nao recebeu: arquivo, agente, hora
+$script:ultimoAlerta = $null    # o ultimo alerta dado: qual (arquivo e programa) e a hora
 
 # ---------- respostas HTTP ----------
 function Enviar($ctx, [int]$status, [string]$tipo, [byte[]]$bytes) {
@@ -320,6 +352,57 @@ function TratarPonte($ctx) {
   if ($script:sondagem) { [void](Enviar $script:sondagem.ctx 204 $null $null) }               # pedido anterior da mesma aba
   $script:sondagem = @{ ctx = $ctx; desde = Get-Date }
   Despachar
+  EntregarAlertas                             # (se ninguem pediu nada: os alertas que estavam esperando a pagina)
+}
+
+# ---------- a credencial da pagina e os alertas ----------
+# O pedido traz a credencial da pagina? (O cookie que o servidor deu no endereco de entrada.)
+function TemCredencial($req) {
+  $m = [regex]::Match([string]$req.Headers['Cookie'], '(?:^|;\s*)' + $NOME_DO_COOKIE + '=([a-f0-9]{32})(?:\s*;|\s*$)')
+  return ($m.Success -and $m.Groups[1].Value -ceq $CREDENCIAL)
+}
+# O endereco da pagina sem a senha de entrada (o resto do que vinha depois do ? continua).
+function EnderecoSemEntrada($req) {
+  $partes = @()
+  $q = $req.QueryString
+  for ($i = 0; $i -lt $q.Count; $i++) {       # (pelo numero, e nao pelo nome: o que vem sem nome, como ?depurar, tem nome nulo)
+    $k = $q.GetKey($i)
+    if ($k -ceq 'entrada') { continue }
+    foreach ($v in @($q.GetValues($i))) {
+      if ($null -eq $v) { continue }
+      if ($null -eq $k) { $partes += [Uri]::EscapeDataString([string]$v) } else { $partes += [Uri]::EscapeDataString($k) + '=' + [Uri]::EscapeDataString([string]$v) }
+    }
+  }
+  if ($partes.Count) { return "$RAIZ/?" + ($partes -join '&') }
+  return "$RAIZ/"
+}
+# Alguem pediu um arquivo do jogo sem ser a pagina do jogo: pode ser uma iA tentando ler o codigo.
+# O pedido ja foi recusado; aqui ele vira uma linha na janela do servidor e um aviso na pagina do
+# jogo, para quem assiste saber que aquela partida pode nao valer. (O nome do programa que pediu
+# vem do proprio pedido: e so uma pista, e vai para a pagina como texto.)
+function Alertar($req, [string]$oQue) {
+  $agente = (([string]$req.UserAgent) -replace '[^\x20-\x7e]', '' -replace '["\\<>]', '').Trim()
+  if (-not $agente) { $agente = 'programa sem nome' }
+  if ($agente.Length -gt 60) { $agente = $agente.Substring($agente.Length - 60) }   # (o fim e o que diz quem e: ...WindowsPowerShell/5.1, ...Chrome/131 Edg/131)
+  $arquivo = ($oQue -replace '[^A-Za-z0-9._/-]', '')
+  if ($arquivo.Length -gt 40) { $arquivo = $arquivo.Substring(0, 40) }
+  if (-not $arquivo -or $arquivo -eq '/') { $arquivo = 'a pagina do jogo' }
+  # (o mesmo pedido, do mesmo programa, repetido em seguida: um alerta so)
+  $agora = Get-Date
+  if ($script:ultimoAlerta -and $script:ultimoAlerta.qual -ceq "$arquivo|$agente" -and ($agora - $script:ultimoAlerta.hora).TotalSeconds -lt 3) { return }
+  $script:ultimoAlerta = @{ qual = "$arquivo|$agente"; hora = $agora }
+  Registrar "ALERTA: pedido de $arquivo sem a credencial da pagina ($agente)"
+  if ($script:alertas.Count -lt 20) { [void]$script:alertas.Add(@{ arquivo = $arquivo; agente = $agente; hora = (Get-Date -Format 'HH:mm:ss') }) }
+  EntregarAlertas
+}
+# Manda os alertas para a pagina do jogo, se ela estiver esperando (ela pede de novo em seguida).
+function EntregarAlertas {
+  if (-not $script:sondagem -or $script:alertas.Count -eq 0) { return }
+  $itens = @($script:alertas | ForEach-Object { '{"arquivo":' + (ConvertTo-Json -InputObject ([string]$_.arquivo) -Compress) + ',"agente":' + (ConvertTo-Json -InputObject ([string]$_.agente) -Compress) + ',"hora":"' + $_.hora + '"}' })
+  $json = '{"comando":"alerta","alertas":[' + ($itens -join ',') + ']}'
+  $ctx = $script:sondagem.ctx
+  $script:sondagem = $null
+  if (EnviarJson $ctx 200 $json) { $script:alertas.Clear() }
 }
 
 # ---------- gravacoes das partidas ----------
@@ -549,8 +632,33 @@ function Tratar($ctx) {
   # Daqui para baixo e a pagina do jogo (os arquivos dela e a ponte): so com a chave no endereco.
   if ($RAIZ) {
     if ($caminho -ceq $RAIZ) { $ctx.Response.Headers['Location'] = "$RAIZ/"; [void](Enviar $ctx 302 $null $null); return }
-    if (-not $caminho.StartsWith("$RAIZ/", [StringComparison]::Ordinal)) { [void](Enviar $ctx 404 $null $null); return }
+    if (-not $caminho.StartsWith("$RAIZ/", [StringComparison]::Ordinal)) {
+      if ($NOMES_DO_PROJETO -contains [IO.Path]::GetFileName($caminho)) { Alertar $req $caminho }   # (alguem procurando o codigo do jogo fora do endereco da pagina)
+      [void](Enviar $ctx 404 $null $null)
+      return
+    }
     $caminho = $caminho.Substring($RAIZ.Length)
+    # A credencial: o endereco de entrada a entrega (uma vez so) e manda o navegador para o endereco
+    # de sempre, sem a senha a vista; dai em diante, so entra quem a tem. O resto e recusado e vira alerta.
+    $senhaDita = [string]$req.QueryString['entrada']
+    if ($senhaDita -and $caminho -eq '/' -and $req.HttpMethod -eq 'GET') {
+      $vale = (-not $script:entradaUsada) -and ($senhaDita -ceq $SENHA_DE_ENTRADA) -and ((Get-Date) -lt $ENTRADA_VALE_ATE)
+      if ($vale) { $script:entradaUsada = $true; Registrar 'navegador autorizado: a pagina do jogo so abre nele' }
+      if ($vale -or (TemCredencial $req)) {
+        if ($vale) { $ctx.Response.AppendHeader('Set-Cookie', "$NOME_DO_COOKIE=$CREDENCIAL; Path=$RAIZ/; Max-Age=31536000; HttpOnly; SameSite=Lax") }
+        $ctx.Response.Headers['Location'] = EnderecoSemEntrada $req
+        [void](Enviar $ctx 302 $null $null)
+        return
+      }
+    }
+    if (-not (TemCredencial $req)) {
+      # (A ponte, sem credencial: e uma aba que ficou aberta de antes. Ela recebe o 409 de "esta aba saiu do jogo", que
+      # faz qualquer versao da pagina parar de pedir, em vez de ficar martelando o servidor; e nao vira alerta.)
+      if ($caminho -eq '/ponte') { [void](Enviar $ctx 409 $null $null); return }
+      Alertar $req $caminho
+      [void](Enviar $ctx 403 'text/html; charset=utf-8' $PAGINA_RECUSADA)
+      return
+    }
   }
   if ($caminho -eq '/ponte' -and $req.HttpMethod -eq 'POST') { TratarPonte $ctx; return }
   if ($caminho -eq '/partidas') { TratarPartidas $ctx; return }
@@ -601,8 +709,13 @@ Write-Host "  Jogo:  http://localhost:$Porta$RAIZ/      (deixe esta pagina abert
 Write-Host "  MCP:   http://localhost:$Porta/mcp   (Streamable HTTP; o mesmo endereco para todas as iAs)"
 Write-Host "  Ctrl+C encerra."
 Write-Host ""
-if ($RAIZ) { Write-Host "  (O endereco do jogo tem uma chave: assim as iAs, que so conhecem o do MCP, nao chegam ao codigo.)"; Write-Host "" }
-if (-not $SemNavegador) { Start-Process "http://localhost:$Porta$RAIZ/" }
+if ($RAIZ) {
+  Write-Host "  (O endereco do jogo tem uma chave, e so abre no navegador que este servidor abrir: assim as iAs,"
+  Write-Host "   que so conhecem o do MCP, nao chegam ao codigo. Pedido de fora e recusado e vira um ALERTA aqui.)"
+  if ($SemNavegador) { Write-Host "  Entrada (vale uma vez, por 2 minutos):  http://localhost:$Porta$RAIZ/?entrada=$SENHA_DE_ENTRADA" }
+  Write-Host ""
+}
+if (-not $SemNavegador) { Start-Process ("http://localhost:$Porta$RAIZ/" + $(if ($RAIZ) { "?entrada=$SENHA_DE_ENTRADA" } else { '' })) }
 
 try {
   $tarefa = $ouvinte.GetContextAsync()
