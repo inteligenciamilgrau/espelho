@@ -4,12 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jogo</title>
+<!-- O navegador só desenha esta página depois de chegar ao fim dela (o elemento #pronta, lá embaixo), ou seja, com o
+     cenário já montado pelos scripts. Junto com a transição de página (@view-transition, no estilo), é o que faz a
+     página anterior ficar na tela até esta ter o que mostrar: sem tela preta ao voltar um ponto numa gravação ou ao
+     começar outro desafio. (O navegador que não conhece isto desenha como sempre.) -->
+<link rel="expect" href="#pronta" blocking="render">
 <!-- ícone da aba: o rosto do robô, desenhado em SVG aqui mesmo (funciona sem servidor) -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cline x1='42' y1='17' x2='42' y2='7' stroke='%232c333b' stroke-width='3'/%3E%3Ccircle cx='42' cy='7' r='5' fill='%23ff8a3d'/%3E%3Crect x='7' y='17' width='50' height='40' rx='10' fill='%23e6eaee' stroke='%232c333b' stroke-width='3'/%3E%3Crect x='14' y='27' width='36' height='18' rx='6' fill='%232c333b'/%3E%3Ccircle cx='24' cy='36' r='5' fill='%234fe3ff'/%3E%3Ccircle cx='40' cy='36' r='5' fill='%234fe3ff'/%3E%3C/svg%3E">
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
-  canvas { display: block; width: 100vw; height: 100vh; }
+  /* (o canvas enche a janela; nos desafios, com o menu ao lado, jogo.js diz onde a imagem fica: ver "a tela cheia e o menu ao lado") */
+  canvas { display: block; position: fixed; left: var(--tela-x, 0px); top: var(--tela-y, 0px); width: var(--tela-l, 100vw); height: var(--tela-a, 100vh); }
   [hidden] { display: none !important; }
+  /* Ao trocar de página dentro do jogo, a velha fica na tela até a nova estar pronta, e a troca é de uma vez (sem esmaecer). */
+  @view-transition { navigation: auto; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+  ::view-transition-old(*) { display: none; }
+  #doca, #pilulas { display: contents; }
   .painel {
     position: fixed; padding: 10px 12px; border-radius: 8px;
     background: rgba(10, 14, 18, .62); color: #e8eef2;
@@ -42,7 +53,7 @@
 
   /* ---------- a cara dos desafios 1 a 3 ----------
      jogo.js põe a classe "desafio" no body; a quadra (arena.js) continua com o estilo de cima.
-     Tudo aqui é da página, por cima do jogo: nada disto entra na imagem que a iA recebe.
+     Tudo aqui é da página, não do jogo: nada disto entra na imagem que a iA recebe.
      As fontes são as que já vêm no Windows (nada é baixado): Bahnschrift nos títulos, Segoe UI
      no texto e Cascadia Mono nas teclas e nos números. */
   body.desafio {
@@ -107,12 +118,12 @@
   body.desafio #ponte::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--verde); box-shadow: 0 0 0 3px rgba(125, 255, 176, .2); }
   body.desafio #ponte.alerta { border-radius: 14px; background: rgba(170, 36, 28, .92); border-color: rgba(255, 255, 255, .25); color: #fff; font-size: 14px; font-weight: 600; }
   body.desafio #ponte.alerta::before { background: #fff; box-shadow: none; }
-  /* a visão de quem assiste: dois botões numa pílula, o aceso é a visão atual (tecla C) */
-  body.desafio #vista { bottom: 54px; right: 14px; padding: 4px; border-radius: 999px; display: flex; align-items: center; gap: 2px; white-space: nowrap; }
-  body.desafio #vista button { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 999px; font: 600 12.5px/1 var(--texto); color: #c9d4db; transition: background .15s, color .15s; }
-  body.desafio #vista button:hover { color: #fff; }
-  body.desafio #vista button.acesa { background: var(--verde); color: #07130d; }
-  body.desafio #vista kbd { min-width: 22px; height: 22px; padding: 0 6px; margin: 0 4px 0 5px; font-size: 11px; }
+  /* a visão de quem assiste: dois botões numa pílula, o aceso é a visão atual (tecla C); e o arranjo da página, do mesmo jeito (tecla B) */
+  body.desafio #vista, body.desafio #arranjo { bottom: 54px; right: 14px; padding: 4px; border-radius: 999px; display: flex; align-items: center; gap: 2px; white-space: nowrap; pointer-events: auto; }
+  body.desafio #vista button, body.desafio #arranjo button { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 999px; font: 600 12.5px/1 var(--texto); color: #c9d4db; transition: background .15s, color .15s; }
+  body.desafio #vista button:hover, body.desafio #arranjo button:hover { color: #fff; }
+  body.desafio #vista button.acesa, body.desafio #arranjo button.acesa { background: var(--verde); color: #07130d; }
+  body.desafio #vista kbd, body.desafio #arranjo kbd { min-width: 22px; height: 22px; padding: 0 6px; margin: 0 4px 0 5px; font-size: 11px; }
   /* o som dos desafios: uma pílula que liga e desliga (tecla O) */
   body.desafio #som { bottom: 140px; right: 14px; padding: 4px; border-radius: 999px; display: flex; align-items: center; white-space: nowrap; pointer-events: auto; }
   body.desafio #som button { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 999px; font: 600 12.5px/1 var(--texto); color: #c9d4db; transition: background .15s, color .15s; }
@@ -134,11 +145,80 @@
   body.desafio #pensa::before { bottom: -14px; width: 12px; height: 12px; margin-left: -10px; }
   body.desafio #pensa::after { bottom: -25px; width: 7px; height: 7px; margin-left: -2px; }
   body.desafio #pensa b { display: inline-block; margin-right: 7px; padding: 2px 6px; border-radius: 6px; background: #14181d; color: #fff; font: 700 10.5px/1.4 var(--mono); vertical-align: 2px; }
-  body.desafio #modo { bottom: 15px; right: 150px; padding: 6px 13px; border-radius: 999px; background: rgba(190, 86, 10, .9); font: 700 13px/1 var(--mono); }
-  body.desafio #status { top: 58px; right: 14px; font: 12.5px/1.5 var(--mono); }
-  body.desafio #log { bottom: 14px; left: 14px; font: 12.5px/1.5 var(--mono); }
-  /* a caixa de digitar o texto do botão T */
-  body.desafio #caixa { padding: 18px 22px 16px; background: rgba(17, 22, 29, .88); }
+  body.desafio #modo { padding: 6px 13px; border-radius: 999px; background: rgba(190, 86, 10, .9); font: 700 13px/1 var(--mono); }
+  /* o painel de depuração (só com ?depurar) fica sempre por cima da imagem, nos cantos dela */
+  body.desafio #status { top: calc(var(--tela-y, 0px) + 58px); right: auto; left: calc(var(--tela-x, 0px) + var(--tela-l, 100vw) - 14px); transform: translateX(-100%); font: 12.5px/1.5 var(--mono); }
+  body.desafio #log { bottom: calc(100vh - var(--tela-y, 0px) - var(--tela-a, 100vh) + 14px); left: calc(var(--tela-x, 0px) + 14px); font: 12.5px/1.5 var(--mono); }
+
+  /* ---------- a tela cheia e o menu ao lado ----------
+     A página dos desafios tem dois arranjos, que quem assiste troca pela tecla B ou pela pílula
+     "tela cheia / menu ao lado" (jogo.js: ver "a tela cheia e o menu ao lado").
+       tela cheia (body.tela-cheia): a imagem do jogo enche a janela, e os painéis ficam por cima
+         dela, de vidro, nos cantos. O campo de quem joga e do que pretende fica no canto de baixo,
+         à direita, em cima das pílulas — e não embaixo, no meio, onde tapava o chão.
+       menu ao lado (body.bancada): a imagem tem o formato da que a iA recebe e nada fica por cima
+         dela; tudo o que é de quem assiste mora na bancada (#doca): uma coluna à esquerda da imagem
+         (body.doca-lado) ou, numa janela mais quadrada, uma faixa embaixo dela (body.doca-baixo).
+         --doca é a largura da coluna ou a altura da faixa. */
+  body.desafio #doca { position: fixed; z-index: 3; box-sizing: border-box; display: flex; pointer-events: none; }
+  body.desafio #pilulas { display: flex; gap: 6px; flex: none; }
+  body.desafio #pilulas > .painel { position: static; }
+  body.desafio #quer { overflow: hidden; overflow-wrap: anywhere; }
+  /* tela cheia: uma pilha no canto de baixo, à direita (o campo das intenções em cima, as pílulas embaixo), que só sobe até --teto: o indicador
+     do alvo, no alto da imagem, ou o pé da lista de teclas, quando ela está desse lado (jogo.js mede: ver arrumarPaineis) */
+  body.desafio.tela-cheia #doca { right: 14px; bottom: 14px; width: min(380px, calc(100vw - 28px)); max-height: calc(100vh - 14px - var(--teto, 14vh)); flex-direction: column; align-items: flex-end; justify-content: flex-end; gap: 8px; }
+  body.desafio.tela-cheia #quer { position: static; transform: none; width: 100%; box-sizing: border-box; flex: 0 1 auto; min-height: 0; }
+  body.desafio.tela-cheia #quer .ultima { font-size: 15.5px; }
+  body.desafio.tela-cheia #pilulas { width: 100%; flex-wrap: wrap; justify-content: flex-end; align-items: center; }   /* (as pílulas em fileiras, da direita para a esquerda: a pilha fica mais baixa) */
+  /* (no quebra-cabeça a bandeja das peças fica à direita: lá o campo continua embaixo, no meio, entre o quadro e a bandeja, e menor) */
+  body.desafio.tela-cheia.quebra #quer { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(58vw, 780px); zoom: .85; }
+  /* menu ao lado */
+  body.desafio.bancada { background: #090c10; }
+  body.desafio.bancada #doca { gap: 10px; padding: 14px; overflow: hidden; background: #090c10; }
+  body.desafio.bancada #doca > .painel:not(.solta), body.desafio.bancada #pilulas > .painel { position: static; transform: none; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07); }
+  body.desafio.bancada #doca > .gravacao { position: static !important; flex: none; pointer-events: auto; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07) !important; }
+  body.desafio.bancada #quer { width: auto; }
+  /* a coluna: a gravação, quem joga e o que pretende, o que o jogo disse; no pé, as teclas e as pílulas */
+  body.desafio.doca-lado #doca { top: 0; left: 0; bottom: 0; width: var(--doca, 340px); flex-direction: column; border-right: 1px solid rgba(255, 255, 255, .08); }
+  body.desafio.doca-lado #doca > .gravacao { width: auto !important; }
+  body.desafio.doca-lado #quer { flex: 0 1 auto; min-height: 0; }
+  body.desafio.doca-lado #mensagem { flex: none; max-width: none; }
+  body.desafio.doca-lado #ajuda { flex: none; margin-top: auto; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; align-items: start; padding: 10px 10px 8px; }
+  body.desafio.doca-lado #ajuda .da-pagina { margin-top: 0; padding: 0 0 0 12px; border-top: 0; border-left: 1px solid var(--borda); }
+  body.desafio.doca-lado #ajuda .da-pagina .fileira { flex-wrap: wrap; }
+  body.desafio.doca-lado #ajuda .do-voador .dica { max-width: 132px; }
+  body.desafio.doca-lado #pilulas { margin-top: auto; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+  body.desafio.doca-lado #ajuda:not([hidden]) + #pilulas { margin-top: 0; }
+  body.desafio.doca-lado #pilulas > .painel { flex: 1 1 auto; box-sizing: border-box; text-align: center; }
+  body.desafio.doca-lado #pilulas > #modo { flex: none; }
+  body.desafio.doca-lado #vista, body.desafio.doca-lado #arranjo { flex-basis: 100%; justify-content: center; }
+  body.desafio.doca-lado #ponte { order: 1; }
+  body.desafio.doca-lado #replays { order: 2; }
+  body.desafio.doca-lado #quer .ultima { font-size: 15.5px; }
+  /* o som em duas fileiras (o botão em cima, as réguas embaixo): na coluna e, assistindo a uma gravação, na faixa */
+  body.desafio.doca-lado #som, body.desafio.doca-baixo.assistindo #som { display: grid; grid-template-columns: auto minmax(0, 1fr); row-gap: 5px; border-radius: 18px; padding: 5px 6px 8px; }
+  body.desafio.doca-lado #som kbd, body.desafio.doca-baixo.assistindo #som kbd { justify-self: start; }
+  body.desafio.doca-lado #som { flex-basis: 100%; }
+  body.desafio.doca-lado #som label input[type=range] { flex: 1 1 40px; min-width: 40px; width: auto; }
+  /* a faixa: da esquerda para a direita, o que o jogo disse, quem joga e o que pretende, e as pílulas; assistindo a uma
+     gravação, o painel dela vem primeiro e o que o jogo disse sobe para cima das pílulas (jogo.js o muda de lugar)
+     (aqui a lista de teclas não cabe: fica solta, num canto da imagem em que o jogo não escreve, e o H a guarda) */
+  body.desafio.doca-baixo #doca { left: 0; right: 0; bottom: 0; height: var(--doca, 204px); flex-direction: row; align-items: flex-end; border-top: 1px solid rgba(255, 255, 255, .08); }
+  body.desafio.doca-baixo #doca > .gravacao { order: -2; }
+  body.desafio.doca-baixo #mensagem { order: -1; flex: 0 1 auto; max-width: 210px; }
+  body.desafio.doca-baixo #quer { flex: 1 1 0; min-width: 0; max-height: 100%; }
+  body.desafio.doca-baixo #pilulas { flex-direction: column; align-items: flex-end; justify-content: flex-end; max-height: 100%; }
+  body.desafio.doca-baixo #pilulas > #mensagem { max-width: 270px; padding: 7px 13px 8px; }
+  /* na vila coletiva são até quatro robôs: na faixa, o campo deles vai em duas colunas */
+  body.desafio.doca-baixo.coletivo #quer { column-count: 2; column-gap: 26px; }
+  body.desafio.coletivo #quer .quem, body.desafio.coletivo #quer .linha { break-inside: avoid; }
+  /* (e o traço fica em cima de cada robô, não embaixo do nome: o que vem depois do nome é dele) */
+  body.desafio.coletivo #quer .quem:not(:last-child) { margin-bottom: 3px; padding-bottom: 0; border-bottom: 0; }
+  body.desafio.coletivo #quer .quem ~ .quem { margin-top: 8px; padding-top: 9px; border-top: 1px solid var(--borda); }
+  @media (max-width: 1150px) { body.desafio.doca-baixo #quer .ultima { font-size: 15.5px; } }
+
+  /* a caixa de digitar o texto do botão T: no meio da imagem */
+  body.desafio #caixa { left: calc(var(--tela-x, 0px) + var(--tela-l, 100vw) / 2); top: calc(var(--tela-y, 0px) + var(--tela-a, 100vh) / 2); padding: 18px 22px 16px; background: rgba(17, 22, 29, .88); }
   body.desafio #caixa::before { content: 'texto'; display: block; margin-bottom: 8px; font: 600 10px/1 var(--titulo); letter-spacing: 1.6px; text-transform: uppercase; color: var(--apagado); }
   body.desafio #caixa input {
     margin: 0 auto; width: 11ch; padding: 9px 12px; border-radius: 10px;
@@ -147,7 +227,7 @@
     transition: border-color .15s, box-shadow .15s;
   }
   body.desafio #caixa input:focus { border-color: var(--verde); box-shadow: 0 0 0 4px rgba(125, 255, 176, .16); }
-  /* o painel de quem assiste a uma gravação (gravacao.js monta com estilo próprio: aqui só a cara dos desafios) */
+  /* o painel de quem assiste a uma gravação (gravacao.js monta com estilo próprio: aqui só a cara dos desafios; no menu ao lado, jogo.js o põe na bancada) */
   body.desafio .gravacao { top: 14px !important; left: 14px !important; width: 276px !important; padding: 11px 13px !important; border-radius: 14px !important; background: var(--vidro) !important; font: 13px/1.5 var(--texto) !important; }
   body.desafio .gravacao b { font-family: var(--titulo); letter-spacing: 1px; }
 </style>
@@ -159,26 +239,10 @@
      página, não do jogo: nunca entra na imagem que a iA recebe. -->
 <div id="pensa" hidden></div>
 
-<!-- Só quais botões existem: o jogo não diz o que cada botão faz.
-     (As duas últimas linhas são da página, não do jogo: 1, 2, 3, 4, M e Shift+T começam um desafio,
-     C troca a visão de quem assiste, I é o modo iA, R recomeça, H esconde esta lista e G abre os
-     replays. Nos desafios M e T, arena.js troca esta lista pela dos dois jogadores.) -->
-<div id="ajuda" class="painel">  W
-A S D
-Espaço Tab
-L T F
-
-1 2 3 4 5 6 M C Shift+T
-I R H G</div>
-
-<!-- A visão de quem assiste, nos desafios 1 a 6 (jogo.js): a da iA ou a de quem voa por fora. -->
-<div id="vista" class="painel" hidden><button type="button" tabindex="-1" data-vista="ia" title="O que o robô da iA está vendo">visão da iA</button><button type="button" tabindex="-1" data-vista="voador" title="Uma câmera solta, invisível: W A S D voam, Q e E descem e sobem, Shift corre, Z vai até o robô; um clique prende o mouse, que passa a virar a câmera, e Esc solta">voador</button><kbd>C</kbd></div>
-
-<!-- O som dos desafios (jogo.js): os efeitos, a música do violeiro e a chuva. Um clique, ou a tecla O, liga e desliga; as duas réguas são o volume da música e o dos efeitos. -->
-<div id="som" class="painel" hidden><button type="button" tabindex="-1" title="Liga e desliga o som do jogo: os efeitos, a música do violão e a chuva">som ligado</button><kbd>O</kbd><label title="O volume da música do violeiro da praça">violão <input type="range" min="0" max="100" step="1" tabindex="-1" data-som="musica"></label><label title="O volume dos efeitos: o que acontece no jogo, os bichos e a chuva">efeitos <input type="range" min="0" max="100" step="1" tabindex="-1" data-som="efeitos"></label></div>
-
-<!-- As partidas gravadas, em outra aba (ver gravacao.js e replays.html). Só com o servidor ligado. -->
-<a id="replays" class="painel" href="replays.html" target="_blank" rel="noopener">▶ replays (G)</a>
+<!-- A bancada de quem assiste. Nos desafios (jogo.js) é uma coluna ao lado da imagem ou uma faixa
+     embaixo dela, e tudo o que é da página fica aqui, fora da imagem do jogo. Na quadra (arena.js)
+     esta caixa não existe para o desenho da página: cada painel fica no canto que sempre teve. -->
+<div id="doca">
 
 <!-- O que a iA diz que pretende com cada botão, para quem assiste (jogo.js preenche). -->
 <div id="quer" class="painel" hidden></div>
@@ -186,13 +250,43 @@ I R H G</div>
 <!-- O que o jogo diz ao jogador no começo do desafio (jogo.js preenche). -->
 <div id="mensagem" class="painel"></div>
 
-<!-- Painel de depuração: mostra o que cada comando fez. Sem tecla; só aparece com ?depurar no endereço. -->
-<div id="status" class="painel" hidden></div>
-<div id="log" class="painel" hidden></div>
+<!-- Só quais botões existem: o jogo não diz o que cada botão faz.
+     (As últimas linhas são da página, não do jogo: 1 a 7, V, M e Shift+T começam um desafio,
+     C troca a visão de quem assiste, B troca o arranjo da página, I é o modo iA, R recomeça, H esconde
+     esta lista e G abre os replays. Nos desafios M e T, arena.js troca esta lista pela dos dois jogadores.) -->
+<div id="ajuda" class="painel">  W
+A S D
+Espaço Tab
+L T F
+
+1 2 3 4 5 6 7 V M C Shift+T
+I R H G</div>
+
+<div id="pilulas">
+<!-- O modo iA (tecla I): a imagem só muda quando a iA pede uma. -->
 <div id="modo" class="painel" hidden>I</div>
+
+<!-- O som dos desafios (jogo.js): os efeitos, a música do violeiro e a chuva. Um clique, ou a tecla O, liga e desliga; as duas réguas são o volume da música e o dos efeitos. -->
+<div id="som" class="painel" hidden><button type="button" tabindex="-1" title="Liga e desliga o som do jogo: os efeitos, a música do violão e a chuva">som ligado</button><kbd>O</kbd><label title="O volume da música do violeiro da praça">violão <input type="range" min="0" max="100" step="1" tabindex="-1" data-som="musica"></label><label title="O volume dos efeitos: o que acontece no jogo, os bichos e a chuva">efeitos <input type="range" min="0" max="100" step="1" tabindex="-1" data-som="efeitos"></label></div>
 
 <!-- Estado da ligação com o servidor MCP (ver ponte.js). Não aparece quando a página é aberta direto do arquivo. -->
 <div id="ponte" class="painel" hidden></div>
+
+<!-- A visão de quem assiste, nos desafios 1 a 7 (jogo.js): a da iA ou a de quem voa por fora. -->
+<div id="vista" class="painel" hidden><button type="button" tabindex="-1" data-vista="ia" title="O que o robô da iA está vendo">visão da iA</button><button type="button" tabindex="-1" data-vista="voador" title="Uma câmera solta, invisível: W A S D voam, Q e E descem e sobem, Shift corre, Z vai até o robô; um clique prende o mouse, que passa a virar a câmera, e Esc solta">voador</button><kbd>C</kbd></div>
+
+<!-- O arranjo da página nos desafios (jogo.js): a imagem enchendo a janela, com os painéis por cima, ou a imagem com o menu ao lado. -->
+<div id="arranjo" class="painel" hidden><button type="button" tabindex="-1" data-arranjo="cheia" title="A imagem do jogo enche a janela, e os painéis ficam por cima dela, nos cantos">tela cheia</button><button type="button" tabindex="-1" data-arranjo="lado" title="A imagem fica do tamanho da que a iA recebe, sem nada por cima, e os painéis vão para um menu ao lado">menu ao lado</button><kbd>B</kbd></div>
+
+<!-- As partidas gravadas, em outra aba (ver gravacao.js e replays.html). Só com o servidor ligado. -->
+<a id="replays" class="painel" href="replays.html" target="_blank" rel="noopener">▶ replays (G)</a>
+</div>
+
+</div>
+
+<!-- Painel de depuração: mostra o que cada comando fez. Sem tecla; só aparece com ?depurar no endereço. -->
+<div id="status" class="painel" hidden></div>
+<div id="log" class="painel" hidden></div>
 
 <div id="caixa" hidden>
   <input id="entrada" maxlength="10" autocomplete="off" spellcheck="false">
@@ -203,5 +297,7 @@ I R H G</div>
 <script src="jogo.js"></script>
 <script src="arena.js"></script>
 <script src="ponte.js"></script>
+<!-- O fim da página: é por ele que o navegador espera para desenhar (ver o link rel=expect, no alto). -->
+<i id="pronta" hidden></i>
 </body>
 </html>

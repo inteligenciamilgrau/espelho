@@ -31,19 +31,46 @@
   const RITMOS = [0.5, 1, 2, 4];                // as velocidades de quem assiste
 
   // Nos desafios, voltar a um ponto anterior recarrega a página (o jogo não sabe desfazer um
-  // botão: ver tocador). Para a tela não piscar preta enquanto a página nova monta o cenário, a
-  // página velha deixa guardada uma foto do que estava mostrando, e a nova a põe por cima do
-  // canvas até o jogo chegar ao ponto pedido. (A foto fica só nesta aba, e só até ser usada.)
+  // botão: ver tocador). Para a tela não piscar preta no meio, e a volta não demorar mais do
+  // que precisa:
+  //   - a página velha fica na tela até a nova ter o que mostrar, e a troca é de uma vez só. Quem
+  //     faz isso é o navegador (a "transição de página" e a espera pelo fim da página: ver
+  //     index.html, @view-transition e o link rel=expect);
+  //   - a página velha deixa a gravação, já lida, guardada na aba (ver deixar e deixada): a nova
+  //     não a busca de novo no servidor, e chega ao ponto pedido antes do seu primeiro desenho.
+  // No navegador que não sabe fazer a transição, fica o jeito antigo: a página velha guarda uma
+  // foto do que estava mostrando, e a nova a põe por cima do canvas até o jogo chegar ao ponto
+  // pedido. (Tudo isso fica só nesta aba, e só até ser usado.)
+  const TROCA_SUAVE = 'CSSViewTransitionRule' in window;
+  const CHAVE_DA_FITA = 'gravacao.fita';
+  function deixar(gravada) {
+    try { sessionStorage.setItem(CHAVE_DA_FITA, JSON.stringify({ id: assistindo, resumo: gravada.resumo, eventos: gravada.eventos })); }
+    catch (e) { try { sessionStorage.removeItem(CHAVE_DA_FITA); } catch (e2) { } }   // (não coube na aba: a página nova busca a gravação no servidor, como antes)
+  }
+  // A gravação `id` que a página anterior deixou, ou null. Vale uma vez só: quem recarrega a página à mão lê a do servidor.
+  function deixada(id) {
+    try {
+      const texto = sessionStorage.getItem(CHAVE_DA_FITA);
+      sessionStorage.removeItem(CHAVE_DA_FITA);
+      const g = texto ? JSON.parse(texto) : null;
+      if (!g || g.id !== id || !g.resumo || typeof g.resumo !== 'object' || Array.isArray(g.resumo) || !Array.isArray(g.eventos)) return null;
+      return { resumo: g.resumo, eventos: g.eventos.filter(o => o && typeof o === 'object' && !Array.isArray(o) && typeof o.e === 'string' && Number.isFinite(o.t)) };
+    } catch (e) { return null; }
+  }
   const CHAVE_DA_FOTO = 'gravacao.foto';
   let foto = null;
   if (assistindo) try {
     const guardada = sessionStorage.getItem(CHAVE_DA_FOTO);
+    let onde = null;                            // (onde a imagem do jogo estava na janela: nos desafios, com o menu ao lado, ela não enche a janela)
+    try { onde = JSON.parse(sessionStorage.getItem(CHAVE_DA_FOTO + '.onde')); } catch (e) { }
     sessionStorage.removeItem(CHAVE_DA_FOTO);
+    sessionStorage.removeItem(CHAVE_DA_FOTO + '.onde');
     const tela = document.getElementById('tela');
     if (guardada && guardada.startsWith('data:image/') && tela) {
+      const r = Array.isArray(onde) && onde.length === 4 && onde.every(v => Number.isFinite(v) && v >= 0) ? onde.map(v => Math.round(v) + 'px') : ['0', '0', '100vw', '100vh'];
       foto = new Image();
       foto.alt = '';
-      Object.assign(foto.style, { position: 'fixed', left: '0', top: '0', width: '100vw', height: '100vh', pointerEvents: 'none' });
+      Object.assign(foto.style, { position: 'fixed', left: r[0], top: r[1], width: r[2], height: r[3], pointerEvents: 'none' });
       foto.src = guardada;
       tela.after(foto);                         // logo depois do canvas: por cima dele e por baixo dos painéis da página
       setTimeout(tirarFoto, 6000);              // (se a gravação não carregar, a foto não fica ali para sempre)
@@ -55,7 +82,10 @@
   function guardarFoto() {
     try {
       const tela = document.getElementById('tela');
-      if (tela) sessionStorage.setItem(CHAVE_DA_FOTO, tela.toDataURL('image/jpeg', 0.85));
+      if (!tela) return;
+      const r = tela.getBoundingClientRect();
+      sessionStorage.setItem(CHAVE_DA_FOTO, tela.toDataURL('image/jpeg', 0.85));
+      sessionStorage.setItem(CHAVE_DA_FOTO + '.onde', JSON.stringify([r.left, r.top, r.width, r.height]));
     } catch (e) { }
   }
 
@@ -191,25 +221,35 @@
     ev.forEach((e, n) => { if (o.ehPasso(e)) passos.push(n); });
     const total = passos.length;
     let i = 0, falta = 700;                     // i: o próximo acontecimento; falta: milissegundos até ele
-    let tocando = ENDERECO.get('parado') !== '1';
+    let tocando = ENDERECO.get('parado') === '0';   // a gravação abre em pausa, para quem assiste começar quando quiser (o Espaço ou o botão); com ?parado=0 no endereço ela já abre tocando
     let ritmo = RITMOS.includes(Number(ENDERECO.get('ritmo'))) ? Number(ENDERECO.get('ritmo')) : 1;
-    const posicao = () => { let p = 0; while (p < total && passos[p] < i) p++; return p; };   // quantos passos já foram
+    let voltando = null, marcada = false;       // voltando: o ponto para onde a página nova vai abrir, enquanto ela não vem (ver ir)
+    const posicao = () => { if (voltando !== null) return voltando; let p = 0; while (p < total && passos[p] < i) p++; return p; };   // quantos passos já foram
     const acabou = () => i >= ev.length;
     function aplicarUm(rapido) {
       try { o.aplicar(ev[i], rapido); } catch (e) { console.error('gravação: acontecimento ' + i, e); }
       i++;
     }
+    // A página recarrega no ponto `voltando`. Enquanto a nova não vem, esta continua na tela, parada.
+    function recarregar() {
+      marcada = false;
+      const q = new URLSearchParams(location.search);
+      q.set('em', String(voltando)); q.set('ritmo', String(ritmo));
+      q.set('parado', tocando ? '0' : '1');     // (a página nova continua como esta estava: tocando ou em pausa)
+      deixar(gravada);                          // a página nova não precisa buscar a gravação de novo
+      if (!TROCA_SUAVE) guardarFoto();          // (no navegador sem a transição de página: a foto, por cima da tela preta)
+      location.search = q.toString();
+    }
     // Vai para o ponto em que `p` passos já aconteceram (0 = o começo).
     function ir(p) {
       p = Math.max(0, Math.min(total, Math.round(p)));
       const alvo = p >= total ? ev.length : passos[p];
+      if (voltando !== null && p >= voltando) return;   // (já está voltando para antes disso: quem decide o resto é a página nova)
       if (alvo < i) {
         if (!o.doComeco) {                      // este jogo não sabe voltar: a página recarrega já nesse ponto
-          const q = new URLSearchParams(location.search);
-          q.set('em', String(p)); q.set('ritmo', String(ritmo));
-          if (tocando) q.delete('parado'); else q.set('parado', '1');
-          guardarFoto();                        // a página nova mostra esta imagem até chegar ao ponto pedido: sem tela preta no meio
-          location.search = q.toString();
+          voltando = p;                         // (um segundo pedido de voltar, antes de a página nova chegar, muda o ponto: ela abre já nele)
+          mostrar();
+          if (!marcada) { marcada = true; requestAnimationFrame(recarregar); }   // (no quadro seguinte: o painel já diz "voltando", e dois pedidos seguidos viram uma recarga só)
           return;
         }
         i = 0;
@@ -221,12 +261,12 @@
       mostrar();
     }
     function passo(dt) {
-      if (!tocando) return 0;
+      if (!tocando || voltando !== null) return 0;
       falta -= dt * ritmo * 1000;
       return dt * ritmo;
     }
     function soltar() {
-      if (!tocando) return;
+      if (!tocando || voltando !== null) return;
       let mudou = false;
       while (i < ev.length && falta <= 0) {
         if (o.livre && !o.livre(ev[i])) { falta = 450; break; }   // ainda não dá: tenta de novo, e deixa um respiro depois
@@ -279,7 +319,7 @@
     function mostrar() {
       const p = posicao();
       elTocar.textContent = acabou() && tocando ? '↻ de novo' : tocando ? '❚❚ pausar' : '▶ tocar';
-      elOnde.textContent = `${o.nomeDoPasso} ${p} de ${total}` + (acabou() ? ' · fim da gravação' : tocando ? '' : ' · em pausa');
+      elOnde.textContent = `${o.nomeDoPasso} ${p} de ${total}` + (voltando !== null ? ' · voltando…' : acabou() ? ' · fim da gravação' : tocando ? '' : ' · em pausa');
       if (document.activeElement !== regua) regua.value = String(p);
       botoesDeRitmo.forEach((b, n) => { const aceso = RITMOS[n] === ritmo; b.style.background = aceso ? '#7dffb0' : 'rgba(255,255,255,.12)'; b.style.color = aceso ? '#0a0e12' : '#e8eef2'; });
     }
@@ -305,5 +345,5 @@
   const atalho = document.getElementById('replays');
   if (atalho && (!noServidor || assistindo)) atalho.hidden = true;
 
-  window.gravacao = { assistindo, noServidor, gravar, carregar, listar, apagar, abrirLista, quandoFoi, tocador, avisar };
+  window.gravacao = { assistindo, noServidor, gravar, carregar, deixada, listar, apagar, abrirLista, quandoFoi, tocador, avisar };
 })();
