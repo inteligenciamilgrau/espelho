@@ -172,6 +172,8 @@
   body.desafio.tela-cheia #pilulas { width: 100%; flex-wrap: wrap; justify-content: flex-end; align-items: center; }   /* (as pílulas em fileiras, da direita para a esquerda: a pilha fica mais baixa) */
   /* (no quebra-cabeça a bandeja das peças fica à direita: lá o campo continua embaixo, no meio, entre o quadro e a bandeja, e menor) */
   body.desafio.tela-cheia.quebra #quer { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(58vw, 780px); zoom: .85; }
+  /* Nos zumbis a imagem tem o mapa deles no canto de baixo, à esquerda (38% da altura): o que o jogo disse sobe para cima dele. */
+  body.desafio.tela-cheia.zumbis #mensagem { bottom: calc(0.4 * var(--tela-a) + 14px); }
   /* menu ao lado */
   body.desafio.bancada { background: #090c10; }
   body.desafio.bancada #doca { gap: 10px; padding: 14px; overflow: hidden; background: #090c10; }

@@ -1138,7 +1138,13 @@
   const valendo = () => presentes() && jog[1].pronto && jog[2].pronto;
   // O nome de guerra de cada jogador, que vai no placar. A iA manda o dela ao entrar (comecar).
   const nomeDe = J => J.nome || (J.controle === 'bot' ? 'Robô da casa' : `Jogador ${J.n}`);
-  const limparNome = nome => Array.from(String(nome == null ? '' : nome).replace(/[\u0000-\u001f\u007f]/g, '').trim()).slice(0, 12).join('');
+  const limparNome = nome => Array.from(String(nome == null ? '' : nome).replace(/[\u0000-\u001f\u007f]/g, '').trim()).slice(0, 20).join('');   // (o nome de guerra: até 20 letras, o mesmo limite de ferramentas.json, do servidor e de jogo.js)
+  // Um nome de guerra pode ser comprido: onde ele é escrito numa largura fixa, a letra diminui (até dois terços do tamanho) antes de o texto ser apertado.
+  const letraQueCabe = (g, texto, px, largura) => {
+    g.font = `bold ${px}px Arial, sans-serif`;
+    const l = g.measureText(texto).width;
+    if (l > largura) g.font = `bold ${Math.max(Math.round(px * 0.66), Math.floor(px * largura / l))}px Arial, sans-serif`;
+  };
   // `modelo`: que modelo de iA é (ela diz, se quiser, ao entrar): vai em letras menores, embaixo do nome.
   const limparModelo = modelo => Array.from(String(modelo == null ? '' : modelo).replace(/[\u0000-\u001f\u007f]/g, '').trim()).slice(0, 24).join('');
   function batizar(J, nome, modelo) {
@@ -1207,7 +1213,7 @@
     g.textAlign = 'center'; g.textBaseline = 'middle';
     const presente = naCabine();
     g.fillStyle = '#c9b3e6'; g.font = `bold ${presente ? 20 : 26}px Arial, sans-serif`; g.fillText('COMENTARISTA', 128, presente ? 24 : 48, 236);
-    if (presente) { g.fillStyle = '#ffffff'; g.font = 'bold 38px Arial, sans-serif'; g.fillText(narrador.nome, 128, 62, 236); }
+    if (presente) { g.fillStyle = '#ffffff'; letraQueCabe(g, narrador.nome, 38, 236); g.fillText(narrador.nome, 128, 62, 236); }
     cabine.textura.needsUpdate = true;
     marcarCadeira();
   }
@@ -2168,7 +2174,7 @@
       g.fillStyle = 'rgba(10,14,18,0.78)'; cantos(g, n === 1 ? borda - INFO : borda, Y, INFO, ALT, 12); g.fill();
       g.textAlign = n === 1 ? 'right' : 'left';
       const m = J.modelo && J.controle === 'ia' ? 1 : 0;                   // com o modelo embaixo do nome, as linhas apertam um pouco
-      g.fillStyle = COR_CSS[n]; g.font = `bold ${m ? 22 : 25}px Arial, sans-serif`; g.fillText(nomeDe(J), texto, Y + (m ? 17 : 23), cabe);
+      g.fillStyle = COR_CSS[n]; letraQueCabe(g, nomeDe(J), m ? 22 : 25, cabe); g.fillText(nomeDe(J), texto, Y + (m ? 17 : 23), cabe);
       if (m) { g.fillStyle = '#e8eef2'; g.font = '13px Arial, sans-serif'; g.fillText(J.modelo, texto, Y + 36, cabe); }
       if (s) { g.fillStyle = s.jogou ? '#7dffb0' : '#ffd83a'; g.font = `bold ${m ? 14 : 15}px Arial, sans-serif`; g.fillText((s.jogou ? '✓ ' : '') + s.texto, texto, Y + (m ? 54 : 48), cabe); }
       g.fillStyle = '#cfd8de'; g.font = `${m ? 12 : 14}px Arial, sans-serif`;
@@ -2246,10 +2252,10 @@
       // (O modelo de quem olha vai embaixo do nome dele: é assim que a iA vê que o que mandou
       // valeu. O do adversário não aparece aqui: os dois modelos são só para quem assiste.)
       const meuModelo = J.controle === 'ia' && J.modelo;
-      g.font = 'bold 24px Arial, sans-serif';
+      letraQueCabe(g, nomeDe(J), 24, 160);
       g.textAlign = 'right'; g.fillText(nomeDe(J), l / 2 - 76, meuModelo ? 31 : 40, 160);
       if (meuModelo) { g.font = '14px Arial, sans-serif'; g.fillStyle = '#cfd8de'; g.fillText(J.modelo, l / 2 - 76, 51, 160); g.fillStyle = '#ffffff'; g.font = 'bold 24px Arial, sans-serif'; }
-      g.textAlign = 'left'; g.fillText(nomeDe(O), l / 2 + 76, 40, 160);
+      g.textAlign = 'left'; letraQueCabe(g, nomeDe(O), 24, 160); g.fillText(nomeDe(O), l / 2 + 76, 40, 160);
       g.font = 'bold 17px Arial, sans-serif';
       for (const [K, alinhar, x] of [[J, 'right', l / 2 - 76], [O, 'left', l / 2 + 76]]) {
         const s = situacao(K);
@@ -2286,7 +2292,7 @@
     for (const [n, x] of [[1, 128], [2, 384]]) {
       g.fillStyle = COR_CSS[n];
       // (sem o modelo de cada um: esta placa aparece na imagem dos jogadores, e os modelos são só para quem assiste a transmissão)
-      g.font = 'bold 36px Arial, sans-serif'; g.fillText(nomeDe(jog[n]), x, 34, 236);
+      letraQueCabe(g, nomeDe(jog[n]), 36, 236); g.fillText(nomeDe(jog[n]), x, 34, 236);
       g.font = 'bold 128px Consolas, "Courier New", monospace'; g.fillText(String(jog[n].pontos), x, 134);
     }
     g.fillStyle = '#e8eef2'; g.font = 'bold 80px Arial, sans-serif'; g.fillText('×', 256, 128);

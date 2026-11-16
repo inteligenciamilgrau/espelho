@@ -442,7 +442,7 @@ function TratarMcp($ctx, [string]$sufixo) {
       $nomeDeGuerra = (([string]$a.nome) -replace '[\x00-\x1f\x7f]', '').Trim()
       $modelo = (([string]$a.modelo) -replace '[\x00-\x1f\x7f]', '').Trim()         # que modelo a iA e (opcional): vai embaixo do nome dela
       if ($modelo.Length -gt 24) { $modelo = $modelo.Substring(0, 24).Trim() }
-      if ($nomeDeGuerra.Length -gt 12) { $nomeDeGuerra = $nomeDeGuerra.Substring(0, 12).Trim() }   # o mesmo limite que a ferramenta declara
+      if ($nomeDeGuerra.Length -gt 20) { $nomeDeGuerra = $nomeDeGuerra.Substring(0, 20).Trim() }   # o mesmo limite que a ferramenta declara
       switch -CaseSensitive ($nome) {
         'comecar' {                             # a pagina vai para o desafio pedido; o nome de guerra vai junto
           $argumentos = @([string]$a.desafio, $nomeDeGuerra, $modelo)

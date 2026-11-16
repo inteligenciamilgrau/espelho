@@ -92,7 +92,7 @@
     const corpo = elemento(item, 'div', '', 'corpo'), titulo = elemento(corpo, 'div', '', 'titulo');
     const detalhes = [gravacao.quandoFoi(resumo.quando)];
     if (desafio === 'M' || desafio === 'T') {
-      const nomes = [0, 1].map(i => texto(Array.isArray(resumo.nomes) && resumo.nomes[i], 12) || `Jogador ${i + 1}`);
+      const nomes = [0, 1].map(i => texto(Array.isArray(resumo.nomes) && resumo.nomes[i], 20) || `Jogador ${i + 1}`);
       const placar = [0, 1].map(i => numero(Array.isArray(resumo.placar) && resumo.placar[i]));
       const modelos = [0, 1].map(i => texto(Array.isArray(resumo.modelos) && resumo.modelos[i], 24));
       elemento(titulo, 'span', nomes[0], 'laranja');
@@ -101,9 +101,9 @@
       const fim = numero(resumo.fim);
       detalhes.push(numero(resumo.rodadas) === 1 ? '1 rodada' : `${numero(resumo.rodadas)} rodadas`, `ao vivo durou ${quantoDurou(resumo.duracao)}`, fim === 1 || fim === 2 ? `venceu ${nomes[fim - 1]}` : 'sem fim de jogo');
       if (modelos[0] || modelos[1]) detalhes.push(modelos.map(m => m || '—').join(' × '));
-      if (texto(resumo.narrador, 12)) detalhes.push('🎙 ' + texto(resumo.narrador, 12));
+      if (texto(resumo.narrador, 20)) detalhes.push('🎙 ' + texto(resumo.narrador, 20));
     } else {
-      const nome = texto(resumo.nome, 12), modelo = texto(resumo.modelo, 24);
+      const nome = texto(resumo.nome, 20), modelo = texto(resumo.modelo, 24);
       elemento(titulo, 'span', nome || 'sem nome', nome ? 'laranja' : '');
       if (modelo) elemento(titulo, 'span', `  ${modelo}`);
       const tantos = (n, um, varios) => `${numero(n)} ${numero(n) === 1 ? um : varios}`;
@@ -113,6 +113,8 @@
       else if (desafio === '8') {               // os zumbis: quantos caíram e com quantos tiros
         const z = resumo.zumbis && typeof resumo.zumbis === 'object' ? resumo.zumbis : {};
         detalhes.push(tantos(z.mortos, 'zumbi derrubado', 'zumbis derrubados'), tantos(z.tiros, 'tiro', 'tiros'), resumo.perdeu === true ? 'um zumbi encostou' : 'não terminou');
+        if (!(Number(resumo.versao) >= 14)) detalhes.push('regras antigas: zumbis mais lentos, balas sem fim e sem mapa (fora do pódio)');
+        else if (!(Number(resumo.versao) >= 15)) detalhes.push('regras antigas: o robô virava na hora (fora do pódio)');
       } else detalhes.push(resumo.ganhou === true ? 'venceu' : 'não terminou');
     }
     elemento(corpo, 'div', detalhes.filter(Boolean).join(' · '), 'linha');
@@ -137,15 +139,17 @@
   // podem ter um ou outro botão apertado depois da vitória. No quebra-cabeça (7) a ordem é a da
   // pontuação, que já junta peças, giros e tempo; no empate, menos tempo.
   // Nos zumbis (8) não há vitória: é o recorde — quem derrubou mais; no empate, quem deu menos tiros.
+  // Só valem as partidas com as regras de agora (da versão 15 em diante: ver jogo.js).
   // Cada iA (o nome de guerra com o modelo) entra uma vez só, com a melhor partida dela. Partida
   // sem nome é do teclado: não entra. A vila e o Galinha Pong não têm pódio.
   const elPodio = document.getElementById('podio'), elPodios = document.getElementById('podios');
   const NO_PODIO = ['1', '2', '3', '4', '5', '6', '7', '8'], CHAVE_DO_PODIO = 'replays.podio';
   const relogio = ms => { const s = Math.round(numero(ms) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   function feito({ id, resumo }) {
-    const desafio = String(resumo.desafio), nome = texto(resumo.nome, 12), modelo = texto(resumo.modelo, 24);
+    const desafio = String(resumo.desafio), nome = texto(resumo.nome, 20), modelo = texto(resumo.modelo, 24);
     if (!NO_PODIO.includes(desafio) || !nome) return null;
     if (desafio === '8') {
+      if (!(Number(resumo.versao) >= 15)) return null;   // (antes da versão 14 das regras os zumbis eram mais lentos, as balas não acabavam e não havia mapa; antes da 15 o robô virava na hora: era outro jogo)
       const z = resumo.zumbis && typeof resumo.zumbis === 'object' ? resumo.zumbis : null, mortos = z ? numero(z.mortos) : 0, tiros = z ? numero(z.tiros) : 0;
       return mortos < 1 ? null : { id, desafio, nome, modelo, ordem: [-mortos, tiros], conta: [`${mortos} ${mortos === 1 ? 'zumbi' : 'zumbis'}`, `${tiros} ${tiros === 1 ? 'tiro' : 'tiros'}`] };
     }
