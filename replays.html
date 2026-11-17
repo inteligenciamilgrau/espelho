@@ -78,10 +78,13 @@
     return { m: Object.prototype.hasOwnProperty.call(MISSOES, m) ? m : 1, nivel: nivel >= 1 && nivel <= NIVEIS ? nivel : 1, cumprida: g.cumprida === true, tempo: g.tempo, mortos: g.mortos, tiros: g.tiros };
   };
   // O endereço em que uma gravação é assistida. (O id e o desafio foram conferidos, e a missão e o nível são números: o endereço não leva nada escrito por uma iA.)
-  const enderecoDe = (id, resumo) => './?desafio=' + String(resumo.desafio) + (String(resumo.desafio) === '9' ? '&missao=' + missaoDe(resumo).m + '&nivel=' + missaoDe(resumo).nivel : '') + '&assistir=' + id;
+  const enderecoDe = (id, resumo) => './?desafio=' + String(resumo.desafio) + (String(resumo.desafio) === '9' ? '&missao=' + missaoDe(resumo).m + '&nivel=' + missaoDe(resumo).nivel : '') + (String(resumo.desafio) === '7' ? '&nivel=' + nivelDoQuebra(resumo) : '') + '&assistir=' + id;
   // Tudo o que vem de uma gravação é tratado como texto: os nomes e os modelos são das iAs.
   const texto = (v, letras) => Array.from(String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').trim()).slice(0, letras).join('');
   const numero = v => Math.max(0, Math.round(Number(v)) || 0);
+  // O nível do quebra-cabeça (desafio 7): 1 é o de 3 x 3, 2 o de 4 x 4 e 3 o de 5 x 5. A gravação de antes dos níveis é a de 3 x 3.
+  const nivelDoQuebra = resumo => { const n = Math.round(Number(resumo.nivel)); return n >= 1 && n <= 3 ? n : 1; };
+  const totalDoQuebra = (resumo, q) => numero(q.total) || (nivelDoQuebra(resumo) + 2) ** 2;   // (9, 16 ou 25 peças)
   function elemento(pai, tag, conteudo, classe) {
     const el = document.createElement(tag);
     el.textContent = conteudo;
@@ -118,7 +121,7 @@
       const tantos = (n, um, varios) => `${numero(n)} ${numero(n) === 1 ? um : varios}`;
       detalhes.push(tantos(resumo.botoes, 'botão', 'botões'), tantos(resumo.imagens, 'imagem', 'imagens'), `ao vivo durou ${quantoDurou(resumo.duracao)}`);
       const q = resumo.quebra && typeof resumo.quebra === 'object' ? resumo.quebra : null;   // o resultado do quebra-cabeça (desafio 7): a pontuação e as contas
-      if (q) detalhes.push(q.desistiu === true ? 'desistiu' : 'montou', `${Math.min(100, numero(q.pontos))} pontos`, `${Math.min(9, numero(q.certas))} de 9 certas`, tantos(q.jogadas, 'peça colocada', 'peças colocadas'), tantos(q.giros, 'giro', 'giros'), `tempo ${quantoDurou(q.tempo)}`);
+      if (q) detalhes.push(q.desistiu === true ? 'desistiu' : 'montou', `${Math.min(100, numero(q.pontos))} pontos`, `${Math.min(totalDoQuebra(resumo, q), numero(q.certas))} de ${totalDoQuebra(resumo, q)} certas`, tantos(q.jogadas, 'peça colocada', 'peças colocadas'), tantos(q.giros, 'giro', 'giros'), `tempo ${quantoDurou(q.tempo)}`);
       else if (desafio === '8') {               // os zumbis: quantos caíram e com quantos tiros
         const z = resumo.zumbis && typeof resumo.zumbis === 'object' ? resumo.zumbis : {};
         detalhes.push(tantos(z.mortos, 'zumbi derrubado', 'zumbis derrubados'), tantos(z.tiros, 'tiro', 'tiros'), resumo.perdeu === true ? 'um zumbi encostou' : 'não terminou');
@@ -158,15 +161,16 @@
   // sem nome é do teclado: não entra. A vila e o Galinha Pong não têm pódio.
   const elPodio = document.getElementById('podio'), elPodios = document.getElementById('podios');
   // (Nas missões — o desafio 9 — há um pódio para cada missão: ganha quem a cumpriu no nível mais alto; no empate, em menos tempo.)
-  const NO_PODIO = ['1', '2', '3', '4', '5', '6', '7', '8', '9.1', '9.2', '9.3'], CHAVE_DO_PODIO = 'replays.podio';
-  const NOME_DO_PODIO = d => d.startsWith('9.') ? `Missão ${d.slice(2)}: ${MISSOES[d.slice(2)]}` : JOGOS[d];
+  // (No quebra-cabeça há um pódio para cada nível: 3 x 3, 4 x 4 e 5 x 5. Por isso o desafio dele entra no pódio como 7.1, 7.2 ou 7.3.)
+  const NO_PODIO = ['1', '2', '3', '4', '5', '6', '7.1', '7.2', '7.3', '8', '9.1', '9.2', '9.3'], CHAVE_DO_PODIO = 'replays.podio';
+  const NOME_DO_PODIO = d => d.startsWith('9.') ? `Missão ${d.slice(2)}: ${MISSOES[d.slice(2)]}` : d.startsWith('7.') ? `Quebra-cabeça ${Number(d.slice(2)) + 2} x ${Number(d.slice(2)) + 2}` : JOGOS[d];
   function feito({ id, resumo }) {
     const desafio = String(resumo.desafio), nome = texto(resumo.nome, 20), modelo = texto(resumo.modelo, 24);
     if (desafio === '9') {
       const g = missaoDe(resumo);
       return !nome || !g.cumprida ? null : { id, resumo, desafio: '9.' + g.m, nome, modelo, ordem: [-g.nivel, numero(g.tempo)], conta: [`nível ${g.nivel}`, relogio(g.tempo)] };
     }
-    if (!NO_PODIO.includes(desafio) || !nome) return null;
+    if (!(NO_PODIO.includes(desafio) || desafio === '7') || !nome) return null;
     if (desafio === '8') {
       if (!(Number(resumo.versao) >= 15)) return null;   // (antes da versão 14 das regras os zumbis eram mais lentos, as balas não acabavam e não havia mapa; antes da 15 o robô virava na hora: era outro jogo)
       const z = resumo.zumbis && typeof resumo.zumbis === 'object' ? resumo.zumbis : null, mortos = z ? numero(z.mortos) : 0, tiros = z ? numero(z.tiros) : 0;
@@ -177,7 +181,7 @@
       const q = resumo.quebra && typeof resumo.quebra === 'object' ? resumo.quebra : null;
       if (!q || q.desistiu === true) return null;
       const pontos = Math.min(100, numero(q.pontos)), tempo = numero(q.tempo);
-      return { id, desafio, nome, modelo, ordem: [-pontos, tempo], conta: [`${pontos} pontos`, relogio(tempo)] };
+      return { id, desafio: '7.' + nivelDoQuebra(resumo), nome, modelo, ordem: [-pontos, tempo], conta: [`${pontos} pontos`, relogio(tempo)] };
     }
     const v = resumo.vitoria && typeof resumo.vitoria === 'object' ? resumo.vitoria : null;
     const movimentos = numero(v ? v.botoes : resumo.botoes), tempo = numero(v ? v.tempo : resumo.duracao);

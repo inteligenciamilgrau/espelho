@@ -224,6 +224,9 @@
   // A vila coletiva (V): a cidade dos desafios 4 a 6, com as três casas abertas, as três pessoas e até quatro robôs, que começam na praça.
   DESAFIOS.V = Object.assign({}, DESAFIOS[4], { coletivo: true, mensagem: 'A vila é de todos. Na praça fica a central de pedidos.', inicio: { x: 14, z: 8, rumo: 0, sala: 4 } });
   const REGRAS = Object.assign({ portaManual: false, contador: true, falas: { pedido: '', agradecimento: '' } }, DESAFIOS[DESAFIO]);
+  // O quebra-cabeça (desafio 7) tem três níveis: 1, o de 3 x 3 (o de sempre); 2, o de 4 x 4; 3, o de 5 x 5 (`?nivel=N`).
+  const CASAS_DO_QUEBRA = REGRAS.quebraCabeca ? 2 + (/^[1-3]$/.test(ENDERECO.get('nivel') || '') ? Number(ENDERECO.get('nivel')) : 1) : 3;
+  const PECAS_DO_QUEBRA = CASAS_DO_QUEBRA * CASAS_DO_QUEBRA;   // (9, 16 ou 25)
   const FALAS = REGRAS.falas;                   // o que a pessoa diz (desafios 3 e 4)
   // Variante para experimentar sem mexer no código: ...?desafio=2&disfarce
   if (ENDERECO.has('disfarce')) REGRAS.espelhoDisfarcado = true;
@@ -4818,21 +4821,23 @@
     return { d: k / 100, barra: movel ? `bloqueado: ${movel.nome} no caminho` : portasDaVila.some(p => !p.aberta && noVaoDe(p, x, z)) ? 'bloqueado: porta fechada' : 'bloqueado: parede' };
   }
 
-  function virar(lado) {
+  function virar(lado, texto) {
     if (lado !== 'esquerda' && lado !== 'direita') return resposta(`virar ${lado}`, false, 'lado inválido');
     if (quebra && !quebraAnda) return resposta(`virar ${lado}`, false, 'o robô não sai do lugar');   // (no quebra-cabeça ele fica de frente para a parede: virar só fazia a iA se perder)
     if (zumbi && zumbi.fim !== null) return resposta(`virar ${lado}`, false, 'o jogo acabou');
     if (campanha && campanha.andar) { notar({ tipo: 'roboOcupado' }); return resposta(`virar ${lado}`, false, 'o robô ainda está andando'); }   // (nas missões: no meio de uma caminhada ele não vira)
+    // Nas missões (desafio 9), "meio" no texto vira meio giro: 22,5 graus, em metade do tempo. O giro inteiro é de 45°.
+    const passo = campanha && /^\s*meio\s*$/i.test(String(texto == null ? '' : texto)) ? 0.5 : 1, sinal = lado === 'esquerda' ? passo : -passo;
     if (zumbi && ZUMBI.giro > 0) {              // nos zumbis, virar leva tempo: enquanto um giro não termina, outro não começa (ver "os zumbis")
       const t = hora();
       if (virandoAte(t) !== null) { zumbi.novidades.push({ tipo: 'giroOcupado' }); return resposta(`virar ${lado}`, false, 'o robô ainda está virando'); }
-      zumbi.giro = { de: estado.rumo, para: estado.rumo + (lado === 'esquerda' ? 1 : -1), inicio: t, fim: t + prazoDoZumbi(ZUMBI.giro) };
+      zumbi.giro = { de: estado.rumo, para: estado.rumo + sinal, inicio: t, fim: t + prazoDoZumbi(ZUMBI.giro) * passo };
     }
     if (estado.dirigindo && !carroManual) return resposta(`virar ${lado}`, false, 'o carro anda sozinho: escolha um destino');
     escolhido = undefined;
-    estado.rumo += lado === 'esquerda' ? 1 : -1;
+    estado.rumo += sinal;
     if (estado.dirigindo) { estado.dirigindo.rumo = estado.rumo; estado.dirigindo.assentar(); }   // (o carro vira com quem dirige)
-    return resposta(`virar ${lado}`, true, 'ok');
+    return resposta(`virar ${lado}`, true, passo < 1 ? 'ok, meio giro' : 'ok');
   }
 
   // Distância até algo que esteja ao alcance e à frente (±45°); Infinity se não estiver.
@@ -5026,13 +5031,14 @@
   // Tudo isso é desenhado dentro do canvas, só no mundo real (camada 2): sai na imagem que a iA
   // recebe e não aparece no reflexo.
   const marcas = [];
-  for (let n = 1; n <= MAXIMO_DE_ALVOS + (REGRAS.quebraCabeca ? 1 : 0); n++) {   // (no quebra-cabeça há mais uma, a do 0: o lugar da peça na bandeja)
+  const NUMEROS_DAS_MARCAS = REGRAS.quebraCabeca ? PECAS_DO_QUEBRA + 1 : MAXIMO_DE_ALVOS + 1;   // (no quebra-cabeça, uma para cada peça e mais uma, a do 0: o lugar da peça na bandeja)
+  for (let n = 1; n <= NUMEROS_DAS_MARCAS; n++) {
     const m = new T.Sprite(new T.SpriteMaterial({ transparent: true, depthTest: false, depthWrite: false, toneMapped: false, sizeAttenuation: false,
       map: texturaCanvas(96, 96, (g, l) => {
         g.fillStyle = '#ffffff'; g.strokeStyle = '#0a0e12'; g.lineWidth = 8;
         g.beginPath(); g.arc(l / 2, l / 2, l / 2 - 6, 0, 7); g.fill(); g.stroke();
-        g.fillStyle = '#0a0e12'; g.font = 'bold 64px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillText(String(n > MAXIMO_DE_ALVOS ? 0 : n), l / 2, l / 2 + 5);
+        g.fillStyle = '#0a0e12'; g.font = `bold ${REGRAS.quebraCabeca && n >= 10 ? 52 : 64}px Arial, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(String(n > (REGRAS.quebraCabeca ? PECAS_DO_QUEBRA : MAXIMO_DE_ALVOS) ? 0 : n), l / 2, l / 2 + 5);
       }) }));
     m.renderOrder = 997;                        // por cima do mundo, por baixo do resto do que é desenhado na tela
     m.layers.set(2);
@@ -5158,7 +5164,7 @@
     if (quebra) {                               // no quebra-cabeça o número é o da peça ou o da casa (0: a bandeja), e aparece sempre
       for (const m of marcas) m.userData.ponto = null;
       for (const a of lista) {
-        const m = marcas[a.numero ? a.numero - 1 : MAXIMO_DE_ALVOS];
+        const m = marcas[a.numero ? a.numero - 1 : PECAS_DO_QUEBRA];
         m.userData.ponto = pontoDe(a);
         m.material.color.set(a === alvo ? 0x00e5ff : 0xffffff);
         m.scale.setScalar(TAMANHO_DA_MARCA * 0.85 * (a === alvo ? 1.25 : 1));
@@ -5392,9 +5398,11 @@
     if (!arena && !existeDesafio(n)) return false;
     const p = new URLSearchParams(location.search);
     p.set('desafio', comentarista ? 'M' : n);
+    // (o quebra-cabeça, 7, também tem nível: 1 é o de 3 x 3, 2 o de 4 x 4 e 3 o de 5 x 5)
     for (const [chave, valor] of [['missao', missao], ['nivel', nivel]]) {
-      if (String(n) === '9' && /^[0-9]{1,2}$/.test(String(valor == null ? '' : valor))) p.set(chave, String(valor));
-      else if (String(n) !== '9' || DESAFIO !== 9) p.delete(chave);
+      const v = String(valor == null ? '' : valor);
+      if ((String(n) === '9' && /^[0-9]{1,2}$/.test(v)) || (String(n) === '7' && chave === 'nivel' && /^[1-3]$/.test(v))) p.set(chave, v);
+      else if (!(String(n) === '9' || String(n) === '7') || DESAFIO !== Number(n)) p.delete(chave);
     }
     try {
       if (arena && Number.isInteger(quem) && quem > 0) sessionStorage.setItem('quadra.entrada', JSON.stringify({ quem, cmd: cmd || 0, nome: nome || '', modelo: modelo || '', papel: comentarista ? 'C' : '' }));
@@ -5975,6 +5983,8 @@
   }
 
   // ---------- o quebra-cabeça (desafio 7) ----------
+  // Três níveis, com a mesma figura cortada de outro jeito: 1 é o de 3 x 3 (o de sempre), 2 o de 4 x 4 e 3 o de 5 x 5
+  // (`?nivel=2` ou `?nivel=3`; quem chama pela iA manda o nível junto). O quadro e a bandeja têm sempre a mesma largura.
   // Na parede do fundo da sala há um quadro de 3 x 3 casas, vazio, e ao lado dele a bandeja com as 9
   // peças de uma figura, embaralhadas e giradas. Montar a figura no quadro é a vitória. As peças são
   // quadradas: o que diz onde cada uma vai é só o desenho (e a margem clara da figura, que as da
@@ -6004,9 +6014,9 @@
   //   y: a altura do meio do quadro (a dos olhos do robô, que aqui olha reto: a parede sai na imagem sem entortar);
   //   quadro e bandeja: o x do meio de cada um (olhando para a parede, +x é a esquerda);
   //   tempo: até `pleno` os pontos do tempo são todos; em `zero`, nenhum; pontos: quanto vale cada parte
-  const QUEBRA = { lado: 0.345, peca: 0.332, passo: 0.39, y: ALTURA_OLHOS, quadro: 0.79, bandeja: -0.79,
+  const QUEBRA = { lado: 1.035 / CASAS_DO_QUEBRA, peca: 1.035 / CASAS_DO_QUEBRA - 0.013, passo: (1.125 - 1.035 / CASAS_DO_QUEBRA) / (CASAS_DO_QUEBRA - 1), y: ALTURA_OLHOS, quadro: 0.79, bandeja: -0.79,
     tempo: { pleno: 5 * 60000, zero: 30 * 60000 }, pontos: { pecas: 60, jogadas: 15, giros: 10, tempo: 15 } };
-  const quebra = REGRAS.quebraCabeca ? { sorte: 0, figura: 0, pecas: [], casas: [], vagas: [], naMao: null, giros: 0, girosMinimos: 0, jogadas: 0, postasCertas: 0, postasErradas: 0,
+  const quebra = REGRAS.quebraCabeca ? { n: CASAS_DO_QUEBRA, total: PECAS_DO_QUEBRA, sorte: 0, figura: 0, pecas: [], casas: [], vagas: [], naMao: null, giros: 0, girosMinimos: 0, jogadas: 0, postasCertas: 0, postasErradas: 0,
     comeco: null, fim: null, desistiu: false, pontos: 0, contas: null, novidade: false, tela: null, textura: null } : null;
 
   // As figuras, desenhadas aqui mesmo (o jogo não tem arquivos de imagem), num quadrado de 768 pontos.
@@ -6149,11 +6159,12 @@
   })();
 
   // Onde ficam, na parede, o meio de uma casa do quadro e o de um lugar da bandeja: [x, y].
-  const casaXY = (lin, col) => [QUEBRA.quadro + (1 - col) * QUEBRA.lado, QUEBRA.y + (1 - lin) * QUEBRA.lado];
-  const vagaXY = i => [QUEBRA.bandeja + (1 - i % 3) * QUEBRA.passo, QUEBRA.y + (1 - Math.floor(i / 3)) * QUEBRA.passo];
+  // (centrados no quadro e na bandeja: em 3 x 3 são as mesmas posições de antes)
+  const casaXY = (lin, col) => [QUEBRA.quadro + ((CASAS_DO_QUEBRA - 1) / 2 - col) * QUEBRA.lado, QUEBRA.y + ((CASAS_DO_QUEBRA - 1) / 2 - lin) * QUEBRA.lado];
+  const vagaXY = i => [QUEBRA.bandeja + ((CASAS_DO_QUEBRA - 1) / 2 - i % CASAS_DO_QUEBRA) * QUEBRA.passo, QUEBRA.y + ((CASAS_DO_QUEBRA - 1) / 2 - Math.floor(i / CASAS_DO_QUEBRA)) * QUEBRA.passo];
   // Monta, na parede do fundo da sala `s`, o quadro, a bandeja e as nove peças; e sorteia a partida.
   function montarQuebraCabeca(s) {
-    const q = quebra, g = s.grupo, parede = SALA.P / 2, zPeca = parede - 0.022, { lado, peca, passo, y: Y } = QUEBRA;
+    const q = quebra, g = s.grupo, parede = SALA.P / 2, zPeca = parede - 0.022, { lado, peca, passo, y: Y } = QUEBRA, n = CASAS_DO_QUEBRA;
     q.tela = document.createElement('canvas');
     q.tela.width = q.tela.height = 768;
     q.textura = new T.CanvasTexture(q.tela);
@@ -6175,22 +6186,25 @@
       c.strokeStyle = '#c9a45c'; c.lineWidth = 5; c.strokeRect(6, 6, l - 12, a - 12);
       c.fillStyle = '#ecdcb4'; c.font = 'bold 54px Georgia, "Times New Roman", serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
       c.fillText(texto, l / 2, a / 2 + 4);
-    }) }), x, Y - 1.5 * lado - 0.115, parede - 0.012).rotation.y = Math.PI;   // (embaixo: em cima fica o que o jogo escreve na imagem)
+    }) }), x, Y - (n / 2) * lado - 0.115, parede - 0.012).rotation.y = Math.PI;   // (embaixo: em cima fica o que o jogo escreve na imagem)
     // o quadro: a moldura de nogueira, o fundo de feltro e os fios que separam as nove casas
-    const xq = QUEBRA.quadro, xb = QUEBRA.bandeja, meio = 1.5 * lado;
-    malha(g, new T.BoxGeometry(3 * lado, 3 * lado, 0.01), feltro, xq, Y, parede - 0.005);
+    const xq = QUEBRA.quadro, xb = QUEBRA.bandeja, meio = (n / 2) * lado;
+    malha(g, new T.BoxGeometry(n * lado, n * lado, 0.01), feltro, xq, Y, parede - 0.005);
     for (const d of [-1, 1]) {
-      fazSombra(malha(g, new T.BoxGeometry(3 * lado + 0.08, 0.04, 0.04), M.nogueira, xq, Y + d * (meio + 0.02), parede - 0.02));
-      fazSombra(malha(g, new T.BoxGeometry(0.04, 3 * lado, 0.04), M.nogueira, xq + d * (meio + 0.02), Y, parede - 0.02));
-      malha(g, new T.BoxGeometry(0.005, 3 * lado, 0.002), fio, xq + d * lado / 2, Y, parede - 0.011);
-      malha(g, new T.BoxGeometry(3 * lado, 0.005, 0.002), fio, xq, Y + d * lado / 2, parede - 0.011);
+      fazSombra(malha(g, new T.BoxGeometry(n * lado + 0.08, 0.04, 0.04), M.nogueira, xq, Y + d * (meio + 0.02), parede - 0.02));
+      fazSombra(malha(g, new T.BoxGeometry(0.04, n * lado, 0.04), M.nogueira, xq + d * (meio + 0.02), Y, parede - 0.02));
+    }
+    for (let k = 1; k < n; k++) {               // os fios entre as casas
+      const o = (k - n / 2) * lado;
+      malha(g, new T.BoxGeometry(0.005, n * lado, 0.002), fio, xq + o, Y, parede - 0.011);
+      malha(g, new T.BoxGeometry(n * lado, 0.005, 0.002), fio, xq, Y + o, parede - 0.011);
     }
     plaquinha('QUADRO', xq);
     // a bandeja: uma placa de cortiça com nove rebaixos, um para cada peça
-    malha(g, new T.BoxGeometry(2 * passo + lado + 0.07, 2 * passo + lado + 0.07, 0.012), cortica, xb, Y, parede - 0.006);
+    malha(g, new T.BoxGeometry((n - 1) * passo + lado + 0.07, (n - 1) * passo + lado + 0.07, 0.012), cortica, xb, Y, parede - 0.006);
     plaquinha('PEÇAS', xb);
-    for (let i = 0; i < 9; i++) {
-      const lin = Math.floor(i / 3), col = i % 3, [cx, cy] = casaXY(lin, col), [vx, vy] = vagaXY(i);
+    for (let i = 0; i < PECAS_DO_QUEBRA; i++) {
+      const lin = Math.floor(i / n), col = i % n, [cx, cy] = casaXY(lin, col), [vx, vy] = vagaXY(i);
       malha(g, new T.BoxGeometry(lado, lado, 0.002), rebaixo, vx, vy, parede - 0.013);
       // (ponto: onde fica o número, na imagem — no canto de cima, à esquerda, para não tapar o desenho)
       const casa = { nome: 'casa', ehCasa: true, numero: i + 1, lin, col, x: cx, y: cy, z: zPeca, peca: null, contorno: borda(g, cx, cy, parede - 0.036, lado - 0.012),
@@ -6222,7 +6236,7 @@
   }
   // Começa a partida de sorte `n`: escolhe a figura, embaralha as peças na bandeja e gira cada uma.
   function embaralharQuebra(n) {
-    const q = quebra, acaso = aleatorio(Math.imul(n + 1, 0x9e3779b1) >>> 0), ordem = [0, 1, 2, 3, 4, 5, 6, 7, 8];   // (a sorte é espalhada antes: duas sortes vizinhas dão partidas que não se parecem)
+    const q = quebra, acaso = aleatorio(Math.imul(n + 1, 0x9e3779b1) >>> 0), ordem = Array.from({ length: PECAS_DO_QUEBRA }, (_, i) => i);   // (a sorte é espalhada antes: duas sortes vizinhas dão partidas que não se parecem)
     Object.assign(q, { sorte: n, figura: Math.floor(acaso() * FIGURAS.length), naMao: null, giros: 0, jogadas: 0, postasCertas: 0, postasErradas: 0, comeco: null, fim: null, desistiu: false, pontos: 0, contas: null, novidade: false });
     const c = q.tela.getContext('2d');
     c.clearRect(0, 0, 768, 768);
@@ -6231,10 +6245,10 @@
     for (let i = ordem.length - 1; i > 0; i--) { const j = Math.floor(acaso() * (i + 1)); [ordem[i], ordem[j]] = [ordem[j], ordem[i]]; }
     for (const casa of q.casas) casa.peca = null;
     q.pecas.forEach((p, i) => {
-      Object.assign(p, { lin: Math.floor(ordem[i] / 3), col: ordem[i] % 3, giro: Math.floor(acaso() * 4), lugar: q.vagas[i] });
+      Object.assign(p, { lin: Math.floor(ordem[i] / CASAS_DO_QUEBRA), col: ordem[i] % CASAS_DO_QUEBRA, giro: Math.floor(acaso() * 4), lugar: q.vagas[i] });
       q.vagas[i].peca = p;
       const uv = p.face.geometry.attributes.uv;  // (os quatro cantos do plano: em cima à esquerda, em cima à direita, embaixo à esquerda, embaixo à direita)
-      [[0, 1], [1, 1], [0, 0], [1, 0]].forEach(([u, v], k) => uv.setXY(k, (p.col + u) / 3, (2 - p.lin + v) / 3));
+      [[0, 1], [1, 1], [0, 0], [1, 0]].forEach(([u, v], k) => uv.setXY(k, (p.col + u) / CASAS_DO_QUEBRA, (CASAS_DO_QUEBRA - 1 - p.lin + v) / CASAS_DO_QUEBRA));
       uv.needsUpdate = true;
       assentarPeca(p);
     });
@@ -6325,7 +6339,7 @@
   // ou giradas), as que ficaram fora do quadro, o tempo, as peças colocadas e os giros.
   function contasDoQuebra() {
     const q = quebra, noQuadro = q.pecas.filter(p => p.lugar && p.lugar.ehCasa), certas = noQuadro.filter(certaNoLugar).length;
-    return { certas, erradas: noQuadro.length - certas, fora: 9 - noQuadro.length, tempo: q.comeco === null ? 0 : (q.fim !== null ? q.fim : hora()) - q.comeco, jogadas: q.jogadas, giros: q.giros };
+    return { certas, erradas: noQuadro.length - certas, fora: quebra.total - noQuadro.length, tempo: q.comeco === null ? 0 : (q.fim !== null ? q.fim : hora()) - q.comeco, jogadas: q.jogadas, giros: q.giros };
   }
   // A pontuação, de 0 a 100. As peças certas valem 60 pontos (cada uma, um nono disso). Os outros 40
   // são da eficiência, e só contam na proporção das peças certas (quem desiste sem acertar nada não
@@ -6334,7 +6348,7 @@
   //   10 pelos giros: todos, se não houve giro além dos que as peças pediam (ver girosMinimos);
   //   15 pelo tempo: todos até 5 minutos; daí vão caindo, até nenhum aos 30.
   function pontuarQuebra(c) {
-    const P = QUEBRA.pontos, parte = c.certas / 9, jogadas = c.jogadas ? Math.min(1, c.certas / c.jogadas) : 0, giros = c.giros > quebra.girosMinimos ? quebra.girosMinimos / c.giros : 1;
+    const P = QUEBRA.pontos, parte = c.certas / quebra.total, jogadas = c.jogadas ? Math.min(1, c.certas / c.jogadas) : 0, giros = c.giros > quebra.girosMinimos ? quebra.girosMinimos / c.giros : 1;
     const tempo = Math.max(0, Math.min(1, (QUEBRA.tempo.zero - c.tempo) / (QUEBRA.tempo.zero - QUEBRA.tempo.pleno)));
     return Math.round(parte * (P.pecas + P.jogadas * jogadas + P.giros * giros + P.tempo * tempo));
   }
@@ -6357,12 +6371,12 @@
     const q = quebra;
     if (!q || !q.novidade) return [];
     q.novidade = false;
-    return [{ tipo: 'quebraCabeca', tempo: minutos(q.contas.tempo), jogadas: q.contas.jogadas, giros: q.contas.giros, certas: q.contas.certas, pontos: q.pontos }];
+    return [{ tipo: 'quebraCabeca', tempo: minutos(q.contas.tempo), jogadas: q.contas.jogadas, giros: q.contas.giros, certas: q.contas.certas, pontos: q.pontos, total: q.total }];
   }
   // O que quem assiste lê no campo de quem joga, na página: as contas ao vivo (a iA não as vê).
   const placarDoQuebra = () => {
     const c = quebra.fim !== null ? quebra.contas : contasDoQuebra();
-    return `${minutos(c.tempo)} · ${c.jogadas} ${c.jogadas === 1 ? 'peça colocada' : 'peças colocadas'} · ${c.giros} ${c.giros === 1 ? 'giro' : 'giros'} · ${c.certas} de 9 certas`
+    return `${minutos(c.tempo)} · ${c.jogadas} ${c.jogadas === 1 ? 'peça colocada' : 'peças colocadas'} · ${c.giros} ${c.giros === 1 ? 'giro' : 'giros'} · ${c.certas} de ${quebra.total} certas`
       + (quebra.fim !== null ? ` · ${quebra.desistiu ? 'desistiu' : 'montou'}: ${quebra.pontos} pontos` : '');
   };
   // A peça que está na mão, no alto da imagem, no meio (onde, na parede, fica o vão entre o quadro e
@@ -6392,7 +6406,8 @@
     g.save();
     g.translate(L / 2, 268);
     g.rotate(p.giro * Math.PI / 2);              // (no desenho, o ângulo que cresce é o do sentido horário)
-    g.drawImage(quebra.tela, p.col * 256, p.lin * 256, 256, 256, -tam / 2, -tam / 2, tam, tam);
+    const t = quebra.tela.width / CASAS_DO_QUEBRA;
+    g.drawImage(quebra.tela, p.col * t, p.lin * t, t, t, -tam / 2, -tam / 2, tam, tam);
     g.restore();
     g.strokeStyle = '#f4efe4'; g.lineWidth = 6; g.strokeRect(L / 2 - tam / 2, 268 - tam / 2, tam, tam);
     naMao.textura.needsUpdate = true;
@@ -6416,7 +6431,7 @@
     g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.font = 'bold 92px Arial, sans-serif'; g.fillText(`${q.desistiu ? 'VOCÊ DESISTIU' : 'MONTADO!'}  PONTUAÇÃO: ${q.pontos} DE 100`, L / 2, 84, L - 70);
     g.font = 'bold 52px Arial, sans-serif';
-    g.fillText(`tempo ${minutos(k.tempo)} · ${k.jogadas} peças colocadas · ${k.giros} giros · ${k.certas} de 9 certas`, L / 2, 182, L - 70);
+    g.fillText(`tempo ${minutos(k.tempo)} · ${k.jogadas} peças colocadas · ${k.giros} giros · ${k.certas} de ${q.total} certas`, L / 2, 182, L - 70);
     fimDoQuebra.textura.needsUpdate = true;
     fimDoQuebra.malha.visible = true;
   }
@@ -7567,7 +7582,7 @@
   // que o jogador fica sabendo: quais botões existem. O que cada um faz, ele descobre.
   const BOTOES = {
     W: () => mover('frente'), S: () => mover('tras'),             // anda um passo
-    A: () => virar('esquerda'), D: () => virar('direita'),        // vira 45° sem sair do lugar
+    A: texto => virar('esquerda', texto), D: texto => virar('direita', texto),        // vira 45° sem sair do lugar (nas missões, com "meio" no texto, vira 22,5°)
     ESPACO: () => pegar(), L: () => levantar(),
     TAB: texto => escolher(1, texto),                             // passa o alvo do ESPACO para o seguinte; com um número no texto, direto para o alvo com esse número
     T: texto => COLETIVO ? falar(texto) : escrever(texto),                // escreve no peito o texto que vem junto
@@ -7608,13 +7623,13 @@
   const quemJoga = { quem: 0, nome: '', modelo: '' }, contagem = { botoes: 0, imagens: 0, vitoria: null };   // (vitoria: as contas na hora em que o jogo foi vencido, para o pódio da lista de replays)
   // A versão das regras que mudam o que um botão faz, para a gravação antiga continuar igual
   // quando é assistida. 2: entre alvos do mesmo tipo, vale o mais central na imagem (ver ordemAntiga).
-  const VERSAO_DAS_REGRAS = 18;                 // (18: nas salas dos desafios 1 a 3, Q e E dão passo de lado, sem virar, como no desafio 4: ver semPassoDeLadoNasSalas; 17: nas salas dos desafios 1 a 3, o chão só é alvo quando há lugar para soltar o que está na mão: ver chaoSempreAlvo; 16: nas salas dos desafios 1 a 3, o S recua sem virar, como na cidade: ver meiaVoltaNasSalas; 3: as portas que o jogador abre também fecham: ver portasNaoFecham; 4: o violeiro e o cachorro barram um canto da praça; 5: dá para entrar no carro; 6: na cidade, o S recua sem virar; 7: no coletivo, cada robô pede a sua missão na central; 8: o carro anda sozinho; 9: ele para para os robôs e pode ser chamado, e as casas 1 e 3 do coletivo revezam dois pedidos; 10: o que está num móvel aberto só é alvo se o robô o vê: ver aVista; 11: a poltrona da casa amarela foi para longe da cama, e o robô do desafio 4 começa na frente dela: ver POLTRONA_DO_QUARTO; 12: os móveis barram o robô com os cantos arredondados (ver noMovel) e, na cidade, o passo que não cabe inteiro vai até encostar (ver ateOnde); 13: no quebra-cabeça o robô não anda nem vira (ver quebraAnda); 14: os zumbis andam mais depressa, a arma tem um pente de balas, que é preciso recarregar, e a imagem tem o mapa dos zumbis e as balas (ver ZUMBI_ANTES, recarregar e desenharRadar); 15: nos zumbis, virar leva tempo (ver ZUMBI.giro))
+  const VERSAO_DAS_REGRAS = 19;                 // (19: nas missões (desafio 9), A ou D com "meio" no texto viram meio giro, de 22,5 graus, em metade do tempo: as gravações de antes não usam isso; 18: nas salas dos desafios 1 a 3, Q e E dão passo de lado, sem virar, como no desafio 4: ver semPassoDeLadoNasSalas; 17: nas salas dos desafios 1 a 3, o chão só é alvo quando há lugar para soltar o que está na mão: ver chaoSempreAlvo; 16: nas salas dos desafios 1 a 3, o S recua sem virar, como na cidade: ver meiaVoltaNasSalas; 3: as portas que o jogador abre também fecham: ver portasNaoFecham; 4: o violeiro e o cachorro barram um canto da praça; 5: dá para entrar no carro; 6: na cidade, o S recua sem virar; 7: no coletivo, cada robô pede a sua missão na central; 8: o carro anda sozinho; 9: ele para para os robôs e pode ser chamado, e as casas 1 e 3 do coletivo revezam dois pedidos; 10: o que está num móvel aberto só é alvo se o robô o vê: ver aVista; 11: a poltrona da casa amarela foi para longe da cama, e o robô do desafio 4 começa na frente dela: ver POLTRONA_DO_QUARTO; 12: os móveis barram o robô com os cantos arredondados (ver noMovel) e, na cidade, o passo que não cabe inteiro vai até encostar (ver ateOnde); 13: no quebra-cabeça o robô não anda nem vira (ver quebraAnda); 14: os zumbis andam mais depressa, a arma tem um pente de balas, que é preciso recarregar, e a imagem tem o mapa dos zumbis e as balas (ver ZUMBI_ANTES, recarregar e desenharRadar); 15: nos zumbis, virar leva tempo (ver ZUMBI.giro))
   const gravando = !ASSISTINDO && GRAVACAO
     ? GRAVACAO.gravar(COLETIVO ? 'V' : DESAFIO, () => ({ versao: VERSAO_DAS_REGRAS, nome: COLETIVO ? 'coletivo' : quemJoga.nome, modelo: COLETIVO ? `${participantes.size} robôs, ${entregas} pedidos` : quemJoga.modelo, botoes: contagem.botoes, imagens: contagem.imagens, ganhou: estado.ganhou, alertas: contagem.alertas || undefined,   // (alertas: quantas vezes alguém pediu um arquivo do jogo sem ser a página, durante a partida: ver anotarAlerta)
-      vitoria: contagem.vitoria || undefined, perdeu: estado.perdeu || undefined, assar: REGRAS.vila ? [ASSAR.pronto, ASSAR.queima] : undefined, sorte: COLETIVO ? sorte : quebra ? quebra.sorte : zumbi ? zumbi.sorte : undefined, pressa: zumbi && zumbi.pressa !== 1 ? zumbi.pressa : undefined,   // (sorte: o sorteio do começo, no coletivo: ver sortear; no quebra-cabeça, a partida: ver embaralharQuebra)
+      vitoria: contagem.vitoria || undefined, perdeu: estado.perdeu || undefined, assar: REGRAS.vila ? [ASSAR.pronto, ASSAR.queima] : undefined, nivel: quebra ? quebra.n - 2 : undefined, sorte: COLETIVO ? sorte : quebra ? quebra.sorte : zumbi ? zumbi.sorte : undefined, pressa: zumbi && zumbi.pressa !== 1 ? zumbi.pressa : undefined,   // (sorte: o sorteio do começo, no coletivo: ver sortear; no quebra-cabeça, a partida: ver embaralharQuebra)
       zumbis: zumbi && !campanha ? { mortos: zumbi.mortos, tiros: zumbi.tiros, tempo: zumbi.comeco === null ? 0 : Math.round((zumbi.fim !== null ? zumbi.fim : hora()) - zumbi.comeco) } : undefined,   // (as contas dos zumbis, para a lista de replays e para o recorde)
       missao: campanha ? resumoDaCampanha() : undefined,   // (nas missões: qual missão, o nível, se foi cumprida e as contas)
-      quebra: quebra && quebra.fim !== null ? Object.assign({ pontos: quebra.pontos, desistiu: quebra.desistiu }, quebra.contas) : undefined }))   // (o resultado do quebra-cabeça, para a lista de replays)
+      quebra: quebra && quebra.fim !== null ? Object.assign({ pontos: quebra.pontos, desistiu: quebra.desistiu, total: quebra.total }, quebra.contas) : undefined }))   // (o resultado do quebra-cabeça, para a lista de replays)
     : null;
   const NOME_DO_BOTAO = { ESPACO: 'Espaço', F: 'F · imagem' };
   const elQuer = document.getElementById('quer'), intencoes = [];

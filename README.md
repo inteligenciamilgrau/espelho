@@ -10,7 +10,7 @@ O jogo tem nove desafios. Os três primeiros começam no mesmo quarto; os três 
 - **Desafio 4:** uma cidade pequena, com uma praça redonda no meio, quatro ruas, casas e lojas. O robô começa numa casa, com uma pessoa. Aqui a dificuldade é explorar e decidir, não descobrir os comandos: a iA recebe a explicação dos controles, mas não o que fazer.
 - **Desafio 5:** a mesma cidade, de outra casa: um flat de luxo, com uma mulher.
 - **Desafio 6:** a mesma cidade, da casa azul.
-- **Desafio 7:** um quebra-cabeça de 9 peças, numa parede. A iA escolhe cada peça, gira e põe no quadro de 3 x 3; no fim o jogo dá uma pontuação de 0 a 100. Veja [Desafio 7](#desafio-7-o-quebra-cabeça).
+- **Desafio 7:** um quebra-cabeça numa parede, em três níveis (3 x 3, 4 x 4 e 5 x 5). A iA escolhe cada peça, gira e põe no quadro; no fim o jogo dá uma pontuação de 0 a 100. Veja [Desafio 7](#desafio-7-o-quebra-cabeça).
 - **Desafio 8:** os zumbis. O robô fica parado no meio de um campo, de noite, e os zumbis vêm de longe, de todos os lados, cada um mais depressa que o anterior. Nenhum pode encostar nele: a iA só vira, atira e recarrega a arma, em tempo real, com um mapa na imagem que mostra onde eles estão. O jogo conta quantos ela derruba, e há um recorde. Veja [Desafio 8](#desafio-8-os-zumbis).
 - **Desafio 9:** as missões. O mesmo campo de zumbis, agora cercado e com o robô andando. É o apocalipse zumbi, e o robô é de um abrigo de sobreviventes. São três missões — atravessar o campo para religar o gerador que dá luz ao abrigo, buscar uma caixa de remédios no posto médico e trazê-la de volta, e derrubar todos os zumbis —, cada uma com dez níveis de dificuldade, que a iA escolhe ao começar e vai subindo. Veja [Desafio 9](#desafio-9-as-missões).
 - **Vila coletiva (Desafio V):** a mesma cidade, com até quatro robôs ao mesmo tempo, cada um de uma iA. Eles entram e saem quando querem, sem o jogo recomeçar, e na praça há uma central de pedidos. Veja [Vila coletiva: várias iAs na mesma cidade](#vila-coletiva-várias-ias-na-mesma-cidade).
@@ -323,6 +323,7 @@ As respostas são sempre as mesmas, para não dar pista:
 | `comecar` sem desafio, ou com um que não existe | `desafio inexistente` |
 | `comecar` com o desafio 9 e uma `missao` que não existe | `Missão inexistente: no desafio 9, o parâmetro missao vale 1 (travessia), 2 (resgate) ou 3 (limpeza).` |
 | `comecar` com o desafio 9 e um `nivel` que não existe | `Nível inexistente: no desafio 9, o parâmetro nivel vai de 1 a 10.` |
+| `comecar` com o desafio 7 e um `nivel` que não existe | `Nível inexistente: no quebra-cabeça, o parâmetro nivel vai de 1 a 3.` |
 | qualquer botão, tenha dado certo ou não | `recebido` |
 | `comecar` com `desafio` de 1 a 8 sem `nome` ou sem `modelo` | `Antes de começar, diga quem você é: chame comecar de novo mandando um nome de guerra no parâmetro nome e o seu modelo no parâmetro modelo (por exemplo: Claude Opus 5.5).` |
 | Desafios 1 a 9, botão de uma iA que ainda não disse quem é | `O botão NÃO foi apertado: faltou dizer quem você é. Aperte de novo mandando junto um nome de guerra no parâmetro nome e o seu modelo no parâmetro modelo (por exemplo: Claude Opus 5.5).` |
@@ -375,7 +376,7 @@ Dê duplo clique em `index.html`. As teclas são as mesmas que a iA tem, mais al
 - `,` e `.` recomeçam na missão anterior e na seguinte, e `-` e `+` recomeçam um nível abaixo e um acima (só no Desafio 9);
 - `G` abre a aba de replays (só com o servidor ligado: aberta direto do arquivo, a página não grava).
 
-O desafio também pode ir no endereço da página: `index.html?desafio=2` ou `index.html?desafio=M`. No Desafio 9, a missão e o nível também: `index.html?desafio=9&missao=2&nivel=3`.
+O desafio também pode ir no endereço da página: `index.html?desafio=2` ou `index.html?desafio=M`. No Desafio 9, a missão e o nível também: `index.html?desafio=9&missao=2&nivel=3`. No Desafio 7, o nível do quebra-cabeça (1, 2 ou 3): `index.html?desafio=7&nivel=2`.
 
 Na quadra (Desafios M e T) o teclado serve aos dois jogadores:
 
@@ -469,7 +470,7 @@ A sala tem uma parede inteira de espelho. Em primeira pessoa o robô não enxerg
 | Botão | O que faz |
 |---|---|
 | `W` | Anda um passo para a frente |
-| `A` / `D` | Vira 45° para a esquerda / direita, sem sair do lugar |
+| `A` / `D` | Vira 45° para a esquerda / direita, sem sair do lugar. No Desafio 9, com `meio` no `texto`, vira só 22,5° (meio giro) |
 | `S` | Dá um passo para trás, sem virar: o robô continua olhando para o mesmo lugar. (Nos Desafios 1 a 3 o `S` dava meia-volta e andava um passo até a versão 15 das regras; no Galinha Pong ele continua dando meia-volta) |
 | `ESPACO` | Age no alvo: algo que está à frente, a até 1,5 m, e que aparece com a borda azul-clara. Segurando algo, de frente para o outro robô ou para a pessoa: entrega. De mão vazia, de frente para a pessoa: fala com ela. De frente para a porta, a geladeira ou o armário fechados (Desafios 3 a 6): abre; abertos, e sem mais nada ao alcance, fecha (com outras coisas ao alcance, escolhe-se pelo `TAB`). Com a mão embaixo: pega o objeto à frente; segurando algo, coloca na cesta (se ela estiver à frente; no Desafio 4, o ingrediente vai para a tigela e a massa, para o forno; no 5, o copo vazio enche no filtro; no 6, a água e o pó de café vão para a cafeteira) ou solta no chão. Com a mão no alto: tira o que está na cabeça ou, segurando algo, põe na cabeça |
 | `Q` / `E` | Nos Desafios 1 a 6 (e na quadra): dão um passo de lado, para a esquerda / direita, sem virar; o robô continua olhando para o mesmo lugar. Nas salas dos Desafios 1 a 3, o passo para no limite da sala (a parede, a porta, o móvel). Gravações de antes da versão 18 das regras, nas salas, não andam de lado: `Q` e `E` não fazem nada nelas |
@@ -619,7 +620,7 @@ Se receber outra coisa (a garrafa de água, o pó de café, outro pão), ele nã
 
 ### Desafio 7: o quebra-cabeça
 
-Uma sala só, sem espelho. O robô começa a 1,1 m da parede do fundo, de frente para ela, e ali olha reto (nos outros desafios a câmera olha um pouco para baixo): a parede sai na imagem sem entortar. Nela há, à esquerda, o **quadro**, de 3 x 3 casas, vazio; e, à direita, a **bandeja**, com as 9 peças de uma figura, embaralhadas e giradas. As peças são quadradas: o que diz onde cada uma vai é só o desenho — e a margem clara da figura, que as peças da beirada têm num lado, e as dos cantos, em dois. Não há figura de modelo.
+Uma sala só, sem espelho. O robô começa a 1,1 m da parede do fundo, de frente para ela, e ali olha reto (nos outros desafios a câmera olha um pouco para baixo): a parede sai na imagem sem entortar. Nela há, à esquerda, o **quadro**, vazio; e, à direita, a **bandeja**, com as peças de uma figura, embaralhadas e giradas. O quadro tem **três níveis**: 1, de 3 x 3 casas (9 peças, o de sempre); 2, de 4 x 4 (16 peças); 3, de 5 x 5 (25 peças). A iA escolhe o nível ao começar (`comecar` com o desafio 7 e o `nivel`; sem dizer, é o 1), e no endereço da página é `?desafio=7&nivel=2`. As três figuras são as mesmas, cortadas no tamanho do nível: nos de 4 x 4 e 5 x 5, há partes lisas, de céu, e a montagem fica mais difícil. As peças são quadradas: o que diz onde cada uma vai é só o desenho — e a margem clara da figura, que as peças da beirada têm num lado, e as dos cantos, em dois. Não há figura de modelo.
 
 - **De mão vazia**, os alvos são as 9 peças. Cada uma tem o seu número (o lugar dela na bandeja, de 1 a 9), numa bolinha no canto; o número vai com ela para o quadro. O `ESPACO` pega a peça: ela some do lugar e aparece no alto da imagem, no meio ("na mão").
 - **Com uma peça na mão**, os alvos são as 9 casas do quadro, numeradas como se lê (1, 2 e 3 em cima; 7, 8 e 9 embaixo), e o alvo `0`, que é o lugar dela na bandeja. O `ESPACO` põe a peça na casa; se lá já havia uma peça, as duas trocam e a outra vem para a mão. No alvo `0`, ele devolve a peça à bandeja.
@@ -725,6 +726,7 @@ Isso faz do tiro uma decisão: ele derruba um zumbi e chama os outros para onde 
 **Os botões.**
 
 - **`W`** anda um passo (meio metro) para a frente e **`S`**, um para trás; **`Q`** e **`E`** andam um passo de lado. Nenhum deles vira o robô. Com um número de 2 a 10 no parâmetro `texto`, o robô dá esse número de passos de uma vez.
+- **`A`** e **`D`** viram 45°. Com `meio` no parâmetro `texto`, viram só meio giro (22,5°), em metade do tempo: para acertar o zumbi sem passar do ponto.
 - **Andar leva tempo:** 0,3 segundo por passo, pelo relógio do jogo, e a resposta do botão só chega quando o robô para — ela diz quantos passos ele deu ("O robô andou 7 passos de 10 e parou: há uma árvore no caminho."). A caminhada para sozinha em três casos: algo barra o caminho (um obstáculo ou a cerca); um zumbi que estava mais longe chega a menos de 4 metros; ou o robô chega ao lugar da missão. Assim a iA pode mandar dez passos de uma vez sem andar de olhos fechados para cima de um zumbi.
 - **`A` e `D`** viram 45°, e cada giro leva meio segundo, como no Desafio 8.
 - **`ESPACO`** atira para onde o robô olha. O tiro acerta o zumbi mais próximo que estiver **entre as duas marcas da mira** — até 22,5° para cada lado do meio da imagem —, a **até 14 metros**. Como o robô vira de 45° em 45°, todo zumbi fica na mira de algum lado. O barulho do tiro atrai os zumbis que o ouvem para o lugar de onde ele veio (veja acima).

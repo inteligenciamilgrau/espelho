@@ -294,6 +294,8 @@ function Concluir($a, [byte[]]$corpo, $req) {
     if ($espera) { $texto = $config.respostaEspera }
     else { $texto = $config.desafios.PSObject.Properties[$a.argumentos[0]].Value.respostaComecar }
     if (@($a.argumentos).Count -ge 5) { $texto = ([string]$texto).Replace('{missao}', [string]$a.argumentos[3]).Replace('{nivel}', [string]$a.argumentos[4]) }   # (o desafio com missoes: qual comecou, e em que nivel)
+    $tabela = $config.desafios.PSObject.Properties[[string]$a.argumentos[0]].Value.niveisQuebra   # (o quebra-cabeça: o tamanho do quadro, as peças e os números do nível)
+    if ($tabela -and @($a.argumentos).Count -ge 5) { $e = $tabela.PSObject.Properties[[string]$a.argumentos[4]].Value; $texto = ([string]$texto).Replace('{quadro}', [string]$e.quadro).Replace('{pecas}', [string]$e.pecas).Replace('{linhas}', [string]$e.linhas) }
   } elseif ($corpo -and $corpo.Length) {      # o botao devolveu uma imagem (o frame)
     $imagem = [Convert]::ToBase64String($corpo)
   } elseif ($DESAFIOS -ccontains $inicio) {   # a partida comecou agora: no lugar do "recebido", o texto de inicio
@@ -569,6 +571,11 @@ function TratarMcp($ctx, [string]$sufixo) {
               if (@($d.missoes) -cnotcontains $missao) { $invalido = [string]$d.respostaSemMissao }
               elseif ($nivel -cnotmatch '^[0-9]{1,2}$' -or [int]$nivel -lt 1 -or [int]$nivel -gt [int]$d.niveis) { $invalido = [string]$d.respostaSemNivel }
               else { $argumentos += @($missao, [string][int]$nivel) }
+            }
+            elseif ($d.niveis) {                # o quebra-cabeça: só o nível (1 a 3); sem dizer, é o 1
+              $nivel = ([string]$a.nivel).Trim(); if (-not $nivel) { $nivel = '1' }
+              if ($nivel -cnotmatch '^[0-9]{1,2}$' -or [int]$nivel -lt 1 -or [int]$nivel -gt [int]$d.niveis) { $invalido = [string]$d.respostaSemNivel }
+              else { $argumentos += @('', [string][int]$nivel) }
             }
           }
         }
