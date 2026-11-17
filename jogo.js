@@ -99,6 +99,7 @@
       mensagem: 'jogo começou. O desafio é descobrir como jogar e resolver o desafio a partir da experiência.',
       inicio: { z: Z_ESPELHO + 1, rumo: 4 },    // a 1 m do espelho, de costas para ele
       bracoCaido: false,                        // carrega os objetos com o braço estendido, bem à vista
+      passoDeLado: true,                        // Q e E andam de lado, sem virar (como no desafio 4)
       espelhoDisfarcado: false,
       salas: TOTAL_SALAS,
     },
@@ -108,6 +109,7 @@
       // Carrega o presente com o braço caído: fica fora da própria visão e, no reflexo, é só
       // uma coisa pequena na mão. Assim o objeto não entrega logo de cara quem é o reflexo.
       bracoCaido: true,
+      passoDeLado: true,                        // Q e E andam de lado, sem virar (como no desafio 4)
       // true = espelho sem moldura, sem tom de vidro e sem a placa da sala (que aparece
       // invertida): o reflexo passa a parecer a continuação da sala.
       espelhoDisfarcado: false,
@@ -123,6 +125,7 @@
       // (ESPACO de frente para ela), com passagem livre nos dois sentidos; e é ele que a fecha, do mesmo jeito.
       portaManual: true,
       contador: false,                          // sem contador: nada na tela sugere que exista algo a cumprir
+      passoDeLado: true,                        // Q e E andam de lado, sem virar (como no desafio 4)
       falas: { pedido: 'Estou com sede', agradecimento: 'Obrigado!' },
     },
     4: {
@@ -228,7 +231,7 @@
   // O passo para trás (o botão S) é dado sem virar: o robô recua e continua olhando para onde olhava. É assim em todos os
   // desafios — na cidade desde a versão 6 das regras, e nas salas dos desafios 1 a 3 desde a 16. Antes disso o S dava
   // meia-volta e então o passo, e as gravações de antes são assistidas assim (ver reComMeiaVolta e meiaVoltaNasSalas):
-  // é para elas que este quadro ainda existe. (Nas salas não há passo de lado; na cidade, sim: ver mover.)
+  // é para elas que este quadro ainda existe. (Nas salas dos desafios 1 a 3 há passo de lado desde a versão 18 das regras; na cidade, sim: ver mover.)
   // Valor = quantos giros de 45° antes do passo. (Virar para os lados é outro comando.)
   const GIRO_DA_DIRECAO = { 'frente': 0, 'tras': 4 };
 
@@ -919,8 +922,9 @@
   ];
 
   // O objeto que aparece em cima da cabeça do robô, em toda sala, depois que o chão fica
-  // vazio: uma pirâmide cinza, que de frente (e no reflexo) aparece como um triângulo.
-  const CHAPEU = { nome: 'triângulo cinza', alt: 0.26, raio: 0.15, cor: 0x8a9099,
+  // vazio: uma pirâmide roxa, que de frente (e no reflexo) aparece como um triângulo. Roxa, e não cinza, porque o
+  // cinza se confundia com o próprio robô no espelho.
+  const CHAPEU = { nome: 'triângulo roxo', alt: 0.26, raio: 0.15, cor: 0x7b3fb0,
     geo: new T.ConeGeometry(0.15, 0.26, 4).rotateY(Math.PI / 4).toNonIndexed(), casca: cascaDoCone(0.15, 0.26, 4).rotateY(Math.PI / 4) };
   CHAPEU.geo.computeVertexNormals();            // faces planas, sem sombreado arredondado
 
@@ -4750,16 +4754,22 @@
   }
 
   // ---------- comandos ----------
+  // O passo de lado (Q e E) das salas dos desafios 1 a 3 só existe desde a versão 18 das regras: a gravação de antes
+  // assistida assim não anda de lado (ver semPassoDeLadoNasSalas). Na vila e na quadra, vale sempre (ver passoDeLado).
+  let semPassoDeLadoNasSalas = false;
+  const passoDeLadoAtivo = () => REGRAS.passoDeLado && !(semPassoDeLadoNasSalas && !REGRAS.vila);
   function mover(direcao, texto) {
     // 'esquerda' e 'direita' são o passo de lado: o robô anda para o lado sem virar, e continua
-    // olhando para onde olhava. Só existe no desafio 4 (REGRAS.passoDeLado): nos três primeiros
-    // o robô só anda para onde está olhando, de propósito.
+    // olhando para onde olhava. Existe onde REGRAS.passoDeLado está ligado (os desafios 1 a 6 e a
+    // quadra): nas gravações de antes da versão 18, nas salas dos desafios 1 a 3, não existe (ver passoDeLadoAtivo).
     if (campanha) return andarNaCampanha(direcao, texto);   // (nas missões o passo leva tempo, e podem ser vários de uma vez: ver "as missões")
     if (zumbi || (quebra && !quebraAnda)) return resposta(`mover ${direcao}`, false, 'o robô não sai do lugar');   // (nos zumbis ele só vira e atira; no quebra-cabeça fica de frente para a parede)
     if (estado.dirigindo) return carroManual ? dirigir(direcao) : resposta(`mover ${direcao}`, false, 'o carro anda sozinho: escolha um destino');   // dentro do carro, quem anda é ele
     // (na cidade, o passo para trás é como o de lado: o robô recua sem virar. Numa gravação de antes disso, ele dava meia-volta: ver reComMeiaVolta)
     // (nas salas dos desafios 1 a 3 é igual: o S recua sem virar. Era meia-volta e um passo até a versão 15 das regras: ver meiaVoltaNasSalas)
-    const lado = (REGRAS.passoDeLado ? { esquerda: 2, direita: -2, tras: reComMeiaVolta ? undefined : 4 } : { tras: meiaVoltaNasSalas ? undefined : 4 })[direcao], giro = lado === undefined ? GIRO_DA_DIRECAO[direcao] : 0;
+    const passo = passoDeLadoAtivo(), meiaVolta = REGRAS.vila ? reComMeiaVolta : meiaVoltaNasSalas;   // (na vila, o S de antes da versão 6 dava meia-volta; nas salas, o de antes da 16)
+    if (!passo && (direcao === 'esquerda' || direcao === 'direita')) return resposta(`mover ${direcao}`, false, 'botão inexistente');
+    const lado = (passo ? { esquerda: 2, direita: -2, tras: meiaVolta ? undefined : 4 } : { tras: meiaVolta ? undefined : 4 })[direcao], giro = lado === undefined ? GIRO_DA_DIRECAO[direcao] : 0;
     if (giro === undefined) return resposta(`mover ${direcao}`, false, 'direção inválida');
     escolhido = undefined;                      // mexeu-se: a escolha do alvo volta ao mais óbvio
     estado.rumo += giro;                        // vira mesmo que o passo acabe bloqueado
@@ -7563,7 +7573,7 @@
     T: texto => COLETIVO ? falar(texto) : escrever(texto),                // escreve no peito o texto que vem junto
     F: () => frame(),                           // o único que devolve algo: a imagem
   };
-  if (REGRAS.passoDeLado) Object.assign(BOTOES, { Q: () => mover('esquerda'), E: () => mover('direita') });   // desafio 4: um passo de lado, sem virar
+  if (REGRAS.passoDeLado) Object.assign(BOTOES, { Q: () => mover('esquerda'), E: () => mover('direita') });   // desafios 1 a 6: um passo de lado, sem virar
   if (quebra) BOTOES.SAIR = () => desistirDoQuebra();   // desafio 7: desistir do quebra-cabeça
   if (zumbi) for (const b of ['TAB', 'T']) BOTOES[b] = () => resposta(`apertar ${b}`, false, 'esse botão não faz nada aqui');   // desafio 8: só A, D, ESPACO, L e F servem
   if (zumbi) BOTOES.L = () => recarregar();     // ...e aqui o L recarrega a arma
@@ -7598,7 +7608,7 @@
   const quemJoga = { quem: 0, nome: '', modelo: '' }, contagem = { botoes: 0, imagens: 0, vitoria: null };   // (vitoria: as contas na hora em que o jogo foi vencido, para o pódio da lista de replays)
   // A versão das regras que mudam o que um botão faz, para a gravação antiga continuar igual
   // quando é assistida. 2: entre alvos do mesmo tipo, vale o mais central na imagem (ver ordemAntiga).
-  const VERSAO_DAS_REGRAS = 17;                 // (17: nas salas dos desafios 1 a 3, o chão só é alvo quando há lugar para soltar o que está na mão: ver chaoSempreAlvo; 16: nas salas dos desafios 1 a 3, o S recua sem virar, como na cidade: ver meiaVoltaNasSalas; 3: as portas que o jogador abre também fecham: ver portasNaoFecham; 4: o violeiro e o cachorro barram um canto da praça; 5: dá para entrar no carro; 6: na cidade, o S recua sem virar; 7: no coletivo, cada robô pede a sua missão na central; 8: o carro anda sozinho; 9: ele para para os robôs e pode ser chamado, e as casas 1 e 3 do coletivo revezam dois pedidos; 10: o que está num móvel aberto só é alvo se o robô o vê: ver aVista; 11: a poltrona da casa amarela foi para longe da cama, e o robô do desafio 4 começa na frente dela: ver POLTRONA_DO_QUARTO; 12: os móveis barram o robô com os cantos arredondados (ver noMovel) e, na cidade, o passo que não cabe inteiro vai até encostar (ver ateOnde); 13: no quebra-cabeça o robô não anda nem vira (ver quebraAnda); 14: os zumbis andam mais depressa, a arma tem um pente de balas, que é preciso recarregar, e a imagem tem o mapa dos zumbis e as balas (ver ZUMBI_ANTES, recarregar e desenharRadar); 15: nos zumbis, virar leva tempo (ver ZUMBI.giro))
+  const VERSAO_DAS_REGRAS = 18;                 // (18: nas salas dos desafios 1 a 3, Q e E dão passo de lado, sem virar, como no desafio 4: ver semPassoDeLadoNasSalas; 17: nas salas dos desafios 1 a 3, o chão só é alvo quando há lugar para soltar o que está na mão: ver chaoSempreAlvo; 16: nas salas dos desafios 1 a 3, o S recua sem virar, como na cidade: ver meiaVoltaNasSalas; 3: as portas que o jogador abre também fecham: ver portasNaoFecham; 4: o violeiro e o cachorro barram um canto da praça; 5: dá para entrar no carro; 6: na cidade, o S recua sem virar; 7: no coletivo, cada robô pede a sua missão na central; 8: o carro anda sozinho; 9: ele para para os robôs e pode ser chamado, e as casas 1 e 3 do coletivo revezam dois pedidos; 10: o que está num móvel aberto só é alvo se o robô o vê: ver aVista; 11: a poltrona da casa amarela foi para longe da cama, e o robô do desafio 4 começa na frente dela: ver POLTRONA_DO_QUARTO; 12: os móveis barram o robô com os cantos arredondados (ver noMovel) e, na cidade, o passo que não cabe inteiro vai até encostar (ver ateOnde); 13: no quebra-cabeça o robô não anda nem vira (ver quebraAnda); 14: os zumbis andam mais depressa, a arma tem um pente de balas, que é preciso recarregar, e a imagem tem o mapa dos zumbis e as balas (ver ZUMBI_ANTES, recarregar e desenharRadar); 15: nos zumbis, virar leva tempo (ver ZUMBI.giro))
   const gravando = !ASSISTINDO && GRAVACAO
     ? GRAVACAO.gravar(COLETIVO ? 'V' : DESAFIO, () => ({ versao: VERSAO_DAS_REGRAS, nome: COLETIVO ? 'coletivo' : quemJoga.nome, modelo: COLETIVO ? `${participantes.size} robôs, ${entregas} pedidos` : quemJoga.modelo, botoes: contagem.botoes, imagens: contagem.imagens, ganhou: estado.ganhou, alertas: contagem.alertas || undefined,   // (alertas: quantas vezes alguém pediu um arquivo do jogo sem ser a página, durante a partida: ver anotarAlerta)
       vitoria: contagem.vitoria || undefined, perdeu: estado.perdeu || undefined, assar: REGRAS.vila ? [ASSAR.pronto, ASSAR.queima] : undefined, sorte: COLETIVO ? sorte : quebra ? quebra.sorte : zumbi ? zumbi.sorte : undefined, pressa: zumbi && zumbi.pressa !== 1 ? zumbi.pressa : undefined,   // (sorte: o sorteio do começo, no coletivo: ver sortear; no quebra-cabeça, a partida: ver embaralharQuebra)
@@ -8454,6 +8464,7 @@
         limiteDaConta = () => fita.i < fita.eventos.length ? Number(fita.eventos[fita.i].t) || 0 : campanha.andar ? Infinity : horaDoTique(campanha.k);   // (depois do último acontecimento — a partida que ficou sem terminar — o robô acaba a caminhada em que estava, e a conta para ali)
       }
       if (!(Number(gravada.resumo.versao) >= 17)) chaoSempreAlvo = true;                                                // ...o chão, que nas salas era sempre um alvo para quem tinha algo na mão...
+      if (!(Number(gravada.resumo.versao) >= 18)) semPassoDeLadoNasSalas = true;                                        // ...o Q e o E, que nas salas dos desafios 1 a 3 não andavam de lado...
       if (!(Number(gravada.resumo.versao) >= 16)) meiaVoltaNasSalas = true;                                             // ...o S, que nas salas dos desafios 1 a 3 dava meia-volta antes do passo...
       if (zumbi && !(Number(gravada.resumo.versao) >= 15)) ZUMBI.giro = 0;                                             // ...o robô dos zumbis, que virava na hora...
       if (zumbi && !(Number(gravada.resumo.versao) >= 14)) { Object.assign(ZUMBI, ZUMBI_ANTES); zumbi.balas = ZUMBI.pente; semMapaDosZumbis = true; }   // ...os zumbis, que eram mais lentos, as balas, que não acabavam, e a imagem, que não tinha o mapa nem as balas...

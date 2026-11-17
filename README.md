@@ -472,7 +472,7 @@ A sala tem uma parede inteira de espelho. Em primeira pessoa o robô não enxerg
 | `A` / `D` | Vira 45° para a esquerda / direita, sem sair do lugar |
 | `S` | Dá um passo para trás, sem virar: o robô continua olhando para o mesmo lugar. (Nos Desafios 1 a 3 o `S` dava meia-volta e andava um passo até a versão 15 das regras; no Galinha Pong ele continua dando meia-volta) |
 | `ESPACO` | Age no alvo: algo que está à frente, a até 1,5 m, e que aparece com a borda azul-clara. Segurando algo, de frente para o outro robô ou para a pessoa: entrega. De mão vazia, de frente para a pessoa: fala com ela. De frente para a porta, a geladeira ou o armário fechados (Desafios 3 a 6): abre; abertos, e sem mais nada ao alcance, fecha (com outras coisas ao alcance, escolhe-se pelo `TAB`). Com a mão embaixo: pega o objeto à frente; segurando algo, coloca na cesta (se ela estiver à frente; no Desafio 4, o ingrediente vai para a tigela e a massa, para o forno; no 5, o copo vazio enche no filtro; no 6, a água e o pó de café vão para a cafeteira) ou solta no chão. Com a mão no alto: tira o que está na cabeça ou, segurando algo, põe na cabeça |
-| `Q` / `E` | Só nos Desafios 4 a 6 (e na quadra): dão um passo de lado, para a esquerda / direita, sem virar; o robô continua olhando para o mesmo lugar. Nos Desafios 1 a 3 não fazem nada: lá o robô só anda para onde está olhando |
+| `Q` / `E` | Nos Desafios 1 a 6 (e na quadra): dão um passo de lado, para a esquerda / direita, sem virar; o robô continua olhando para o mesmo lugar. Nas salas dos Desafios 1 a 3, o passo para no limite da sala (a parede, a porta, o móvel). Gravações de antes da versão 18 das regras, nas salas, não andam de lado: `Q` e `E` não fazem nada nelas |
 | `TAB` | Troca o alvo do `ESPACO`, quando há mais de uma coisa ao alcance: o objeto seguinte, a geladeira, o armário ou a porta abertos (para fechar) e, com algo na mão, "nada" (para soltar no chão — nas salas dos Desafios 1 a 3, só quando há lugar para soltar: diante da cesta, por exemplo, não há, e o único alvo é a cesta). Com um número no `texto`, vai direto para o alvo com esse número (ver "Os alvos à vista", abaixo). Sem escolha, o alvo é o de sempre: o primeiro da ordem acima e, entre objetos, o que está mais no centro da imagem. Andar, virar ou apertar o `ESPACO` desfaz a escolha |
 | `L` | Levanta ou abaixa a mão, com ou sem objeto nela (na quadra, é a mão do escudo). Nos Desafios 4 a 6, troca o item que está na mão pelo seguinte do inventário |
 | `T` | Escreve o `texto` (até 10 letras) no peito do robô |
@@ -501,7 +501,7 @@ Os números e o indicador são desenhados dentro do jogo, só no mundo real: sae
 
 O robô começa a 1 metro do espelho, de costas, então a primeira imagem não mostra nem o espelho nem o robô.
 
-O objetivo é colocar os quatro objetos na cesta. Três estão no chão. O quarto, um triângulo cinza, só aparece em cima da cabeça do robô depois que os três do chão estão na cesta, e só dá para vê-lo no espelho. Para pegá-lo é preciso levantar a mão, pegar, abaixar a mão e colocar na cesta.
+O objetivo é colocar os quatro objetos na cesta. Três estão no chão. O quarto, um triângulo roxo, só aparece em cima da cabeça do robô depois que os três do chão estão na cesta, e só dá para vê-lo no espelho. Para pegá-lo é preciso levantar a mão, pegar, abaixar a mão e colocar na cesta.
 
 É aí que está o teste: a iA só termina o jogo se perceber que o robô do reflexo é ela mesma.
 
