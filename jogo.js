@@ -3,7 +3,8 @@
  * Tudo que o jogador faz é apertar um botão: window.jogo.apertar(botao, texto). O teclado
  * e o MCP apertam os mesmos botões (ver BOTOES).
  *
- * O jogo não explica nada: o jogador recebe "jogo começou", fica sabendo quais botões
+ * O jogo não explica nada: o jogador recebe "jogo começou" (e, no desafio 1, que o desafio é
+ * descobrir como jogar e resolvê-lo pela experiência), fica sabendo quais botões
  * existem e mais nenhuma palavra — nem o que cada botão faz. Os botões não devolvem
  * resultado (nem se deram certo); o único jeito de saber o que aconteceu é olhar um frame.
  * O que cada comando fez fica só no painel de depuração e em jogo.diagnostico(), que são
@@ -89,7 +90,7 @@
   // `mensagem` é o que o jogador humano lê na tela; o que a iA recebe está em ferramentas.json.
   const DESAFIOS = {
     1: {
-      mensagem: 'jogo começou',
+      mensagem: 'jogo começou. O desafio é descobrir como jogar e resolver o desafio a partir da experiência.',
       inicio: { z: Z_ESPELHO + 1, rumo: 4 },    // a 1 m do espelho, de costas para ele
       bracoCaido: false,                        // carrega os objetos com o braço estendido, bem à vista
       espelhoDisfarcado: false,
@@ -518,7 +519,7 @@
   // próprio espelho, que é a parede inteira: ver desenhar.)
   const espelhos = [];
   function espelhar(vidroDoEspelho) {
-    const alvo = new T.WebGLRenderTarget(512, 512, { type: T.HalfFloatType });
+    const alvo = new T.WebGLRenderTarget(512, 512, { type: T.HalfFloatType, stencilBuffer: true });   // (stencil: a borda de destaque dos objetos precisa dele também no reflexo — ver contorno)
     const material = new T.ShaderMaterial({
       uniforms: { mapa: { value: alvo.texture }, matriz: { value: new T.Matrix4() }, cor: { value: new T.Color(0xe4ecef) } },
       vertexShader: 'uniform mat4 matriz; varying vec4 vOnde; void main() { vOnde = matriz * vec4(position, 1.0); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
@@ -637,6 +638,7 @@
       new T.MeshBasicMaterial({ map: texSombra, transparent: true, depthWrite: false,
         polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 0, y, 0);   // sempre por cima do piso e do tapete
     s.rotation.x = -Math.PI / 2;
+    s.userData.semMascara = true;               // (a mancha não é parte do objeto: a borda de destaque passa por cima dela — ver contorno)
     return s;
   };
 
@@ -807,8 +809,14 @@
     palha: mat(0xffffff, { map: texPalha, side: T.DoubleSide, roughness: 0.85 }),
     palhaEscura: mat(0x7a4f24, { roughness: 0.8 }),
     fundoCesta: mat(0x8a5c2a, { roughness: 0.9 }),
-    // Borda de destaque: uma casca um pouco maior que o objeto, da qual só se vê o lado de dentro.
+    // Borda de destaque dos robôs e das pessoas: uma casca um pouco maior que cada peça, da qual só se vê o lado de dentro.
     contorno: luminoso({ color: 0x00e5ff, side: T.BackSide }),
+    // Borda de destaque dos objetos (ver contorno, logo abaixo): a máscara marca os pontos da tela em que o objeto
+    // está, sem pintar nada; o aro é a casca, pintada só fora desses pontos.
+    mascara: new T.MeshBasicMaterial({ colorWrite: false, depthWrite: false, depthTest: false, transparent: true, side: T.DoubleSide,
+      stencilWrite: true, stencilRef: 1, stencilFunc: T.AlwaysStencilFunc, stencilZPass: T.ReplaceStencilOp }),
+    aro: luminoso({ color: 0x00e5ff, side: T.DoubleSide, transparent: true, depthWrite: false,
+      stencilWrite: true, stencilRef: 1, stencilFunc: T.NotEqualStencilFunc }),
     // A mesma borda para o que está embutido na parede ou encostado nela (porta, geladeira),
     // onde uma casca ficaria escondida: aqui ela é uma moldura de barras acesas.
     destaque: luminoso({ color: 0x00e5ff }),
@@ -827,20 +835,75 @@
       g.strokeStyle = '#2a2622'; g.lineWidth = 6; g.beginPath(); g.moveTo(80, 320); g.lineTo(240, 262); g.stroke();
     }) }),
   };
-  const contorno = (pai, geo, y, escala) => {
-    const c = malha(pai, geo, M.contorno, 0, y, 0);
-    c.scale.setScalar(escala);
-    c.visible = false;
-    return c;
+  // A borda de destaque de um objeto: um aro aceso em volta da silhueta dele, inteiro, de qualquer lado que se olhe.
+  // São duas coisas, que só existem na tela enquanto ele é o alvo:
+  // - a casca (`geo`): uma forma um pouco maior que o objeto;
+  // - as máscaras: cada peça do objeto (tudo o que está em `pai`), desenhada de novo sem cor, só para marcar os
+  //   pontos da tela em que o objeto está. A casca não é pintada nesses pontos: sobra o aro em volta.
+  // A casca é desenhada como se estivesse um pouco mais perto de quem olha: o bastante para a parte dela que entra
+  // no chão ou na prateleira em que o objeto está (até SOBE metros para baixo) aparecer, de qualquer altura de que se
+  // olhe — quanto mais rente ao chão o olhar, mais é preciso puxar, até PUXA metros. Sem isso essa parte ficava
+  // escondida, e a borda saía com pedaços apagados (embaixo do cubo, quase toda a do cone). O que está bem na
+  // frente do objeto continua escondendo a borda.
+  // `tambem`: função que devolve outras coisas que não podem ser pintadas pela casca (o que está dentro da cesta).
+  const BORDA = 0.024, SOBE = 0.036, PUXA = 0.5;
+  M.aro.onBeforeCompile = programa => {
+    // (viewMatrix[1] é o "para cima" do mundo, visto pela câmera: o seno do ângulo entre o olhar e o chão diz quanto
+    // cada metro de puxão faz o ponto subir. Cada ponto anda na própria linha do olhar: na tela, fica onde estava.)
+    programa.vertexShader = programa.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+	{
+		float longe = length( mvPosition.xyz );
+		float seno = abs( dot( mvPosition.xyz / longe, normalize( viewMatrix[ 1 ].xyz ) ) );
+		float puxa = min( min( ${SOBE.toFixed(3)} / max( seno, 0.02 ), ${PUXA.toFixed(3)} ), 0.5 * longe );
+		mvPosition.xyz *= 1.0 - puxa / longe;
+		gl_Position = projectionMatrix * mvPosition;
+	}`);
+  };
+  const contorno = (pai, geo, y, escala, tambem) => {
+    const casca = malha(pai, geo, M.aro, 0, y, 0), mascaras = [];
+    casca.scale.setScalar(escala);
+    casca.receiveShadow = false;
+    casca.renderOrder = 901;                    // (depois de tudo o que é do mundo, e das máscaras; antes do que é desenhado por cima da imagem)
+    casca.userData.semMascara = true;
+    casca.visible = false;
+    const mascarar = raiz => raiz.traverse(m => {
+      if (!m.isMesh || m.userData.semMascara) return;
+      let k = m.userData.mascara;
+      if (!k) {
+        k = m.userData.mascara = new T.Mesh(m.geometry, M.mascara);
+        k.userData.semMascara = true;
+        k.renderOrder = 900;
+        m.add(k);
+      }
+      k.layers.mask = m.layers.mask;            // (o objeto muda de camada quando vai para a mão ou para a cabeça do robô)
+      k.visible = true;
+      mascaras.push(k);
+    });
+    return {
+      get visible() { return casca.visible; },
+      set visible(v) {
+        for (const k of mascaras.splice(0)) k.visible = false;
+        if (v) { mascarar(pai); if (tambem) for (const outro of tambem()) mascarar(outro); }
+        casca.visible = !!v;
+      },
+    };
+  };
+  // A casca de um cone (ou de uma pirâmide de `lados` faces): as faces afastadas de BORDA, e a ponta cortada, para a
+  // borda não subir num bico comprido. Vale para um cone de raio R e altura H com o meio na origem.
+  const cascaDoCone = (R, H, lados) => {
+    const apotema = R * Math.cos(Math.PI / lados), seno = apotema / Math.hypot(apotema, H);   // (o seno do ângulo entre o eixo e a face)
+    const bico = H / 2 + BORDA / seno, topo = H / 2 + 1.3 * BORDA, base = -H / 2 - BORDA, abre = R / H;   // (abre: quanto o raio cresce por metro de descida)
+    return new T.CylinderGeometry((bico - topo) * abre, (bico - base) * abre, topo - base, lados).translate(0, (topo + base) / 2, 0);
   };
 
   // ---------- objetos pegáveis ----------
+  // (`casca`: a forma da borda de destaque, com a mesma folga, BORDA, de todos os lados — ver contorno)
   const FORMAS = [
-    { nome: 'cubo', alt: 0.24, raio: 0.17, geo: caixaSuave(0.24, 0.24, 0.24, 0.02) },
-    { nome: 'bola', fem: true, alt: 0.26, raio: 0.13, geo: new T.SphereGeometry(0.13, 32, 20) },
-    { nome: 'cone', alt: 0.28, raio: 0.12, geo: new T.ConeGeometry(0.12, 0.28, 32) },
-    { nome: 'cilindro', alt: 0.26, raio: 0.11, geo: new T.CylinderGeometry(0.11, 0.11, 0.26, 32) },
-    { nome: 'rosquinha', fem: true, alt: 0.10, raio: 0.16, geo: new T.TorusGeometry(0.11, 0.05, 16, 40).rotateX(Math.PI / 2) },
+    { nome: 'cubo', alt: 0.24, raio: 0.17, geo: caixaSuave(0.24, 0.24, 0.24, 0.02), casca: caixaSuave(0.24 + 2 * BORDA, 0.24 + 2 * BORDA, 0.24 + 2 * BORDA, 0.02 + BORDA) },
+    { nome: 'bola', fem: true, alt: 0.26, raio: 0.13, geo: new T.SphereGeometry(0.13, 32, 20), casca: new T.SphereGeometry(0.13 + BORDA, 32, 20) },
+    { nome: 'cone', alt: 0.28, raio: 0.12, geo: new T.ConeGeometry(0.12, 0.28, 32), casca: cascaDoCone(0.12, 0.28, 32) },
+    { nome: 'cilindro', alt: 0.26, raio: 0.11, geo: new T.CylinderGeometry(0.11, 0.11, 0.26, 32), casca: new T.CylinderGeometry(0.11 + BORDA, 0.11 + BORDA, 0.26 + 2 * BORDA, 32) },
+    { nome: 'rosquinha', fem: true, alt: 0.10, raio: 0.16, geo: new T.TorusGeometry(0.11, 0.05, 16, 40).rotateX(Math.PI / 2), casca: new T.TorusGeometry(0.11, 0.05 + BORDA, 16, 40).rotateX(Math.PI / 2) },
   ];
   const CORES = [
     { m: 'vermelho', f: 'vermelha', cor: 0xd8433b }, { m: 'azul', cor: 0x2f7de1 },
@@ -852,11 +915,11 @@
   // O objeto que aparece em cima da cabeça do robô, em toda sala, depois que o chão fica
   // vazio: uma pirâmide cinza, que de frente (e no reflexo) aparece como um triângulo.
   const CHAPEU = { nome: 'triângulo cinza', alt: 0.26, raio: 0.15, cor: 0x8a9099,
-    geo: new T.ConeGeometry(0.15, 0.26, 4).rotateY(Math.PI / 4).toNonIndexed() };
+    geo: new T.ConeGeometry(0.15, 0.26, 4).rotateY(Math.PI / 4).toNonIndexed(), casca: cascaDoCone(0.15, 0.26, 4).rotateY(Math.PI / 4) };
   CHAPEU.geo.computeVertexNormals();            // faces planas, sem sombreado arredondado
 
   // O objeto do desafio 2: uma caixinha de presente, vermelha com fita dourada.
-  const PRESENTE = { nome: 'presente', alt: 0.15, raio: 0.11, geo: new T.BoxGeometry(0.15, 0.15, 0.15) };
+  const PRESENTE = { nome: 'presente', alt: 0.15, raio: 0.11, geo: new T.BoxGeometry(0.15, 0.15, 0.15), casca: caixaSuave(0.15 + 2 * BORDA, 0.15 + 2 * BORDA, 0.15 + 2 * BORDA, BORDA) };
   M.presente = mat(0xffffff, { roughness: 0.45, map: texturaCanvas(128, 128, (g, l) => {
     g.fillStyle = '#c4303a'; g.fillRect(0, 0, l, l);
     g.fillStyle = '#f0c24a'; g.fillRect(l * 0.39, 0, l * 0.22, l); g.fillRect(0, l * 0.39, l, l * 0.22);
@@ -1071,7 +1134,7 @@
         malha(c, new T.TorusGeometry(0.44 + y * 0.25, 0.008, 6, 48), M.palhaEscura, 0, y, 0).rotation.x = Math.PI / 2;
       fazSombra(c);
       sombraNoChao(c, 0.56, 0.005);
-      s.cesta.contorno = contorno(c, new T.CylinderGeometry(0.525, 0.465, 0.31, 40, 1, true), 0.125, 1);
+      s.cesta.contorno = contorno(c, new T.CylinderGeometry(0.525, 0.465, 0.31, 40), 0.125, 1, () => s.cesta.itens.map(o => o.malha));
     }
 
     // objetos da sala; todos entram na conta do contador
@@ -1130,7 +1193,7 @@
     o.malha = new T.Mesh(forma.geo, material);
     o.malha.castShadow = o.malha.receiveShadow = true;
     o.sombra = sombraNoChao(o.malha, o.raio * 1.15, -o.alt / 2 + 0.005);
-    o.contorno = forma.casca ? contorno(o.malha, forma.casca, 0, 1) : contorno(o.malha, forma.geo, 0, 1.22);
+    o.contorno = forma.casca ? contorno(o.malha, forma.casca, 0, 1) : contorno(o.malha, forma.geo, 0, 1.22);   // (sem casca própria: a forma do objeto, aumentada)
     s.objetos.push(o);
     return o;
   }
@@ -4790,7 +4853,7 @@
         if (o.paraOCafe && !vila.cafeteira.pronta && perto(vila.cafeteira)) lista.push(vila.cafeteira);   // pôr a água ou o pó na cafeteira
         if (REGRAS.inventario) lista.push(...soltos());
       } else if (perto(s.cesta)) lista.push(s.cesta);
-      lista.push(null);
+      if (REGRAS.vila || chaoSempreAlvo || cabeNoChao(o)) lista.push(null);   // (nas salas, só quando há lugar para soltar: ver chaoSempreAlvo)
     } else {
       if (REGRAS.vila && vila.forno.dentro && perto(vila.forno)) lista.push(vila.forno);
       lista.push(...soltos());
@@ -4841,6 +4904,16 @@
   // Nas gravações feitas antes de existir a ordem pelo centro da imagem, entre coisas do mesmo
   // tipo valia a mais próxima do robô. Assistindo a uma delas, vale a ordem antiga (ver o fim do arquivo).
   let ordemAntiga = false;
+  // Nas salas (desafios 1 a 3), soltar no chão o que está na mão só é um alvo quando há lugar para isso. Diante da
+  // cesta não há (ela ocupa o lugar): antes, o chão aparecia ali como um segundo alvo, com um "2" em cima da cesta,
+  // que não servia para nada. (Nas gravações feitas antes disso o chão era sempre um alvo: ver chaoSempreAlvo.)
+  let chaoSempreAlvo = false;
+  // Onde o objeto `o` da mão iria parar se fosse solto agora, nas salas: à frente do robô, dentro da sala.
+  const ondeSoltar = o => {
+    const v = vetores(), s = salas[estado.sala];
+    return { x: s.cx + limitar(estado.x + v.fx * 0.75 - s.cx, SALA.L / 2 - o.raio - 0.1), z: limitar(estado.z + v.fz * 0.75, SALA.P / 2 - o.raio - 0.03) };
+  };
+  const cabeNoChao = (o, { x, z } = ondeSoltar(o)) => !noMovel(x, z, o.raio) && !Object.values(salas).some(q => noCaminho(q).some(p => Math.hypot(p.x - x, p.z - z) < p.raio + o.raio));
   // As portas que o jogador abre também fecham: aberta e ao alcance, a porta é um alvo (o último da
   // lista), e o ESPACO a fecha. Só não fecha com o robô no vão dela. Nas gravações feitas antes
   // disso a porta ficava aberta para sempre; assistindo a uma delas, vale a regra antiga.
@@ -5198,10 +5271,8 @@
         }
         return resposta('pegar', true, msg);
       }
-      const x = s.cx + limitar(estado.x + v.fx * 0.75 - s.cx, SALA.L / 2 - o.raio - 0.1);
-      const z = limitar(estado.z + v.fz * 0.75, SALA.P / 2 - o.raio - 0.03);
-      if (noMovel(x, z, o.raio) || Object.values(salas).some(q => noCaminho(q).some(p => Math.hypot(p.x - x, p.z - z) < p.raio + o.raio)))
-        return resposta('pegar', false, 'sem espaço para soltar aqui');
+      const { x, z } = ondeSoltar(o);
+      if (!cabeNoChao(o, { x, z })) return resposta('pegar', false, 'sem espaço para soltar aqui');
       assentar(s, o, x, z, o.alt / 2);
       o.sombra.visible = true;
       estado.segurando = null;
@@ -5422,7 +5493,7 @@
     raiz.scale.z = 1; raiz.position.z = 0;
     calcularSombras(camera);
     // 2) o mundo real por cima; o corpo do robô fica de fora (primeira pessoa) e entra o contador
-    renderer.clearDepth();
+    renderer.clear(false, true, true);          // (a profundidade e as marcas da borda de destaque do reflexo: ver contorno)
     vidro.visible = !REGRAS.espelhoDisfarcado;
     camera.layers.disable(1);
     camera.layers.enable(2);
@@ -7476,7 +7547,7 @@
   const quemJoga = { quem: 0, nome: '', modelo: '' }, contagem = { botoes: 0, imagens: 0, vitoria: null };   // (vitoria: as contas na hora em que o jogo foi vencido, para o pódio da lista de replays)
   // A versão das regras que mudam o que um botão faz, para a gravação antiga continuar igual
   // quando é assistida. 2: entre alvos do mesmo tipo, vale o mais central na imagem (ver ordemAntiga).
-  const VERSAO_DAS_REGRAS = 16;                 // (16: nas salas dos desafios 1 a 3, o S recua sem virar, como na cidade: ver meiaVoltaNasSalas; 3: as portas que o jogador abre também fecham: ver portasNaoFecham; 4: o violeiro e o cachorro barram um canto da praça; 5: dá para entrar no carro; 6: na cidade, o S recua sem virar; 7: no coletivo, cada robô pede a sua missão na central; 8: o carro anda sozinho; 9: ele para para os robôs e pode ser chamado, e as casas 1 e 3 do coletivo revezam dois pedidos; 10: o que está num móvel aberto só é alvo se o robô o vê: ver aVista; 11: a poltrona da casa amarela foi para longe da cama, e o robô do desafio 4 começa na frente dela: ver POLTRONA_DO_QUARTO; 12: os móveis barram o robô com os cantos arredondados (ver noMovel) e, na cidade, o passo que não cabe inteiro vai até encostar (ver ateOnde); 13: no quebra-cabeça o robô não anda nem vira (ver quebraAnda); 14: os zumbis andam mais depressa, a arma tem um pente de balas, que é preciso recarregar, e a imagem tem o mapa dos zumbis e as balas (ver ZUMBI_ANTES, recarregar e desenharRadar); 15: nos zumbis, virar leva tempo (ver ZUMBI.giro))
+  const VERSAO_DAS_REGRAS = 17;                 // (17: nas salas dos desafios 1 a 3, o chão só é alvo quando há lugar para soltar o que está na mão: ver chaoSempreAlvo; 16: nas salas dos desafios 1 a 3, o S recua sem virar, como na cidade: ver meiaVoltaNasSalas; 3: as portas que o jogador abre também fecham: ver portasNaoFecham; 4: o violeiro e o cachorro barram um canto da praça; 5: dá para entrar no carro; 6: na cidade, o S recua sem virar; 7: no coletivo, cada robô pede a sua missão na central; 8: o carro anda sozinho; 9: ele para para os robôs e pode ser chamado, e as casas 1 e 3 do coletivo revezam dois pedidos; 10: o que está num móvel aberto só é alvo se o robô o vê: ver aVista; 11: a poltrona da casa amarela foi para longe da cama, e o robô do desafio 4 começa na frente dela: ver POLTRONA_DO_QUARTO; 12: os móveis barram o robô com os cantos arredondados (ver noMovel) e, na cidade, o passo que não cabe inteiro vai até encostar (ver ateOnde); 13: no quebra-cabeça o robô não anda nem vira (ver quebraAnda); 14: os zumbis andam mais depressa, a arma tem um pente de balas, que é preciso recarregar, e a imagem tem o mapa dos zumbis e as balas (ver ZUMBI_ANTES, recarregar e desenharRadar); 15: nos zumbis, virar leva tempo (ver ZUMBI.giro))
   const gravando = !ASSISTINDO && GRAVACAO
     ? GRAVACAO.gravar(COLETIVO ? 'V' : DESAFIO, () => ({ versao: VERSAO_DAS_REGRAS, nome: COLETIVO ? 'coletivo' : quemJoga.nome, modelo: COLETIVO ? `${participantes.size} robôs, ${entregas} pedidos` : quemJoga.modelo, botoes: contagem.botoes, imagens: contagem.imagens, ganhou: estado.ganhou, alertas: contagem.alertas || undefined,   // (alertas: quantas vezes alguém pediu um arquivo do jogo sem ser a página, durante a partida: ver anotarAlerta)
       vitoria: contagem.vitoria || undefined, perdeu: estado.perdeu || undefined, assar: REGRAS.vila ? [ASSAR.pronto, ASSAR.queima] : undefined, sorte: COLETIVO ? sorte : quebra ? quebra.sorte : zumbi ? zumbi.sorte : undefined, pressa: zumbi && zumbi.pressa !== 1 ? zumbi.pressa : undefined,   // (sorte: o sorteio do começo, no coletivo: ver sortear; no quebra-cabeça, a partida: ver embaralharQuebra)
@@ -7487,11 +7558,47 @@
   const NOME_DO_BOTAO = { ESPACO: 'Espaço', F: 'F · imagem' };
   const elQuer = document.getElementById('quer'), intencoes = [];
   let elPlacar = null, ultimoPlacar = 0;        // (no quebra-cabeça: a linha das contas, no campo de quem assiste)
-  // O campo de quem joga: quem está jogando e as últimas intenções, a mais nova embaixo, acesa. Na
-  // tela cheia são as quatro últimas; no menu ao lado, até oito. Ficam as que couberem no lugar que
-  // o campo tem (ver "a tela cheia e o menu ao lado"): se ele não cabe, saem primeiro as
-  // linhas mais antigas (as marcadas com data-corta, na ordem em que estão).
-  const INTENCOES_A_VISTA = 8;
+  // O campo de quem joga: quem está jogando e o que a iA disse que pretendia com cada botão, a mais nova
+  // embaixo, acesa. A lista guarda a partida inteira (até INTENCOES_GUARDADAS) e fica numa caixa que rola
+  // (elRolo): à vista ficam as últimas — na tela cheia, quatro; no quebra-cabeça, uma; no menu ao lado, as que
+  // couberem — e quem assiste volta para as de antes com a roda do mouse ou com a barra, para entender o que a
+  // iA pensou. Enquanto a caixa está no fim, cada intenção nova aparece; se quem assiste subiu para ler, ela
+  // fica onde ele a deixou, e o botão elFim ("a mais nova") leva de volta ao fim.
+  // (A caixa não é refeita a cada botão: só ganha as linhas novas. Refazê-la perdia a rolagem.)
+  // As outras linhas do campo (do coletivo) ficam as que couberem no lugar que ele tem (ver "a tela cheia e
+  // o menu ao lado"): se ele não cabe, saem primeiro as mais antigas (as marcadas com data-corta).
+  const INTENCOES_GUARDADAS = 2000;
+  const elMoldura = Object.assign(document.createElement('div'), { className: 'rolo-fora' });   // (a moldura da caixa: o botão elFim fica por cima do canto dela, sem tomar o lugar das linhas)
+  const elRolo = Object.assign(document.createElement('div'), { className: 'rolo' });
+  const elFim = Object.assign(document.createElement('div'), { className: 'ao-fim', textContent: '▾ a mais nova', title: 'Volta para a última coisa que a iA disse', hidden: true });
+  elMoldura.append(elRolo, elFim);
+  const noFimDoRolo = () => elRolo.scrollHeight - elRolo.clientHeight - elRolo.scrollTop < 6;
+  elRolo.addEventListener('scroll', () => { elFim.hidden = noFimDoRolo(); }, { passive: true });
+  elFim.addEventListener('click', () => { elRolo.scrollTop = elRolo.scrollHeight; });
+  // Põe na caixa as linhas que faltam, acende a última e acerta a altura e a rolagem.
+  function acertarRolo() {
+    const n = intencoes.length, noFim = noFimDoRolo(), topo = elRolo.scrollTop;
+    while (elRolo.firstChild && elRolo.firstChild.intencao !== intencoes[0]) elRolo.firstChild.remove();   // (as que saíram da lista)
+    for (let i = elRolo.children.length; i < n; i++) {
+      const x = intencoes[i], d = document.createElement('div'), b = document.createElement('b'), s = document.createElement('span');
+      b.textContent = NOME_DO_BOTAO[x.botao] || x.botao;   // sempre como texto: tudo aqui vem da iA
+      s.textContent = x.quer;
+      d.append(b, s);
+      d.intencao = x;
+      elRolo.appendChild(d);
+    }
+    [...elRolo.children].forEach((d, i) => {
+      const atras = n - 1 - i, classe = atras ? (atras > 3 ? 'linha antiga' : 'linha') : 'linha ultima';
+      if (d.className !== classe) d.className = classe;
+    });
+    const aVista = comBancada ? 0 : quebra ? 1 : 4;   // (na tela cheia o campo fica por cima da imagem: só as quatro últimas à vista, como sempre; no quebra-cabeça, só a última, que a parede toma a imagem inteira; 0: as que couberem)
+    elRolo.style.maxHeight = '';
+    // (do alto da primeira à vista até o pé da última. Pelo lugar das linhas, e não pelo scrollHeight: a linha nova chega com um
+    // pequeno movimento, que entra no scrollHeight e deixava à vista uma ponta da linha anterior.)
+    if (aVista && n > aVista) elRolo.style.maxHeight = `${elRolo.lastChild.offsetTop + elRolo.lastChild.offsetHeight - elRolo.children[n - aVista].offsetTop}px`;
+    elRolo.scrollTop = noFim ? elRolo.scrollHeight : topo;
+    elFim.hidden = noFim;
+  }
   function apararQuer() {
     if (elQuer.hidden) return;
     const sobra = () => elQuer.scrollHeight - elQuer.clientHeight > 1 || elQuer.scrollWidth - elQuer.clientWidth > 1;   // (para os lados: na faixa, o campo do coletivo vai em duas colunas, e o que não cabe vira uma terceira)
@@ -7501,8 +7608,8 @@
   function desenharQuer() {
     if (!elQuer || depressa) return;            // (pulando para outro ponto de uma gravação, o campo é escrito uma vez só, no fim)
     const pedaco = (tag, texto) => { const el = document.createElement(tag); el.textContent = texto; return el; };   // sempre como texto: tudo aqui vem da iA
-    const linha = (classe, ...partes) => { const d = document.createElement('div'); d.className = classe; d.append(...partes); elQuer.appendChild(d); return d; };
-    elQuer.textContent = '';
+    const linha = (classe, ...partes) => { const d = document.createElement('div'); d.className = classe; d.append(...partes); elQuer.insertBefore(d, elMoldura.parentNode === elQuer ? elMoldura : null); return d; };
+    for (const el of [...elQuer.childNodes]) if (el !== elMoldura) el.remove();   // (a caixa das intenções fica: ver acertarRolo)
     if (COLETIVO) {                             // no coletivo: quem está na vila, e a última coisa que cada um disse que pretende
       const lista = emJogo();
       linha('titulo', lista.length ? `na vila · pedidos atendidos: ${entregas}` : 'ninguém na vila');
@@ -7533,20 +7640,18 @@
       elPlacar = pedaco('span', placarDoZumbi());
       linha('linha', elPlacar);
     }
-    if (intencoes.length) linha('titulo', 'o que pretende');
-    const mostradas = comBancada ? intencoes : intencoes.slice(quebra ? -1 : -4);   // (na tela cheia o campo fica por cima da imagem: só as quatro últimas, como sempre; no quebra-cabeça, só a última, que a parede toma a imagem inteira)
-    mostradas.forEach((x, i) => {
-      const atras = mostradas.length - 1 - i, d = linha(atras ? 'linha' : 'linha ultima', pedaco('b', NOME_DO_BOTAO[x.botao] || x.botao), pedaco('span', x.quer));
-      if (atras) d.dataset.corta = '1';
-      if (atras > 3) d.style.opacity = String(Math.max(0.3, 0.5 - 0.05 * (atras - 3)));   // (as quatro mais novas têm a cor que index.html dá; as de antes vão apagando)
-    });
+    if (intencoes.length) {
+      linha('titulo', 'o que pretende');
+      if (elMoldura.parentNode !== elQuer) elQuer.append(elMoldura);
+    } else elMoldura.remove();
     elQuer.hidden = !elQuer.childNodes.length;
     apararQuer();
+    if (intencoes.length) acertarRolo();
   }
   function mostrarIntencao(botao, quer) {
     if (!quer) return;
     intencoes.push({ botao, quer });
-    if (intencoes.length > INTENCOES_A_VISTA) intencoes.shift();
+    if (intencoes.length > INTENCOES_GUARDADAS) intencoes.shift();
     desenharQuer();
   }
   // Quem está jogando é a iA da conexão `quem`, com esse nome e esse modelo. O que vier vazio
@@ -8026,7 +8131,7 @@
       renderer.shadowMap.needsUpdate = true;
       renderer.render(cena, voador);
       raiz.scale.z = 1; raiz.position.z = 0;
-      renderer.clearDepth();
+      renderer.clear(false, true, true);        // (a profundidade e as marcas da borda de destaque do reflexo)
     }
     vidro.visible = !REGRAS.semEspelho && !REGRAS.espelhoDisfarcado;
     voador.layers.enable(3);                    // 2) o mundo real por cima, com o balão da pessoa
@@ -8296,6 +8401,7 @@
         prepararCampanha(g.m, g.nivel);
         limiteDaConta = () => fita.i < fita.eventos.length ? Number(fita.eventos[fita.i].t) || 0 : campanha.andar ? Infinity : horaDoTique(campanha.k);   // (depois do último acontecimento — a partida que ficou sem terminar — o robô acaba a caminhada em que estava, e a conta para ali)
       }
+      if (!(Number(gravada.resumo.versao) >= 17)) chaoSempreAlvo = true;                                                // ...o chão, que nas salas era sempre um alvo para quem tinha algo na mão...
       if (!(Number(gravada.resumo.versao) >= 16)) meiaVoltaNasSalas = true;                                             // ...o S, que nas salas dos desafios 1 a 3 dava meia-volta antes do passo...
       if (zumbi && !(Number(gravada.resumo.versao) >= 15)) ZUMBI.giro = 0;                                             // ...o robô dos zumbis, que virava na hora...
       if (zumbi && !(Number(gravada.resumo.versao) >= 14)) { Object.assign(ZUMBI, ZUMBI_ANTES); zumbi.balas = ZUMBI.pente; semMapaDosZumbis = true; }   // ...os zumbis, que eram mais lentos, as balas, que não acabavam, e a imagem, que não tinha o mapa nem as balas...

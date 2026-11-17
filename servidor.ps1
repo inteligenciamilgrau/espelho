@@ -52,7 +52,11 @@ $ferramentasJson = ConvertTo-Json -InputObject @($config.ferramentas) -Depth 20 
 $MARCA = -join ([Security.Cryptography.SHA256]::Create().ComputeHash($utf8.GetBytes($ferramentasJson))[0..3] | ForEach-Object { $_.ToString('x2') })
 
 $VERSOES = '2025-06-18', '2025-03-26', '2024-11-05'      # versoes do protocolo MCP aceitas
-$BOTOES = @(($config.ferramentas | Where-Object { $_.name -eq 'apertar_botao' }).inputSchema.properties.botao.enum)   # os botoes que existem
+# Os botoes que existem: os que valem em todo jogo (sao os que a descricao da ferramenta diz a iA) e os que so
+# existem em alguns jogos (PASSAR e PRONTO, no Galinha Pong; SAIR, no quebra-cabeca, na vila coletiva e na cadeira
+# do comentarista). Esses a iA so conhece pelo texto de inicio do jogo que os tem: assim a iA dos outros desafios
+# nao ve botoes que la nao fazem nada (ela ficava testando).
+$BOTOES = @($config.botoes) + @($config.botoesDeAlgunsJogos)
 $DESAFIOS = @($config.desafios.PSObject.Properties.Name)       # os desafios que existem: '1', '2'...
 $ARQUIVOS = @{
   '/'                    = 'index.html', 'text/html; charset=utf-8'

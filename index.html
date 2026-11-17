@@ -164,6 +164,18 @@
   body.desafio #pilulas { display: flex; gap: 6px; flex: none; }
   body.desafio #pilulas > .painel { position: static; }
   body.desafio #quer { overflow: hidden; overflow-wrap: anywhere; }
+  /* o que a iA pretendia com cada botão: a partida inteira, numa caixa que rola (jogo.js: ver acertarRolo). À vista ficam as últimas;
+     a roda do mouse e a barra voltam para as de antes. Só a caixa recebe o mouse: o resto do campo deixa o clique passar para o jogo. */
+  body.desafio:not(.coletivo) #quer { display: flex; flex-direction: column; }
+  body.desafio:not(.coletivo) #quer > * { flex: none; }
+  body.desafio #quer .rolo-fora { position: relative; display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
+  body.desafio #quer .rolo { position: relative; flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; pointer-events: auto;
+    margin-right: -9px; padding-right: 3px; scrollbar-width: thin; scrollbar-gutter: stable; scrollbar-color: rgba(255, 255, 255, .3) transparent; }   /* (o lugar da barra fica sempre reservado: as linhas não mudam de largura quando ela aparece) */
+  body.desafio #quer .rolo .antiga { opacity: .42; }
+  body.desafio #quer .rolo:hover .linha:not(.ultima) { opacity: 1; }   /* (com o mouse em cima, as antigas acendem para a leitura) */
+  /* "a mais nova": aparece quando quem assiste subiu para ler as antigas; fica por cima do canto da caixa, sem tomar o lugar das linhas */
+  body.desafio #quer .ao-fim { position: absolute; right: 6px; bottom: 2px; padding: 4px 10px; border-radius: 999px; cursor: pointer; pointer-events: auto;
+    font: 600 11.5px/1 var(--texto); color: #07130d; background: var(--verde); box-shadow: 0 2px 10px rgba(0, 0, 0, .45); }
   /* tela cheia: uma pilha no canto de baixo, à direita (o campo das intenções em cima, as pílulas embaixo), que só sobe até --teto: o indicador
      do alvo, no alto da imagem, ou o pé da lista de teclas, quando ela está desse lado (jogo.js mede: ver arrumarPaineis) */
   body.desafio.tela-cheia #doca { right: 14px; bottom: 14px; width: min(412px, calc(100vw - 28px)); max-height: calc(100vh - 14px - var(--teto, 14vh)); flex-direction: column; align-items: flex-end; justify-content: flex-end; gap: 8px; }

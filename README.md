@@ -4,7 +4,7 @@ Um jogo 3D em primeira pessoa, feito para ser jogado por uma iA através de MCP.
 
 O jogo tem nove desafios. Os três primeiros começam no mesmo quarto; os três seguintes, numa cidade pequena; o sétimo é um quebra-cabeça; o oitavo, um jogo de tiro contra zumbis; e o nono, missões nesse campo de zumbis, com níveis de dificuldade:
 
-- **Desafio 1:** a iA não recebe nem o objetivo; só "jogo começou" (e a regra do jogo limpo, que todo desafio diz: jogar só com as ferramentas, sem ler o código).
+- **Desafio 1:** a iA não recebe nem o objetivo; só "jogo começou", que o desafio é descobrir como jogar e resolvê-lo a partir da experiência, e a regra do jogo limpo (que todo desafio diz: jogar só com as ferramentas, sem ler o código).
 - **Desafio 2:** a iA recebe uma única instrução: "Dê o objeto para o robô."
 - **Desafio 3:** há uma pessoa no quarto e nenhuma instrução; a iA recebe só "jogo começou".
 - **Desafio 4:** uma cidade pequena, com uma praça redonda no meio, quatro ruas, casas e lojas. O robô começa numa casa, com uma pessoa. Aqui a dificuldade é explorar e decidir, não descobrir os comandos: a iA recebe a explicação dos controles, mas não o que fazer.
@@ -109,7 +109,7 @@ Nos Desafios 1 a 9 e na vila coletiva a página tem dois arranjos. Troca-se pela
 **Tela cheia** (é como a página abre):
 
 - A imagem do jogo enche a janela, e os painéis de quem assiste ficam por cima dela, transparentes, nos cantos.
-- O campo de **quem está jogando e do que pretende** fica no canto de baixo, à direita, em cima das pílulas do som, da visão e dos replays. Mostra as quatro últimas intenções, a mais nova embaixo e acesa.
+- O campo de **quem está jogando e do que pretende** fica no canto de baixo, à direita, em cima das pílulas do som, da visão e dos replays. Mostra as quatro últimas intenções, a mais nova embaixo e acesa, e guarda a partida inteira: a lista rola. Com a roda do mouse em cima dela (ou pela barra) dá para voltar às mensagens antigas e entender o que a iA pensou. Enquanto você lê as antigas, a lista fica onde você a deixou, mesmo que cheguem intenções novas; o botão "a mais nova", que aparece no canto dela, leva de volta ao fim.
 - Numa janela larga a imagem mostra mais para os lados do que a iA vê: a imagem dela é sempre de 16 por 9.
 - No Desafio 7 esse campo fica embaixo, no meio (à direita está a bandeja das peças).
 
@@ -117,7 +117,7 @@ Nos Desafios 1 a 9 e na vila coletiva a página tem dois arranjos. Troca-se pela
 
 - A imagem tem o formato da que a iA recebe e mostra o mesmo desenho: você vê o que ela vê, nem mais para os lados, nem menos. Nada da página fica por cima dela.
 - Tudo o que é de quem assiste vai para um menu à esquerda da imagem: os controles da gravação (nos replays), quem está jogando e o que pretende, o que o jogo disse, a lista de teclas e as pílulas.
-- O campo das intenções mostra até oito. Se não couberem todas, saem as mais antigas.
+- O campo das intenções mostra as que couberem no lugar que ele tem, a mais nova embaixo, e rola do mesmo jeito para as de antes.
 - Numa janela mais quadrada, em que a coluna deixaria a imagem pequena demais, o menu vira uma faixa embaixo da imagem. Aí a lista de teclas não cabe nele e fica num canto da imagem (o `H` a guarda).
 - No modo voador e na tela dividida da vila coletiva o desenho toma todo o espaço ao lado do menu.
 
@@ -167,7 +167,7 @@ Ao vivo o jogo é lento: cada iA leva vários segundos para decidir um botão. P
 
 O relógio de cada jogador, no replay da quadra, mostra o tempo que ele levou ao vivo; a lista mostra quanto a partida durou de verdade.
 
-As gravações dos desafios guardam a versão das regras com que foram jogadas (`versao`). Uma gravação anterior à ordem dos alvos pelo centro da imagem é assistida com a ordem antiga (o objeto mais próximo primeiro), e uma anterior às portas que fecham (versão 3) é assistida com as portas que ficavam abertas para sempre, para o replay continuar igual à partida. Do mesmo jeito, numa gravação anterior ao violeiro (versão 4) o canto dele na praça está livre, e numa anterior ao carro dirigível (versão 5) o carro não é um alvo; numa anterior à versão 6, o `S` na cidade ainda dá meia-volta antes do passo; e numa gravação da vila coletiva anterior à versão 7 qualquer robô atendia qualquer casa. Numa anterior à versão 8 o carro é dirigido à mão (`W`, `S`, `A`, `D`), e a missão da vila tinha um prazo fixo de 8 minutos. Numa anterior à versão 9 o carro não para para ninguém, não há pontos de chamá-lo, e cada casa da vila só tem o pedido dela. Numa anterior à versão 10 o que estava dentro de um móvel aberto era alvo mesmo tapado pela porta dele. E uma gravação anterior à mudança da poltrona do quarto da casa amarela (versão 11) é assistida com a poltrona e o começo do robô onde ficavam. Numa anterior à versão 12 os móveis barram o robô com os cantos vivos (como retângulos), e o passo que não cabe inteiro não sai. Numa anterior à versão 13 o robô do quebra-cabeça anda e vira. Numa anterior à versão 14 os zumbis são os de antes (o primeiro leva 2 minutos e meio, cada um 6% menos, até 6 segundos), as balas não acabam, o `L` não faz nada e a imagem não tem o mapa nem as balas. Numa anterior à versão 15 o robô dos zumbis vira na hora. Numa anterior à versão 16 o `S`, nas salas dos Desafios 1 a 3, dá meia-volta antes do passo (hoje ele recua sem virar, como na cidade).
+As gravações dos desafios guardam a versão das regras com que foram jogadas (`versao`). Numa gravação anterior à versão 17, nas salas dos Desafios 1 a 3, "soltar no chão" era sempre um alvo para quem tinha algo na mão, mesmo sem lugar para soltar. Uma gravação anterior à ordem dos alvos pelo centro da imagem é assistida com a ordem antiga (o objeto mais próximo primeiro), e uma anterior às portas que fecham (versão 3) é assistida com as portas que ficavam abertas para sempre, para o replay continuar igual à partida. Do mesmo jeito, numa gravação anterior ao violeiro (versão 4) o canto dele na praça está livre, e numa anterior ao carro dirigível (versão 5) o carro não é um alvo; numa anterior à versão 6, o `S` na cidade ainda dá meia-volta antes do passo; e numa gravação da vila coletiva anterior à versão 7 qualquer robô atendia qualquer casa. Numa anterior à versão 8 o carro é dirigido à mão (`W`, `S`, `A`, `D`), e a missão da vila tinha um prazo fixo de 8 minutos. Numa anterior à versão 9 o carro não para para ninguém, não há pontos de chamá-lo, e cada casa da vila só tem o pedido dela. Numa anterior à versão 10 o que estava dentro de um móvel aberto era alvo mesmo tapado pela porta dele. E uma gravação anterior à mudança da poltrona do quarto da casa amarela (versão 11) é assistida com a poltrona e o começo do robô onde ficavam. Numa anterior à versão 12 os móveis barram o robô com os cantos vivos (como retângulos), e o passo que não cabe inteiro não sai. Numa anterior à versão 13 o robô do quebra-cabeça anda e vira. Numa anterior à versão 14 os zumbis são os de antes (o primeiro leva 2 minutos e meio, cada um 6% menos, até 6 segundos), as balas não acabam, o `L` não faz nada e a imagem não tem o mapa nem as balas. Numa anterior à versão 15 o robô dos zumbis vira na hora. Numa anterior à versão 16 o `S`, nas salas dos Desafios 1 a 3, dá meia-volta antes do passo (hoje ele recua sem virar, como na cidade).
 
 Na vila coletiva a gravação é uma só para a sessão inteira (desde que a página abriu), com quem entrou, quem saiu e o botão de cada robô. Na lista ela aparece como **Vila coletiva**.
 
@@ -280,18 +280,21 @@ Nos Desafios 1 a 9, a iA diz duas coisas que são só para quem assiste:
 
 Como isso aparece e o que não muda:
 
-- **Só quem assiste vê.** O nome, o modelo e as intenções aparecem num campo da página, no canto de baixo, à direita (as quatro últimas intenções, a mais nova acesa; no menu ao lado, até oito: veja [Tela cheia ou menu ao lado](#tela-cheia-ou-menu-ao-lado)), e vão para a gravação: o replay e a lista de replays mostram qual iA jogou. Nada disso entra na imagem que a iA recebe: essa imagem é só o desenho do jogo, sem nada do que a página põe por cima. (O nome dela à vista, no quarto do espelho, seria a maior das pistas.)
+- **Só quem assiste vê.** O nome, o modelo e as intenções aparecem num campo da página, no canto de baixo, à direita (as quatro últimas intenções à vista, a mais nova acesa, e as de antes rolando a lista: veja [Tela cheia ou menu ao lado](#tela-cheia-ou-menu-ao-lado)), e vão para a gravação: o replay e a lista de replays mostram qual iA jogou. Nada disso entra na imagem que a iA recebe: essa imagem é só o desenho do jogo, sem nada do que a página põe por cima. (O nome dela à vista, no quarto do espelho, seria a maior das pistas.)
 - **Não é pista.** A intenção não muda o que o botão faz, e a resposta continua sendo `recebido`, tenha dado certo ou não.
 - **Vale para todos os botões**, inclusive o `F` (a imagem). Sem a intenção o botão não é apertado, e a iA recebe o aviso de que faltou (veja a tabela abaixo). Depois da vitória nada disso é cobrado, e o teclado nunca precisa dizer nada.
 - **No Galinha Pong** a intenção não é cobrada nem mostrada (lá o nome e o modelo já aparecem no placar).
 
-O parâmetro `botao` só aceita os valores `W`, `A`, `S`, `D`, `Q`, `E`, `ESPACO`, `TAB`, `L`, `PASSAR`, `PRONTO`, `SAIR`, `T` e `F`. Essa lista vem dentro da definição da ferramenta, e é assim que a iA sabe quais botões existem. Nos Desafios 1 a 3 ela não recebe nenhuma descrição do que eles fazem; nos Desafios 4, 5 e 6, recebe a dos controles ao começar. (`PASSAR`, `PRONTO` e `SAIR` só existem na quadra, e o `TAB`, só nos desafios; fora do seu jogo não fazem nada. O `SAIR` é só do comentarista.)
+A definição da ferramenta diz à iA os botões que valem em todo jogo: `W`, `A`, `S`, `D`, `Q`, `E`, `ESPACO`, `TAB`, `L`, `T` e `F` (está na descrição do parâmetro `botao`, e é assim que a iA sabe quais botões existem). Nos Desafios 1 a 3 ela não recebe nenhuma descrição do que eles fazem; nos Desafios 4, 5 e 6, recebe a dos controles ao começar.
+
+Três botões só existem em alguns jogos e **não aparecem nessa lista**: `PASSAR` e `PRONTO` (Galinha Pong) e `SAIR` (quebra-cabeça, vila coletiva e cadeira do comentarista). Quem joga um desses jogos fica sabendo deles pelo texto de início do jogo; o servidor os aceita (`botoesDeAlgunsJogos`, em `ferramentas.json`). Antes eles vinham na lista de todo mundo, e a iA dos Desafios 1 a 3 perdia jogadas testando botões que lá não fazem nada. Um botão que não existe em nenhum jogo devolve `botao inexistente`.
 
 As respostas são sempre as mesmas, para não dar pista:
 
 | Situação | Resposta |
 |---|---|
-| `comecar` com `desafio` 1 ou 3 | `jogo começou.` e a regra do jogo limpo (`Jogo limpo: jogue só com estas duas ferramentas. Não vale procurar, baixar nem ler os arquivos, o código ou a página do jogo, nem olhar a tela do computador: só vale o que as ferramentas devolvem.`) |
+| `comecar` com `desafio` 1 | `jogo começou. O desafio é descobrir como jogar e resolver o desafio a partir da experiência.` e a regra do jogo limpo (a mesma do Desafio 3, abaixo) |
+| `comecar` com `desafio` 3 | `jogo começou.` e a regra do jogo limpo (`Jogo limpo: jogue só com estas duas ferramentas. Não vale procurar, baixar nem ler os arquivos, o código ou a página do jogo, nem olhar a tela do computador: só vale o que as ferramentas devolvem.`) |
 | `comecar` com `desafio` 4, 5 ou 6 | a explicação dos controles (os botões, o alvo, o inventário, que o tempo corre) e o pedido de jogo limpo; nada sobre o que fazer |
 | Desafio 4, qualquer botão depois de o bolo queimar | `O bolo queimou: você perdeu. Para jogar de novo, chame comecar.` |
 | `comecar` com `desafio` 2 | `Dê o objeto para o robô.` e a regra do jogo limpo |
@@ -470,7 +473,7 @@ A sala tem uma parede inteira de espelho. Em primeira pessoa o robô não enxerg
 | `S` | Dá um passo para trás, sem virar: o robô continua olhando para o mesmo lugar. (Nos Desafios 1 a 3 o `S` dava meia-volta e andava um passo até a versão 15 das regras; no Galinha Pong ele continua dando meia-volta) |
 | `ESPACO` | Age no alvo: algo que está à frente, a até 1,5 m, e que aparece com a borda azul-clara. Segurando algo, de frente para o outro robô ou para a pessoa: entrega. De mão vazia, de frente para a pessoa: fala com ela. De frente para a porta, a geladeira ou o armário fechados (Desafios 3 a 6): abre; abertos, e sem mais nada ao alcance, fecha (com outras coisas ao alcance, escolhe-se pelo `TAB`). Com a mão embaixo: pega o objeto à frente; segurando algo, coloca na cesta (se ela estiver à frente; no Desafio 4, o ingrediente vai para a tigela e a massa, para o forno; no 5, o copo vazio enche no filtro; no 6, a água e o pó de café vão para a cafeteira) ou solta no chão. Com a mão no alto: tira o que está na cabeça ou, segurando algo, põe na cabeça |
 | `Q` / `E` | Só nos Desafios 4 a 6 (e na quadra): dão um passo de lado, para a esquerda / direita, sem virar; o robô continua olhando para o mesmo lugar. Nos Desafios 1 a 3 não fazem nada: lá o robô só anda para onde está olhando |
-| `TAB` | Troca o alvo do `ESPACO`, quando há mais de uma coisa ao alcance: o objeto seguinte, a geladeira, o armário ou a porta abertos (para fechar) e, com algo na mão, "nada" (para soltar no chão). Com um número no `texto`, vai direto para o alvo com esse número (ver "Os alvos à vista", abaixo). Sem escolha, o alvo é o de sempre: o primeiro da ordem acima e, entre objetos, o que está mais no centro da imagem. Andar, virar ou apertar o `ESPACO` desfaz a escolha |
+| `TAB` | Troca o alvo do `ESPACO`, quando há mais de uma coisa ao alcance: o objeto seguinte, a geladeira, o armário ou a porta abertos (para fechar) e, com algo na mão, "nada" (para soltar no chão — nas salas dos Desafios 1 a 3, só quando há lugar para soltar: diante da cesta, por exemplo, não há, e o único alvo é a cesta). Com um número no `texto`, vai direto para o alvo com esse número (ver "Os alvos à vista", abaixo). Sem escolha, o alvo é o de sempre: o primeiro da ordem acima e, entre objetos, o que está mais no centro da imagem. Andar, virar ou apertar o `ESPACO` desfaz a escolha |
 | `L` | Levanta ou abaixa a mão, com ou sem objeto nela (na quadra, é a mão do escudo). Nos Desafios 4 a 6, troca o item que está na mão pelo seguinte do inventário |
 | `T` | Escreve o `texto` (até 10 letras) no peito do robô |
 | `F` | Devolve a imagem do que o robô está vendo |
@@ -486,7 +489,7 @@ A sala tem uma parede inteira de espelho. Em primeira pessoa o robô não enxerg
 
 A imagem mostra todos os alvos possíveis do `ESPACO`, não só o atual:
 
-- Quando há mais de um alvo, cada um ganha uma bolinha com o seu número. A do alvo atual é azul e maior (e ele continua com a borda azul-clara). "Soltar no chão" também é um alvo: a bolinha dele fica na beirada de baixo da imagem, onde o item cairia.
+- Quando há mais de um alvo, cada um ganha uma bolinha com o seu número. A do alvo atual é azul e maior (e ele continua com a borda azul-clara). "Soltar no chão" também é um alvo: a bolinha dele fica na beirada de baixo da imagem, onde o item cairia. Nas salas dos Desafios 1 a 3 ele só entra na lista quando o objeto cabe no lugar em que cairia: antes, diante da cesta, aparecia um "2" em cima dela que não servia para nada (o `ESPACO` respondia "sem espaço para soltar aqui").
 - São no máximo 9 alvos. Num lugar com mais coisas do que isso, ficam as que estão mais no centro da imagem; é também o centro que decide a ordem entre objetos (o número 1 é o alvo de sempre, o que o `ESPACO` usa se ninguém escolher).
 - No canto de cima, à direita, um indicador diz qual é o alvo atual e quantos são: `2/5`. Nos Desafios 4 a 6, em que os controles são explicados, ele diz também o que o `ESPACO` faria (`alvo 2 de 5` e, embaixo, `pegar: ovos`) e aparece mesmo com um alvo só. Nos Desafios 1 a 3 ele não dá nome a nada: continua sem pista.
 - `TAB` passa para o alvo seguinte; `TAB` com o número no `texto` vai direto para ele.
@@ -770,7 +773,7 @@ Na imagem de cada jogador aparecem o placar com os dois nomes de guerra (o dele 
 **O que aparece na imagem**
 
 - Um contador sem legenda no alto ("0/4" no Desafio 1, "0/1" no Desafio 2): quantos objetos já foram guardados ou entregues. Os Desafios 3 a 7 não têm contador; no 8 ele diz quantos zumbis caíram; no 9, no lugar dele vai a faixa da missão.
-- Uma borda azul-clara em volta daquilo em que o `ESPACO` agiria agora: o objeto que seria pego, a cesta, o outro robô, a pessoa, a porta, a geladeira e, na cidade, o armário, a tigela, o forno, o filtro e a cafeteira.
+- Uma borda azul-clara em volta daquilo em que o `ESPACO` agiria agora: o objeto que seria pego, a cesta, o outro robô, a pessoa, a porta, a geladeira e, na cidade, o armário, a tigela, o forno, o filtro e a cafeteira. Nos objetos e na cesta a borda é um aro inteiro em volta da silhueta, com a mesma largura de todos os lados, mesmo onde o objeto encosta no chão ou na prateleira (antes, a parte de baixo da borda ficava enterrada no chão e sumia: no cone sobravam dois riscos).
 - O balão com o que a pessoa disse (Desafios 3 a 6).
 - Nos Desafios 4 a 6: o inventário no alto (quatro casas, com o item da mão em destaque) e os números dos alvos com o indicador. No Desafio 4, também o painel do fogão (relógio e tempo de forno) e, se o bolo queimar, a faixa de derrota.
 - O texto do peito e a placa "SALA 01" aparecem invertidos no reflexo.
