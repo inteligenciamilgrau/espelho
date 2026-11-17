@@ -57,6 +57,12 @@
   const RAIO_ROBO = 0.35;
   const MARGEM_PAREDE = 0.6;                    // o braço estendido não pode atravessar o espelho
   const ALTURA_OLHOS = 1.02;
+  const ABERTURA_DOS_BRACOS = 0.18;             // quanto cada braço do robô se abre para fora, em radianos (~10 graus): no espelho, o braço se distingue do corpo
+  const BRACO_LEVANTADO = 2.45;                 // o ângulo do braço direito com a mão no alto (ver BRACO, mais abaixo)
+  const ALCANCE_DO_BRACO = 0.575;               // do ombro ao centro da mão: o braço (0,46), o pulso (0,05) e a mão, toda para fora do pulso
+  // Quanto o braço direito se abre para fora (positivo) ou se fecha para dentro (negativo) conforme se ergue: aberto com o braço caído,
+  // e fechado para dentro com a mão no alto (2,45 rad), para ela cair mais no centro da visão de quem a levanta.
+  const abertura = b => ABERTURA_DOS_BRACOS * (1 - 2 * b / BRACO_LEVANTADO);
   const INCLINACAO = -0.14;                     // câmera levemente para baixo, para ver o chão perto
   const ALCANCE = 1.5;                          // distância máxima para pegar
   const INTERVALO_TECLA = 150;                  // ms entre passos com a tecla segurada
@@ -1160,7 +1166,7 @@
         corpo, contorno: corpo.contorno, braco: 0, recebeu: null,
         receber(o) {                            // segura o presente na mão direita e agradece no peito
           corpo.grupo.add(o.malha);
-          o.malha.position.set(0.31, 0.6, -0.44);
+          { const b = BRACO.estendido, ca = Math.cos(abertura(b)), sa = Math.sin(abertura(b)); o.malha.position.set(0.31 + ALCANCE_DO_BRACO * sa, 0.76 - ALCANCE_DO_BRACO * ca * Math.cos(b), -0.015 - ALCANCE_DO_BRACO * ca * Math.sin(b)); }   // na mão, com o braço estendido (ver porCorpo)
           corpo.escrever('OBRIGADO!');
         } };
       s.presente = novo(PRESENTE, PRESENTE.nome, M.presente);   // começa na mão do jogador (ver o fim do arquivo)
@@ -4345,9 +4351,35 @@
       malha(pai, caixaSuave(l, a, p, Math.min(0.025, Math.min(l, a, p) / 4)), material, x, y, z);
       if (comBorda && naBorda) cascas.push(malha(pai, caixaSuave(l + 2 * BORDA, a + 2 * BORDA, p + 2 * BORDA, 0.03), M.contorno, x, y, z));
     };
-    const mao = (pai, x, y) => {
-      malha(pai, new T.SphereGeometry(0.065, 16, 12), laranja, x, y, 0);
-      if (comBorda) cascas.push(malha(pai, new T.SphereGeometry(0.065 + BORDA, 16, 12), M.contorno, x, y, 0));
+    // A mão é uma pinça, como a de um boneco de Playmobil (não mais uma bolinha, que a iA tomava por ovo):
+    // um anel de 81 graus de boca, com a boca voltada para dentro e para a frente (com o braço erguido), e as pontas afinam até fechar,
+    // arredondadas. O raio segue um semicírculo: 0,03 no meio, zero nas pontas. Assim a mão levantada se liga
+    // ao braço na imagem. `folga` soma-se ao raio: a borda de destaque é a mesma pinça um pouco maior.
+    const pinca = (pai, x, y, material, folga, esq) => {
+      const boca = esq || x < 0 ? 0 : -2.0;                                     // a mão esquerda (x < 0) abre para +x; a direita, para dentro e para a frente, com o braço erguido (-2 rad)
+      const a0 = boca + 0.225 * Math.PI, a1 = boca + 1.775 * Math.PI;    // o arco: tudo menos a boca
+      const NS = 30, NR = 16, R = 0.046, pos = [], idx = [];
+      for (let i = 0; i <= NS; i++) {
+        const t = i / NS, a = a0 + (a1 - a0) * t, r = Math.max(0.003, 0.03 * Math.sqrt(1 - Math.pow(2 * t - 1, 2))) + folga;
+        const cA = Math.cos(a), sA = Math.sin(a);
+        for (let j = 0; j <= NR; j++) {
+          const f = j / NR * 2 * Math.PI, c = Math.cos(f), s = Math.sin(f);
+          pos.push(R * cA + r * c * cA, R * sA + r * c * sA, r * s);
+        }
+      }
+      for (let i = 0; i < NS; i++) for (let j = 0; j < NR; j++) {
+        const a = i * (NR + 1) + j, b = (i + 1) * (NR + 1) + j, c = b + 1, d = a + 1;
+        idx.push(a, d, b, b, d, c);
+      }
+      const geo = new T.BufferGeometry();
+      geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      return malha(pai, geo, material, x, y, 0);
+    };
+    const mao = (pai, x, y, esq) => {
+      pinca(pai, x, y, laranja, 0, esq);
+      if (comBorda) cascas.push(pinca(pai, x, y, M.contorno, BORDA, esq));
     };
 
     caixa(grupo, 0.46, 0.2, 0.4, escuro, 0, 0.1, 0, true);                        // base
@@ -4383,18 +4415,30 @@
     };
     escrever('');
 
-    // braços (o direito levanta para segurar objetos)
-    caixa(grupo, 0.1, 0.46, 0.1, claro, -0.31, 0.5, 0, true);
-    mao(grupo, -0.31, 0.25);
+    // braços (o direito levanta para segurar objetos), abertos um pouco para fora (ABERTURA_DOS_BRACOS; o direito vai fechando conforme ergue, ver abertura). Cada um gira no
+    // ombro: o esquerdo num pivô; o direito pelo próprio grupo, cuja rotação em z vem antes da de x, e assim a abertura
+    // continua para fora com o braço no alto. O pulso é mais fino e arredondado, para a mão parecer presa ao braço.
+    const pulso = (pai, y) => caixa(pai, 0.07, 0.05, 0.07, claro, 0, y, 0, true);
+    const ombroE = new T.Group();
+    ombroE.position.set(-0.31, 0.72, 0); ombroE.rotation.z = -ABERTURA_DOS_BRACOS; grupo.add(ombroE);
+    caixa(ombroE, 0.1, 0.46, 0.1, claro, 0, -0.22, 0, true);
+    pulso(ombroE, -0.475);
+    mao(ombroE, 0, -ALCANCE_DO_BRACO, true);   // (a mão esquerda vai no pivô: gira com o braço, quando ele se move)
     braco.position.set(0.31, 0.72, 0);
+    braco.rotation.z = ABERTURA_DOS_BRACOS;
     grupo.add(braco);
     caixa(braco, 0.1, 0.46, 0.1, claro, 0, -0.22, 0, true);
-    mao(braco, 0, -0.47);
+    pulso(braco, -0.475);
+    mao(braco, 0, -ALCANCE_DO_BRACO);
+    // a cópia translúcida da pinça da mão direita, por cima de tudo: aparece quando a mão segura um objeto (porCorpo),
+    // para a iA ver a parte laranja da mão em volta dele, e não um objeto solto no ar
+    const sobreAMao = pinca(braco, 0, -ALCANCE_DO_BRACO, new T.MeshBasicMaterial({ color: 0xff8a3d, transparent: true, opacity: 0.5, depthTest: false, depthWrite: false }), 0);
+    sobreAMao.renderOrder = 5; sobreAMao.visible = false;
 
     sombraNoChao(grupo, 0.4, 0.006);
     fazSombra(grupo);
     cascas.forEach(c => { c.visible = false; });
-    return { grupo, braco, escrever, contorno: { set visible(v) { cascas.forEach(c => { c.visible = v; }); } } };
+    return { grupo, braco, ombroE, escrever, sobreAMao, contorno: { set visible(v) { cascas.forEach(c => { c.visible = v; }); } } };
   }
 
   // ---------- pessoa (desafios 3 a 6 e o coletivo) ----------
@@ -4598,12 +4642,13 @@
   }
 
   // O robô do jogador. Camada 1 = só aparece no reflexo: em primeira pessoa o jogador não
-  // vê o próprio corpo, exceto o braço direito quando levantado (camadas 0 e 1).
+  // vê o próprio corpo, exceto os dois braços (camadas 0 e 1).
   let eu = montarRobo(false);                   // (let: no coletivo, estes passam a ser os do robô da vez: ver encarnar)
   let robo = eu.grupo, bracoDireito = eu.braco;
   raiz.add(robo);
   robo.traverse(o => o.layers.set(1));
   bracoDireito.traverse(o => o.layers.enable(0));
+  eu.ombroE.traverse(o => o.layers.enable(0));   // (o braço esquerdo também: ele também se vê, em repouso)
 
   // ---------- estado ----------
   // `estado` é a verdade do jogo e muda na hora; `visual` só persegue o estado para animar.
@@ -4611,7 +4656,7 @@
   let estado = { x: REGRAS.inicio.x || 0, z: REGRAS.inicio.z, rumo: REGRAS.inicio.rumo, sala: REGRAS.inicio.sala || 1, segurando: null, naCabeca: null, maoLevantada: false, texto: '', ganhou: false, perdeu: false };
   // (luz, luzY, luzZ e forca: onde está a lâmpada, que acompanha o robô, e a força dela: ver luzDaqui)
   // (chao: a altura do chão debaixo do robô: na vila, a calçada é um degrau acima do asfalto: ver alturaDoChao)
-  let visual = { x: estado.x, z: estado.z, yaw: estado.rumo * GIRO, braco: 0, luz: 0, luzY: SALA.A - 0.35, luzZ: 0, forca: 2.1, chao: 0 };
+  let visual = { x: estado.x, z: estado.z, yaw: estado.rumo * GIRO, braco: 0, bracoEsq: 0, luz: 0, luzY: SALA.A - 0.35, luzZ: 0, forca: 2.1, chao: 0 };
   // Onde fica a lâmpada (há uma só): no meio da sala em que o robô está. Na vila, cada lugar diz
   // onde (ver areas); na rua, onde quem ilumina é o sol, a lâmpada fica na casa ou na loja mais perto.
   const luzDaqui = () => {
@@ -5354,12 +5399,14 @@
 
   // ---------- desenho ----------
   // Ângulos do braço direito: caído, estendido para carregar, mão levantada.
-  const BRACO = { caido: 0, estendido: 1.13, levantado: 2.45, apontando: 1.7, recarregando: 0.95 };   // (apontando: o braço da arma, no desafio dos zumbis; recarregando: ele desce enquanto a arma recarrega)
+  // (estendido: 1,75 e não mais 1,13, para a mão e o objeto ficarem à vista, embaixo, na visão de quem carrega: com 1,13 o objeto
+  // aparecia sozinho no pé da imagem, e a iA achava que estava no chão)
+  const BRACO = { caido: 0, parado: 1.23, estendido: 1.75, levantado: BRACO_LEVANTADO, apontando: 1.7, recarregando: 0.95 };   // (apontando: o braço da arma, no desafio dos zumbis; recarregando: ele desce enquanto a arma recarrega)
   // Aproxima o que se vê do estado do jogo: k = fração do caminho (1 = chega de uma vez).
   function animarRobo(k) {
     const carregando = REGRAS.bracoCaido ? BRACO.caido : BRACO.estendido;
-    const braco = REGRAS.zumbis ? (zumbi.pronta !== null && hora() < zumbi.pronta ? BRACO.recarregando : BRACO.apontando) : estado.maoLevantada ? BRACO.levantado : estado.segurando ? carregando : BRACO.caido;
-    const l = luzDaqui(), alvo = { x: estado.x, z: estado.z, yaw: estado.rumo * GIRO, braco, luz: l.x, luzY: l.y, luzZ: l.z, forca: l.forca, chao: alturaDoChao(estado.x, estado.z) };
+    const braco = REGRAS.zumbis ? (zumbi.pronta !== null && hora() < zumbi.pronta ? BRACO.recarregando : BRACO.apontando) : estado.maoLevantada ? BRACO.levantado : estado.segurando ? carregando : (REGRAS.bracoCaido ? BRACO.caido : BRACO.parado);
+    const l = luzDaqui(), alvo = { x: estado.x, z: estado.z, yaw: estado.rumo * GIRO, braco, bracoEsq: REGRAS.bracoCaido ? BRACO.caido : BRACO.parado, luz: l.x, luzY: l.y, luzZ: l.z, forca: l.forca, chao: alturaDoChao(estado.x, estado.z) };
     for (const c in alvo) visual[c] += (alvo[c] - visual[c]) * k;
     if (zumbi && ZUMBI.giro > 0) visual.yaw = rumoNaHora(hora()) * GIRO;   // (nos zumbis o robô vira no tempo do jogo, e não no do desenho: ver rumoNaHora)
     if (campanha) { const p = posicaoNaHora(hora()); visual.x = p.x; visual.z = p.z; }   // (...e, nas missões, anda no tempo do jogo: ver posicaoNaHora)
@@ -5387,6 +5434,7 @@
       if (r) {                                  // o outro robô estende o braço quando recebe o presente
         r.braco += ((r.recebeu ? BRACO.estendido : BRACO.caido) - r.braco) * k;
         r.corpo.braco.rotation.x = r.braco;
+        r.corpo.braco.rotation.z = abertura(r.braco);
       }
       const p = s.porta;
       if (!p) continue;
@@ -5429,10 +5477,13 @@
     robo.position.set(visual.x - Math.sin(visual.yaw) * sentado, visual.chao + (estado.dirigindo ? CARRO.banco : 0), visual.z - Math.cos(visual.yaw) * sentado);
     robo.rotation.y = visual.yaw;
     bracoDireito.rotation.x = visual.braco;
+    bracoDireito.rotation.z = abertura(visual.braco);
+    eu.ombroE.rotation.x = visual.bracoEsq;
+    eu.sobreAMao.visible = !!estado.segurando && !REGRAS.bracoCaido;   // (no desafio 2 a mão fica caída, fora da própria visão: não aparece)
     if (estado.segurando) {                     // o objeto acompanha a mão
       const b = visual.braco, o = estado.segurando.malha;
-      if (REGRAS.bracoCaido) o.position.set(0.31, 0.72 - 0.56 * Math.cos(b), -0.56 * Math.sin(b));   // na ponta do braço, depois da mão
-      else o.position.set(0.31, 0.76 - 0.47 * Math.cos(b), -0.015 - 0.47 * Math.sin(b));              // logo acima da mão
+      if (REGRAS.bracoCaido) { const ca = Math.cos(abertura(b)), sa = Math.sin(abertura(b)); o.position.set(0.31 + (ALCANCE_DO_BRACO + 0.09) * sa, 0.72 - (ALCANCE_DO_BRACO + 0.09) * ca * Math.cos(b), -(ALCANCE_DO_BRACO + 0.09) * ca * Math.sin(b)); }   // na ponta do braço, depois da mão
+      else { const ca = Math.cos(abertura(b)), sa = Math.sin(abertura(b)); o.position.set(0.31 + ALCANCE_DO_BRACO * sa, 0.76 - ALCANCE_DO_BRACO * ca * Math.cos(b), -0.015 - ALCANCE_DO_BRACO * ca * Math.sin(b)); }              // logo acima da mão
     }
     if (estado.dirigindo) {                     // o carro vai aonde vai quem dirige (a frente dele é o +x do desenho)
       const c = estado.dirigindo.grupo;
@@ -8036,6 +8087,7 @@
         raiz.add(corpo.grupo);
         corpo.grupo.traverse(o => o.layers.set(CAMADAS_DOS_CORPOS[n]));
         corpo.braco.traverse(o => o.layers.enable(0));
+        corpo.ombroE.traverse(o => o.layers.enable(0));
       }
       corpo.grupo.visible = false;
       robos.push({ n, corpo, camada: CAMADAS_DOS_CORPOS[n], dentro: false, quem: 0, nome: '', modelo: '', entregas: 0, intencao: null, fala: null, ativo: 0, escolhido: undefined,

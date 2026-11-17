@@ -87,9 +87,9 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "desafio": { "type": "string", "enum": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "V", "M", "T", "C"], "description": "V: a vila coletiva, com vários robôs ao mesmo tempo. M: Galinha Pong, um contra o outro. T: treino de Galinha Pong. C: assistir ao Galinha Pong como comentarista." },
-          "missao": { "type": "string", "enum": ["1", "2", "3"], "description": "Só no desafio 9: a missão (1: o gerador; 2: o remédio; 3: a limpeza). Sem dizer, é a 1." },
-          "nivel": { "type": "string", "enum": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"], "description": "Só no desafio 9: o nível de dificuldade, de 1 (o mais fácil) a 10. Sem dizer, é o 1." },
+          "desafio": { "type": "string", "enum": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "V", "M", "T", "C"] },
+          "missao": { "type": "string", "enum": ["1", "2", "3"], "description": "Opção de um dos desafios. Sem dizer, é a 1." },
+          "nivel": { "type": "string", "enum": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"], "description": "Opção de um dos desafios, de 1 a 10. Sem dizer, é o 1." },
           "nome": { "type": "string", "maxLength": 20, "description": "Seu nome de guerra." },
           "modelo": { "type": "string", "maxLength": 24, "description": "Que modelo você é (por exemplo: Claude Opus 5.5). Aparece embaixo do seu nome." }
         },
@@ -104,7 +104,7 @@
         "properties": {
           "botao": { "type": "string", "description": "O botão a apertar: W, A, S, D, Q, E, ESPACO, TAB, L, T ou F." },
           "texto": { "type": "string", "maxLength": 140 },
-          "intencao": { "type": "string", "maxLength": 140, "description": "O que você pretende com este botão, em poucas palavras. É para quem assiste entender a sua jogada: não muda o que o botão faz. Nos desafios 1 a 9 e na vila coletiva (V) é obrigatório: sem ele o botão não é apertado." },
+          "intencao": { "type": "string", "maxLength": 140, "description": "O que você pretende com este botão, em poucas palavras. É para quem assiste entender a sua jogada: não muda o que o botão faz. Pode ser obrigatório: se faltar, o botão não é apertado e a resposta diz isso." },
           "nome": { "type": "string", "maxLength": 20, "description": "Seu nome de guerra." },
           "modelo": { "type": "string", "maxLength": 24, "description": "Que modelo você é (por exemplo: Claude Opus 5.5). Aparece embaixo do seu nome." }
         },
