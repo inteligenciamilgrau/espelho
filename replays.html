@@ -19,11 +19,18 @@
   .partida .corpo { flex: 1; min-width: 0; }
   .partida .titulo { font-size: 16px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .partida .linha { color: #9fb0ba; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .partida .jogo { flex: none; width: 92px; font-size: 12px; text-align: center; padding: 3px 0; border-radius: 6px; background: #223041; color: #cfe6f2; }
   .partida .apagar { flex: none; color: #7c8b94; padding: 2px 6px; border-radius: 5px; }
   .partida .apagar:hover { color: #fff; background: #b3261e; }
   .laranja { color: #ff7a3d; } .verde { color: #22b3a6; }
   #vazio { color: #9fb0ba; padding: 24px 0; }
+  /* as gravações, um grupo por desafio: cada grupo abre e fecha, como o pódio */
+  .grupo { margin: 0 0 14px; }
+  .grupo summary { cursor: pointer; font-size: 17px; font-weight: bold; user-select: none; }
+  .grupo summary:hover { color: #7dffb0; }
+  .grupo .quantas { margin-left: 10px; font-size: 14px; font-weight: normal; color: #9fb0ba; }
+  #dobrar { margin: 0 0 8px; text-align: right; }
+  #dobrar span { cursor: pointer; color: #7dffb0; user-select: none; }
+  #dobrar span:hover { text-decoration: underline; }
   /* o pódio dos desafios: um cartão por desafio, com os três degraus (2º, 1º e 3º) */
   #podio { margin: 0 0 22px; }
   #podio summary { cursor: pointer; font-size: 17px; font-weight: bold; user-select: none; }
@@ -60,6 +67,8 @@
     <p class="dica">De cada desafio, as três iAs que venceram com menos movimentos (os botões apertados até a vitória, sem contar os pedidos de imagem); no empate, a que levou menos tempo. Vale a melhor partida de cada iA, e as partidas do teclado, sem nome, não entram. No quebra-cabeça vale a pontuação e, nos zumbis, quantos foram derrubados (é o recorde). Nas missões, cada missão tem o seu pódio: vale o nível mais alto em que ela foi cumprida e, no empate, o menor tempo. Um clique num degrau abre a partida.</p>
     <div id="podios"></div>
   </details>
+  <!-- As gravações, um grupo por desafio (o script preenche: ver "os grupos"); e o atalho que fecha ou abre todos de uma vez. -->
+  <div id="dobrar" hidden><span></span></div>
   <div id="lista"></div>
   <div id="vazio" hidden></div>
 </main>
@@ -99,8 +108,7 @@
     const desafio = String(resumo.desafio);
     if (!Object.prototype.hasOwnProperty.call(JOGOS, desafio)) return null;
     const item = document.createElement('div');
-    item.className = 'partida';
-    elemento(item, 'div', JOGOS[desafio], 'jogo');
+    item.className = 'partida';              // (de que desafio ela é, diz o grupo em que está: ver "os grupos")
     const corpo = elemento(item, 'div', '', 'corpo'), titulo = elemento(corpo, 'div', '', 'titulo');
     const detalhes = [gravacao.quandoFoi(resumo.quando)];
     if (desafio === 'M' || desafio === 'T') {
@@ -221,15 +229,57 @@
   try { elPodio.open = localStorage.getItem(CHAVE_DO_PODIO) !== 'fechado'; } catch (e) { elPodio.open = true; }
   elPodio.addEventListener('toggle', () => { try { localStorage.setItem(CHAVE_DO_PODIO, elPodio.open ? 'aberto' : 'fechado'); } catch (e) { } });
 
+  // ---------- os grupos ----------
+  // A lista é separada por desafio: um grupo para cada um que tem gravação, na ordem dos desafios,
+  // e dentro dele as gravações da mais nova para a mais antiga. Cada grupo abre e fecha, como o
+  // pódio, e o navegador guarda quais ficaram fechados (a lista é refeita toda vez que a aba volta
+  // a ser olhada: sem isso, o grupo fechado abriria de novo).
+  const GRUPOS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'V', 'M', 'T'], CHAVE_DOS_GRUPOS = 'replays.grupos';
+  const NOME_DO_GRUPO = d => '789V'.includes(d) ? `Desafio ${d}: ${JOGOS[d]}` : d === 'T' ? 'Treino do Galinha Pong' : JOGOS[d];
+  const tantas = n => n === 1 ? '1 gravação' : `${n} gravações`;
+  const fechados = new Set();
+  try { for (const d of JSON.parse(localStorage.getItem(CHAVE_DOS_GRUPOS)) || []) if (GRUPOS.includes(d)) fechados.add(d); } catch (e) { }
+  const elDobrar = document.getElementById('dobrar'), gruposNaTela = () => [...elLista.querySelectorAll('details.grupo')];
+  // O atalho de todos os grupos: fecha todos se há algum aberto; se não, abre todos.
+  function rotularDobrar() {
+    const todos = gruposNaTela();
+    elDobrar.hidden = todos.length < 2;
+    elDobrar.firstElementChild.textContent = todos.some(g => g.open) ? 'recolher todos' : 'expandir todos';
+  }
+  elDobrar.firstElementChild.addEventListener('click', () => {
+    const todos = gruposNaTela(), abrir = !todos.some(g => g.open);
+    todos.forEach(g => { g.open = abrir; });   // (o 'toggle' de cada grupo guarda como ele ficou e acerta o texto do atalho)
+  });
+  // Monta os grupos e devolve quantas gravações há na lista.
+  function mostrarGrupos(lista) {
+    elLista.textContent = '';
+    let quantas = 0;
+    for (const desafio of GRUPOS) {
+      const linhas = lista.filter(g => String(g.resumo.desafio) === desafio).map(linhaDe).filter(Boolean);
+      if (!linhas.length) continue;
+      quantas += linhas.length;
+      const grupo = elemento(elLista, 'details', '', 'grupo'), titulo = elemento(grupo, 'summary', NOME_DO_GRUPO(desafio));
+      elemento(titulo, 'span', tantas(linhas.length), 'quantas');
+      linhas.forEach(l => grupo.appendChild(l));
+      grupo.open = !fechados.has(desafio);
+      grupo.addEventListener('toggle', () => {
+        if (grupo.open === !fechados.has(desafio)) return;   // (o 'toggle' de quando o grupo foi montado: nada mudou)
+        if (grupo.open) fechados.delete(desafio); else fechados.add(desafio);
+        try { localStorage.setItem(CHAVE_DOS_GRUPOS, JSON.stringify([...fechados])); } catch (e) { }
+        rotularDobrar();
+      });
+    }
+    rotularDobrar();
+    return quantas;
+  }
+
   async function mostrar() {
     let lista = null;
     try { lista = await gravacao.listar(); } catch (e) { }
     mostrarPodio(lista || []);
-    elLista.textContent = '';
-    const linhas = (lista || []).map(linhaDe).filter(Boolean);
-    linhas.forEach(l => elLista.appendChild(l));
-    elConta.textContent = lista ? (linhas.length === 1 ? '1 gravação' : `${linhas.length} gravações`) : '';
-    elVazio.hidden = linhas.length > 0;
+    const quantas = mostrarGrupos(lista || []);
+    elConta.textContent = lista ? tantas(quantas) : '';
+    elVazio.hidden = quantas > 0;
     elVazio.textContent = !lista ? 'Não consegui falar com o servidor do jogo. Ele está ligado?' : 'Nenhuma partida gravada ainda. Jogue uma (ou ponha as iAs para jogar) e ela aparece aqui.';
   }
   document.getElementById('atualizar').addEventListener('click', mostrar);
