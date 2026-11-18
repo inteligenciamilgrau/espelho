@@ -1933,7 +1933,10 @@
     const f = vila.forno;
     if (!f) return;
     const ponto = f.dentro ? pontoDoForno() : '';
-    if (ponto !== f.ponto) { if (ponto === 'bom' && f.ponto === 'cru') som.efeito('sino', f); f.ponto = ponto; }   // (o sino do forno: o bolo ficou pronto)
+    // (o sino do forno: o bolo ficou pronto. O nome é `cozimento`, e não `ponto`: `ponto` é o que os alvos do quebra-cabeça têm para
+    //  dizer onde fica o número deles — ver pontoDe —, e o forno, que também é um alvo, era tomado por um deles: com a massa lá dentro,
+    //  numerar os alvos dava erro, o botão valia no jogo sem entrar na gravação, e a imagem pedida não saía.)
+    if (ponto !== f.cozimento) { if (ponto === 'bom' && f.cozimento === 'cru') som.efeito('sino', f); f.cozimento = ponto; }
     if (ponto === 'queimado' && !COLETIVO) perder();   // (no coletivo ninguém perde: o bolo queimado vai para o lixo: ver usarNaVila e atualizarPedidos)
     f.aceso.visible = !!f.dentro;
     f.aceso.material.color.set(ponto === 'queimado' ? 0xff3b1f : 0xffa23a);
@@ -4986,7 +4989,7 @@
   const ALTO = { 'central de pedidos': 1.05, carro: 1.0, 'ponto do carro': 1.4, 'chave geral': 1.0, bica: 0.9, cesta: 0.42, forno: 0.68, pessoa: 0.8, porta: 1.15, 'outro robô': 1.38, geladeira: 0.38, 'armário': 0.6 };
   // O ponto do alvo: o meio do objeto de pegar; nos outros, o lugar dele no chão, na altura de ALTO.
   const pontoDe = a => {
-    if (a.ponto) return a.ponto();              // (as peças e as casas do quebra-cabeça dizem onde fica o número de cada uma)
+    if (typeof a.ponto === 'function') return a.ponto();   // (as peças e as casas do quebra-cabeça dizem onde fica o número de cada uma)
     if (!a.malha) return new T.Vector3(a.x, ALTO[a.nome] || 1, a.z);
     a.malha.updateWorldMatrix(true, false);
     return a.malha.getWorldPosition(new T.Vector3());
@@ -5816,7 +5819,7 @@
     animarPessoas(agora / 1000);                // quem mora ali respira, pisca e olha em volta (no relógio de verdade, mesmo com a gravação parada)
     soarEViver(agora / 1000, real);             // os sons que dependem de onde se está, e a vida da praça
     ajustarTamanho();                           // (a visão de quem assiste ou a tela dividida podem ter mudado o formato da imagem)
-    if (vista.voando) { esconderEtiquetas(); aplicarVisual(); voar(real); desenharDeFora(); }   // quem assiste de fora vê tudo ao vivo, mesmo no modo iA
+    if (vista.voando) { esconderEtiquetas(); aplicarVisual(); if (vista.atras) seguir(real); else voar(real); desenharDeFora(); }   // quem assiste de fora vê tudo ao vivo, mesmo no modo iA
     else if (variosOlhos()) { if (!modoIA) desenharMosaico(agora); }                           // no coletivo, com mais de um robô: a tela dividida, um quadro para cada um
     else if (!modoIA) { esconderEtiquetas(); aplicarVisual(); desenhar(); }
     if (agora - ultimoArranjo > 250) { ultimoArranjo = agora; arrumarPaineis(); }   // (quatro vezes por segundo basta: a lista de teclas, quando está solta, sai de cima do que o jogo escreve)
@@ -7767,10 +7770,12 @@
     }
     // A hora deste botão no relógio do jogo: é a que vale para o que ele faz (o forno do desafio
     // 4 conta o tempo) e a que vai para a gravação, que assim refaz a partida igual.
-    let saida;
+    // O botão entra na gravação mesmo que o jogo tropece no meio dele (um erro de programa): ele pode já ter mudado o
+    // jogo, e a gravação sem ele refaz outra partida. (Aconteceu: ver `cozimento`, no forno.) O erro segue adiante depois.
+    let saida, tropeco = null;
     horaDaJogada = Math.round(performance.now() - NASCEU);
     const t = horaDaJogada, giroDeAntes = zumbi && zumbi.giro, andarDeAntes = campanha && campanha.andar;
-    try { if (existe) { tocarNoQuebra(); tocarNoZumbi(); } saida = acionar(botao, texto); } finally { horaDaJogada = null; }   // (o relógio do quebra-cabeça começa no primeiro botão)
+    try { if (existe) { tocarNoQuebra(); tocarNoZumbi(); } saida = acionar(botao, texto); } catch (e) { tropeco = e; } finally { horaDaJogada = null; }   // (o relógio do quebra-cabeça começa no primeiro botão)
     if (existe) {
       mostrarIntencao(botao, quer);
       if (botao === 'F') contagem.imagens++; else contagem.botoes++;
@@ -7778,6 +7783,7 @@
       const numero = botao === 'TAB' ? semControle(texto, 2) : campanha && ['W', 'S', 'Q', 'E'].includes(botao) && passosPedidos(texto) > 1 ? String(passosPedidos(texto)) : '';   // o TAB com número (ver escolher); nas missões, quantos passos (ver andarNaCampanha)
       if (gravando) gravando.anotar('botao', Object.assign({ t, b: botao }, botao === 'T' ? { x: estado.texto } : numero ? { x: numero } : null, quer ? { q: quer } : null), true);
     }
+    if (tropeco) throw tropeco;
     if (campanha && campanha.andar && campanha.andar !== andarDeAntes) return aoFimDaCaminhada();   // (nas missões, a caminhada que este botão começou: ele só termina quando o robô para)
     if (zumbi && zumbi.giro && zumbi.giro !== giroDeAntes) return aoFimDoGiro();   // (nos zumbis, o giro que este botão começou: ele só termina quando o robô acaba de virar)
     return saida;
@@ -8137,6 +8143,10 @@
   //                fica de fora). Não vê o que é desenhado na tela do robô (camada 2). Em cima
   //                da cabeça do robô vai um balão com o que a iA disse que pretende: é um
   //                pedaço da página (#pensa), não do jogo, onde apareceria no espelho.
+  //   por trás:    só assistindo a uma gravação de um desafio em que o robô joga sozinho. É a
+  //                mesma câmera de fora, mas quem a leva é o jogo: ela vai atrás do robô, por
+  //                cima de um dos ombros dele, olhando para onde ele olha, com o mesmo balão
+  //                em cima da cabeça (ver "por trás do robô").
   // Troca-se pela tecla C ou pelo botão da página (#vista); vale também assistindo a uma
   // gravação. No modo voador o teclado é de quem voa — W A S D andam, Q e E descem e sobem,
   // Shift corre, Z volta para perto do robô — e os botões do jogo, no teclado, ficam
@@ -8148,7 +8158,13 @@
   voador.rotation.order = 'YXZ';
   voador.layers.enable(1);                      // vê o corpo do robô
   for (const c of CAMADAS_DOS_CORPOS) voador.layers.enable(c);   // (e os dos outros robôs do coletivo)
-  const vista = { voando: false, posta: false, x: 0, y: 2, z: 0, yaw: 0, pitch: 0 };
+  // (voando: a página mostra a câmera de fora, e não os olhos do robô; atras: quem leva essa câmera é o jogo, atrás do robô;
+  //  lado e zoom: de que ombro ela olha (1 = o direito, -1 = o esquerdo, 0 = bem atrás) e quanto se afasta: ver "por trás do robô")
+  const vista = { voando: false, atras: false, posta: false, x: 0, y: 2, z: 0, yaw: 0, pitch: 0, lado: 1, zoom: 1 };
+  const solto = () => vista.voando && !vista.atras;   // a câmera está na mão de quem assiste (o modo voador)?
+  const PODE_SEGUIR = ASSISTINDO && !COLETIVO;        // a visão por trás: só nas gravações, e só onde o robô joga sozinho
+  const VISTAS = PODE_SEGUIR ? ['ia', 'atras', 'voador'] : ['ia', 'voador'];
+  const vistaAtual = () => !vista.voando ? 'ia' : vista.atras ? 'atras' : 'voador';
   const TECLAS_DO_VOO = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight']), apertadas = new Set();
   const entre = (v, a, b) => Math.max(a, Math.min(b, v));
   // Até onde a câmera vai. Nas salas com espelho ela não sai do prédio: de fora dele, ou de
@@ -8193,6 +8209,73 @@
     const tem = c => apertadas.has(c) ? 1 : 0, passo = (tem('ShiftLeft') || tem('ShiftRight') ? 9 : 3) * dt;   // metros por segundo
     andar((tem('KeyW') - tem('KeyS')) * passo, (tem('KeyD') - tem('KeyA')) * passo, (tem('KeyE') - tem('KeyQ')) * passo);
   }
+  // ---------- por trás do robô ----------
+  // A câmera de fora, levada pelo jogo: fica atrás do robô, por cima de um dos ombros, e olha
+  // para onde ele olha — o robô aparece de costas, um pouco para o lado, e o que ele tem pela
+  // frente fica à vista. Ela acompanha o robô que se vê (`visual`), devagar, sem trancos.
+  //   o ombro:   de preferência o direito, que é o da mão que pega. Se desse lado não há lugar
+  //              (uma parede, um móvel), vai para o outro, ou para bem atrás dele; e só troca
+  //              quando o outro lugar é bem melhor, para não ficar indo e vindo.
+  //   as paredes: a câmera só se afasta até onde há chão livre em linha reta desde o robô:
+  //              não entra em parede nem em móvel, e só passa por porta aberta. Quando o
+  //              robô está de costas para uma parede e não sobra lugar, ela sobe e olha de cima.
+  //   a roda do mouse afasta e aproxima.
+  // No carro ela vai mais longe e mais alta, e não liga para as paredes (o carro só anda na rua).
+  const ATRAS = { longe: 2.6, noCarro: 6, ombro: 0.4, alto: 1.3, altoNoCarro: 2.4, sobe: 0.8, deCima: 1.1, mira: 4, folga: 0.25, passo: 0.1, pressa: 5, salto: 8, zoomMin: 0.6, zoomMax: 2.5 };
+  // A câmera cabe nesse ponto do chão? (A conta é sempre feita a partir do robô, de passo em passo: ver folgaAtras.)
+  function cabeACamera(x, z) {
+    if (x < VOO.x1 || x > VOO.x2 || z < VOO.z1 || z > VOO.z2) return false;
+    if (estado.dirigindo) return true;
+    const m = ATRAS.folga;
+    if (blocos.some(b => b.r ? Math.hypot(x - b.cx, z - b.cz) < b.r + 0.12 : x > b.x1 - 0.12 && x < b.x2 + 0.12 && z > b.z1 - 0.12 && z < b.z2 + 0.12)) return false;
+    if (REGRAS.zumbis) return true;             // (o campo é aberto: só as coisas dele barram)
+    if (REGRAS.vila) return Object.values(areas).some(a => cabeNoLugar(a, x, z, m)) || portasDaVila.some(p => p.aberta && noVaoDe(p, x, z));
+    return Object.values(salas).some(s => (Math.abs(x - centro(s.n)) <= SALA.L / 2 - m && Math.abs(z) <= SALA.P / 2 - m)
+      || (s.porta && s.porta.aberta && Math.abs(x - centro(s.n) - SALA.L / 2) <= m + 0.01 && noVao(z)));
+  }
+  // Quanto a câmera consegue se afastar do robô na direção `g`, até `longe`.
+  function folgaAtras(g, longe) {
+    const sx = Math.sin(g), cz = Math.cos(g);
+    let d = 0;
+    while (d < longe - 1e-9 && cabeACamera(visual.x + sx * (d + ATRAS.passo), visual.z + cz * (d + ATRAS.passo))) d += ATRAS.passo;
+    return Math.min(d, longe);
+  }
+  // A câmera, nesse ponto, está no mesmo lugar que o robô (e não espiando por uma porta)? E debaixo de um teto?
+  const juntoDoRobo = (x, z) => REGRAS.zumbis || !!estado.dirigindo || (REGRAS.vila ? !!areas[estado.sala] && cabeNoLugar(areas[estado.sala], x, z, ATRAS.folga - 0.01)
+    : Math.abs(x - centro(estado.sala)) <= SALA.L / 2 - ATRAS.folga + 0.01);
+  const sobTeto = (x, z) => {
+    if (REGRAS.zumbis || estado.dirigindo) return false;
+    if (!REGRAS.vila) return true;
+    const a = Object.values(areas).find(q => cabeNoLugar(q, x, z, 0));
+    return !!a && typeof a.luz !== 'function' && a.luz.forca !== 0;   // (a rua, a hidrelétrica e a cachoeira ficam ao ar livre: quem as ilumina é o sol)
+  };
+  // Leva a câmera para o lugar dela atrás do robô (dt: o tempo desde o último quadro; Infinity: de uma vez).
+  function seguir(dt) {
+    const noCarro = !!estado.dirigindo, longe = (noCarro ? ATRAS.noCarro : ATRAS.longe) * vista.zoom, chao = visual.chao;
+    let melhor = null;
+    for (const lado of [1, -1, 0]) {
+      const d = folgaAtras(visual.yaw + lado * ATRAS.ombro, longe);
+      const nota = d + (lado ? 0.2 : 0) + (lado === vista.lado ? 0.6 : 0);
+      if (!melhor || nota > melhor.nota + 1e-9) melhor = { lado, d, nota };
+    }
+    vista.lado = melhor.lado;
+    const g = visual.yaw + melhor.lado * ATRAS.ombro, d = melhor.d;
+    const tx = visual.x + Math.sin(g) * d, tz = visual.z + Math.cos(g) * d;
+    const apertada = entre((0.85 * longe - d) / (0.65 * longe), 0, 1);   // 0: a câmera afastada à vontade; 1: encostada no robô, olhando de cima
+    let ty = chao + (noCarro ? ATRAS.altoNoCarro : ATRAS.alto) + ATRAS.sobe * vista.zoom + ATRAS.deCima * apertada;
+    if (sobTeto(tx, tz)) ty = Math.min(ty, SALA.A - 0.15);
+    if (!juntoDoRobo(tx, tz)) ty = Math.min(ty, chao + ALTURA_PORTA - 0.25);   // (espiando por uma porta: abaixo da verga dela)
+    ty = entre(ty, VOO.y1, VOO.y2);
+    const k = !vista.posta || dt === Infinity || Math.hypot(tx - vista.x, tz - vista.z) > ATRAS.salto ? 1 : 1 - Math.exp(-dt * ATRAS.pressa);   // (longe demais — a gravação pulou —, vai de uma vez)
+    vista.x += (tx - vista.x) * k; vista.y += (ty - vista.y) * k; vista.z += (tz - vista.z) * k;
+    vista.posta = true;
+    // Para onde ela olha: de lado, para um ponto adiante do robô (ele fica um pouco fora do meio da imagem); para cima e para
+    // baixo, de modo que a cabeça dele fique logo acima do meio — com lugar para o balão — ou, olhando de cima, perto da beirada de baixo.
+    const mx = visual.x - Math.sin(visual.yaw) * ATRAS.mira - vista.x, mz = visual.z - Math.cos(visual.yaw) * ATRAS.mira - vista.z;
+    vista.yaw = Math.atan2(-mx, -mz);
+    const cabeca = Math.atan2(1.45 + chao - vista.y, Math.max(0.05, Math.hypot(visual.x - vista.x, visual.z - vista.z)));
+    vista.pitch = entre(cabeca - 0.12 + 0.5 * entre((-0.23 - cabeca) / 1.1, 0, 1), -1.45, 0.3);
+  }
   // O desenho de quem voa: como em desenhar, mas por esta câmera, com o corpo do robô e sem o que é desenhado na tela dele.
   function desenharDeFora() {
     voador.position.set(vista.x, vista.y, vista.z);
@@ -8234,43 +8317,72 @@
       elPensa.textContent = '';
       elPensa.append(b, s);
     }
-    const x = tela.x + (v3.x + 1) / 2 * tela.w, y = tela.y + (1 - v3.y) / 2 * tela.h;
-    elPensa.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, calc(-100% - 26px)) scale(${entre(3.2 / longe, 0.55, 1).toFixed(3)})`;
+    const x = tela.x + (v3.x + 1) / 2 * tela.w, y = tela.y + (1 - v3.y) / 2 * tela.h, escala = entre(3.2 / longe, 0.55, 1);
+    // Onde o balão se prende à cabeça, em % da largura dele: no meio ou, por trás do robô, perto da ponta que dá para o meio da
+    // imagem — o balão cai para o lado de fora, e o que o robô tem pela frente fica à vista. Sem sair da imagem, se der, e sem
+    // entrar debaixo do painel da gravação, que na tela cheia fica por cima dela, num canto: ali o pensamento não se lia.
+    let rabo = 50;
     elPensa.hidden = false;
+    if (vista.atras) {
+      const l = (elPensa.offsetWidth || 300) * escala, base = y - 26 * escala, topo = base - elPensa.offsetHeight * escala;
+      const p = toca && toca.painel ? toca.painel.getBoundingClientRect() : null;
+      let esquerda = tela.x + 8, direita = tela.x + tela.w - 8;
+      if (p && p.width && topo < p.bottom + 8 && base > p.top - 8) {
+        if (x > p.right) esquerda = Math.max(esquerda, p.right + 10);
+        else if (x < p.left) direita = Math.min(direita, p.left - 10);
+      }
+      rabo = entre(50 + 30 * vista.lado, 100 * (1 - (direita - x) / l), 100 * (x - esquerda) / l);
+      rabo = Math.round(entre(rabo, 10, 90));
+    }
+    elPensa.style.setProperty('--rabo', rabo + '%');
+    elPensa.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-${rabo}%, calc(-100% - 26px)) scale(${escala.toFixed(3)})`;
   }
   function mostrarVista() {
-    document.body.classList.toggle('voando', vista.voando);
-    canvas.style.cursor = vista.voando ? 'grab' : '';
-    if (elVista) elVista.querySelectorAll('button').forEach(b => b.classList.toggle('acesa', (b.dataset.vista === 'voador') === vista.voando));
+    const modo = vistaAtual();
+    document.body.classList.toggle('voando', modo === 'voador');
+    document.body.classList.toggle('seguindo', modo === 'atras');
+    canvas.style.cursor = modo === 'voador' ? 'grab' : '';
+    if (elVista) elVista.querySelectorAll('button').forEach(b => b.classList.toggle('acesa', b.dataset.vista === modo));
     if (elPensa && !vista.voando) elPensa.hidden = true;
   }
   function guardarVista() {
-    try { sessionStorage.setItem('desafio.vista', JSON.stringify({ d: DESAFIO, voando: vista.voando, p: vista.posta ? [vista.x, vista.y, vista.z, vista.yaw, vista.pitch] : null })); } catch (e) { }
+    try { sessionStorage.setItem('desafio.vista', JSON.stringify({ d: DESAFIO, voando: vista.voando, atras: vista.atras, zoom: vista.zoom, p: vista.posta ? [vista.x, vista.y, vista.z, vista.yaw, vista.pitch] : null })); } catch (e) { }
   }
-  // Troca a visão de quem assiste: 'ia', 'voador' ou, sem dizer qual, a outra.
+  // Troca a visão de quem assiste: 'ia', 'atras' (só nas gravações: ver PODE_SEGUIR), 'voador' ou, sem dizer qual, a seguinte.
   function verComo(qual) {
-    const voando = qual ? qual === 'voador' : !vista.voando;
-    if (voando === vista.voando) return;
-    vista.voando = voando;
+    const antes = vistaAtual(), modo = qual ? (VISTAS.includes(qual) ? qual : antes) : VISTAS[(VISTAS.indexOf(antes) + 1) % VISTAS.length];
+    if (modo === antes) return;
+    vista.voando = modo !== 'ia';
+    vista.atras = modo === 'atras';
     apertadas.clear();
-    if (!voando) soltar();                      // de volta à visão da iA, o mouse fica livre
-    if (voando && !vista.posta) irAteORobo();
+    if (modo !== 'voador') soltar();            // fora do modo voador, o mouse fica livre
+    if (modo === 'voador' && !vista.posta) irAteORobo();
+    if (modo === 'atras') seguir(antes === 'ia' ? Infinity : 0);   // (vinda do voo, a câmera vai até lá voando; da visão da iA, já aparece no lugar)
     mostrarVista();
     guardarVista();
-    if (!voando && modoIA) { aplicarVisual(); desenhar(); }   // no modo iA a tela só muda quando a iA pede a imagem: sem isto ficaria a do voo
+    if (modo === 'ia' && modoIA) { aplicarVisual(); desenhar(); }   // no modo iA a tela só muda quando a iA pede a imagem: sem isto ficaria a do voo
   }
-  // A visão em que a página abre: a que estava (ver guardarVista), ou a do endereço (?vista=voador).
+  // A visão em que a página abre: a que estava (ver guardarVista), ou a do endereço (?vista=voador, ?vista=atras).
   function abrirVista() {
     try {
       const g = JSON.parse(sessionStorage.getItem('desafio.vista'));
       if (g && g.voando === true) vista.voando = true;
+      if (g && g.atras === true) vista.atras = true;
+      if (g && Number.isFinite(g.zoom)) vista.zoom = entre(g.zoom, ATRAS.zoomMin, ATRAS.zoomMax);
       if (g && g.d === DESAFIO && Array.isArray(g.p) && g.p.length === 5 && g.p.every(Number.isFinite))
         Object.assign(vista, { posta: true, x: entre(g.p[0], VOO.x1, VOO.x2), y: entre(g.p[1], VOO.y1, VOO.y2), z: entre(g.p[2], VOO.z1, VOO.z2), yaw: g.p[3], pitch: entre(g.p[4], -1.45, 1.45) });
     } catch (e) { }
-    if (ENDERECO.get('vista') === 'voador') vista.voando = true;
-    if (ENDERECO.get('vista') === 'ia') vista.voando = false;
-    if (vista.voando && !vista.posta) irAteORobo();
-    if (elVista) elVista.hidden = false;
+    const pedida = ENDERECO.get('vista');
+    if (pedida === 'voador') { vista.voando = true; vista.atras = false; }
+    if (pedida === 'atras') vista.voando = vista.atras = true;
+    if (pedida === 'ia') vista.voando = false;
+    if (vista.atras && !PODE_SEGUIR) vista.voando = false;   // (a visão por trás ficou guardada de uma gravação: ao vivo, vale a da iA)
+    if (!vista.voando) vista.atras = false;
+    if (vista.voando && !vista.atras && !vista.posta) irAteORobo();
+    if (elVista) {
+      if (!PODE_SEGUIR) elVista.querySelectorAll('button[data-vista="atras"]').forEach(b => b.remove());
+      elVista.hidden = false;
+    }
     mostrarVista();
   }
   if (elVista) elVista.addEventListener('click', e => {
@@ -8301,12 +8413,12 @@
   document.addEventListener('pointerlockchange', () => {
     arrasto = null;
     document.body.classList.toggle('preso', preso());
-    canvas.style.cursor = vista.voando ? 'grab' : '';
-    if (preso() && !vista.voando) soltar();     // (prendeu depois de a visão já ter voltado para a da iA)
+    canvas.style.cursor = solto() ? 'grab' : '';
+    if (preso() && !solto()) soltar();          // (prendeu depois de a visão já ter saído do modo voador)
   });
-  document.addEventListener('mousemove', e => { if (preso() && vista.voando) virarVista(e.movementX || 0, e.movementY || 0, 0.0026); });
+  document.addEventListener('mousemove', e => { if (preso() && solto()) virarVista(e.movementX || 0, e.movementY || 0, 0.0026); });
   canvas.addEventListener('pointerdown', e => {
-    if (!vista.voando || e.button !== 0 || preso()) return;
+    if (!solto() || e.button !== 0 || preso()) return;
     arrasto = { x: e.clientX, y: e.clientY };
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { }
     canvas.style.cursor = 'grabbing';
@@ -8317,10 +8429,11 @@
     virarVista(e.clientX - arrasto.x, e.clientY - arrasto.y, 0.0045);
     arrasto = { x: e.clientX, y: e.clientY };
   });
-  for (const fim of ['pointerup', 'pointercancel']) canvas.addEventListener(fim, () => { arrasto = null; canvas.style.cursor = vista.voando ? 'grab' : ''; });
+  for (const fim of ['pointerup', 'pointercancel']) canvas.addEventListener(fim, () => { arrasto = null; canvas.style.cursor = solto() ? 'grab' : ''; });
   canvas.addEventListener('wheel', e => {
     if (!vista.voando) return;
     e.preventDefault();
+    if (vista.atras) { vista.zoom = entre(vista.zoom * Math.exp(entre(e.deltaY, -300, 300) * 0.0015), ATRAS.zoomMin, ATRAS.zoomMax); return; }   // por trás do robô: a roda afasta e aproxima
     andar(-entre(e.deltaY, -300, 300) * 0.004, 0, 0);
   }, { passive: false });
   window.addEventListener('keyup', e => apertadas.delete(e.code));
@@ -8340,8 +8453,8 @@
       if (e.code === 'KeyB') { if (!e.repeat) trocarArranjo(); return; }   // B: a tela cheia ou o menu ao lado
       if (vila.clima && e.code === 'KeyN') { if (!e.repeat) vila.clima.hora = { dia: 'tarde', tarde: 'noite', noite: 'dia' }[vila.clima.hora]; return; }
       if (vila.clima && e.code === 'KeyP') { if (!e.repeat) vila.clima.chuva = !vila.clima.chovendo(); return; }
-      if (vista.voando && TECLAS_DO_VOO.has(e.code)) { e.preventDefault(); apertadas.add(e.code); return; }
-      if (vista.voando && e.code === 'KeyZ') { if (!e.repeat) irAteORobo(); return; }
+      if (solto() && TECLAS_DO_VOO.has(e.code)) { e.preventDefault(); apertadas.add(e.code); return; }
+      if (solto() && e.code === 'KeyZ') { if (!e.repeat) irAteORobo(); return; }
     }
     if (ASSISTINDO) return;                     // numa gravação o teclado não joga (as teclas de quem assiste estão em gravacao.js)
     if (!elCaixa.hidden) {                      // digitando o texto do botão T
@@ -8354,7 +8467,7 @@
     const botao = BOTAO_DA_TECLA[e.code];
     if (botao) {
       e.preventDefault();
-      if (vista.voando) return;                 // voando, o teclado não joga: quem assiste é invisível
+      if (solto()) return;                      // voando, o teclado não joga: quem assiste é invisível
       if (REPETE_SEGURANDO.has(botao)) {
         if (e.timeStamp - ultimoPasso < INTERVALO_TECLA && !(zumbi && ZUMBI.giro > 0 && !e.repeat)) return;   // (nos zumbis, as teclas batidas depressa não se perdem: entram na fila do giro: ver naVezDoTeclado)
         ultimoPasso = e.timeStamp;

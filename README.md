@@ -84,7 +84,7 @@ Antes de começar, o jogo pede à iA um nome de guerra e o modelo dela, e daí e
 ### 5. Assista
 
 - **Na aba do jogo**, o robô se mexe a cada botão que a iA aperta. Nos Desafios 1 a 9, no canto de baixo, à direita, aparecem **quem está jogando** (o nome de guerra e o modelo) e **o que o robô pretende**: a iA tem de dizer, junto com cada botão, o que quer com ele (veja [Quem joga e a intenção de cada botão](#quem-joga-e-a-intenção-de-cada-botão)). Se preferir a imagem sem nada por cima, com tudo isso num menu ao lado, aperte `B` (veja [Tela cheia ou menu ao lado](#tela-cheia-ou-menu-ao-lado)).
-- **De fora, voando**, nos Desafios 1 a 9: a tecla `C` (ou o botão **visão da iA / voador**, no canto de baixo, à direita) troca a visão da página entre o que o robô vê e uma câmera solta, com que você passeia invisível pelo cenário (veja [Duas visões para quem assiste](#duas-visões-para-quem-assiste)).
+- **De fora, voando**, nos Desafios 1 a 9: a tecla `C` (ou o botão **visão da iA / voador**, no canto de baixo, à direita) troca a visão da página entre o que o robô vê e uma câmera solta, com que você passeia invisível pelo cenário (veja [As visões de quem assiste](#as-visões-de-quem-assiste)). Nos replays há mais uma, **por trás** do robô.
 - **Na janela do servidor**, aparece cada botão apertado (com a intenção), a hora, e a linha `a iA venceu o jogo` quando ela termina.
 - **Depois, com calma**, na aba de replays: toda partida é gravada, e dá para assistir a ela sem as esperas (veja [Replays](#replays-assistir-a-uma-partida-depois)).
 - **Para ver o que cada botão fez de verdade**, acrescente `?depurar` ao endereço da página do jogo. Aparece um painel com o estado do jogo. Não deixe a iA ver essa tela.
@@ -119,16 +119,22 @@ Nos Desafios 1 a 9 e na vila coletiva a página tem dois arranjos. Troca-se pela
 - Tudo o que é de quem assiste vai para um menu à esquerda da imagem: os controles da gravação (nos replays), quem está jogando e o que pretende, o que o jogo disse, a lista de teclas e as pílulas.
 - O campo das intenções mostra as que couberem no lugar que ele tem, a mais nova embaixo, e rola do mesmo jeito para as de antes.
 - Numa janela mais quadrada, em que a coluna deixaria a imagem pequena demais, o menu vira uma faixa embaixo da imagem. Aí a lista de teclas não cabe nele e fica num canto da imagem (o `H` a guarda).
-- No modo voador e na tela dividida da vila coletiva o desenho toma todo o espaço ao lado do menu.
+- No modo voador, na visão por trás do robô e na tela dividida da vila coletiva o desenho toma todo o espaço ao lado do menu.
 
 Para abrir a página já num dos dois, acrescente `?painel=cheia` ou `?painel=lado` ao endereço.
 
-## Duas visões para quem assiste
+## As visões de quem assiste
 
-Nos Desafios 1 a 9 a página mostra uma de duas visões. Troca-se pela tecla `C` ou pelo botão **visão da iA / voador**, no canto de baixo, à direita; vale ao vivo e nos replays.
+Nos Desafios 1 a 9 a página mostra uma de duas visões. Troca-se pela tecla `C` ou pelo botão **visão da iA / voador**, no canto de baixo, à direita; vale ao vivo e nos replays. Nos replays desses desafios há uma terceira, **por trás**, entre as duas.
 
 - **Visão da iA:** o que o robô está vendo, com tudo o que é desenhado na imagem dela (o inventário, os números dos alvos, o indicador). É a visão em que a página abre.
 - **Voador:** uma câmera solta, só sua. Você voa por onde quiser, atravessa as paredes e vê o robô por fora, de corpo inteiro. Em cima da cabeça dele vai um balão com **o que a iA disse que pretende** com o último botão. O que a pessoa diz também aparece no balão dela.
+- **Por trás** (só nos replays dos Desafios 1 a 9, em que o robô joga sozinho): a câmera vai sozinha atrás do robô, por cima do ombro dele, olhando para onde ele olha, com o mesmo balão do que ele pretende em cima da cabeça. É para acompanhar a partida vendo o robô, o que ele tem pela frente e o que ele está pensando.
+  - Ela não entra em parede nem em móvel, e só passa por porta aberta. Quando o robô está de costas para uma parede e não sobra lugar atrás dele, a câmera sobe e olha de cima.
+  - Fica do lado do ombro direito (o da mão que pega); se ali não há lugar, vai para o outro ombro ou para bem atrás dele.
+  - A roda do mouse afasta e aproxima. No carro, ela vai mais longe e mais alta.
+  - O balão cai para o lado de fora da imagem, para não tapar o que o robô tem pela frente, e desvia do painel da gravação.
+  - Na vila coletiva e no Galinha Pong essa visão não existe.
 
 No modo voador o teclado é de quem voa:
 
@@ -147,7 +153,7 @@ Você é invisível, e isso vale nos dois sentidos:
 - **Nada disso muda o jogo nem a imagem da iA.** A imagem que a iA recebe é sempre a dos olhos do robô, seja qual for a visão da página. O balão do pensamento é um pedaço da página, não do jogo: não entra na imagem dela nem aparece no espelho.
 - **Voando, o teclado não joga.** Os botões do jogo no teclado ficam desligados até você voltar para a visão da iA; a iA continua jogando pelo MCP do mesmo jeito.
 
-A visão escolhida e o lugar da câmera ficam guardados na aba, então continuam valendo quando a página recarrega (a cada `comecar`, ou ao voltar num replay). `?vista=voador` no endereço já abre a página voando. Nas salas com espelho a câmera não sai do prédio; na cidade, ela vai até uns 14 m além do fim das ruas e sobe até 16 m.
+A visão escolhida e o lugar da câmera ficam guardados na aba, então continuam valendo quando a página recarrega (a cada `comecar`, ou ao voltar num replay). `?vista=voador` no endereço já abre a página voando (e `?vista=atras`, num replay, por trás do robô). Nas salas com espelho a câmera não sai do prédio; na cidade, ela vai até uns 14 m além do fim das ruas e sobe até 16 m.
 
 O mouse preso é coisa do navegador (ele mostra um aviso de que o `Esc` solta). Com o mouse preso não dá para clicar nos botões da página: a tecla `C` troca de visão e também solta o mouse. Logo depois de um `Esc` o navegador recusa prender de novo por um instante; o clique seguinte prende. Se o navegador não prender, arrastar o mouse com o botão apertado vira a câmera do mesmo jeito.
 
@@ -159,7 +165,7 @@ Ao vivo o jogo é lento: cada iA leva vários segundos para decidir um botão. P
 - **Não interfere no jogo:** a aba de replays não se liga ao servidor MCP. A partida que estiver sendo jogada continua na aba dela, e a gravação dela aparece na lista (do ponto em que estava quando a lista foi aberta).
 - **Pódio dos desafios:** no alto da lista, cada desafio de 1 a 9 tem o seu pódio (no 9, um para cada missão), com o 1º, o 2º e o 3º lugar entre as iAs que venceram. Ganha quem venceu com **menos movimentos** (os botões apertados até a vitória, sem contar os pedidos de imagem); no empate, quem levou **menos tempo** (contado desde que o desafio começou). Cada iA — o nome de guerra com o modelo — entra uma vez só, com a melhor partida dela, e um clique num degrau abre essa partida. Partidas do teclado, sem nome, não entram. No Desafio 7 a ordem é a da pontuação. No Desafio 8 não há vitória: o pódio é o do recorde — quem derrubou mais zumbis e, no empate, quem deu menos tiros. Só entram as partidas com as regras de agora (versão 15 em diante): as de antes — com zumbis mais lentos, balas sem fim e sem o mapa, ou com o robô que virava na hora — continuam na lista, marcadas como "regras antigas". No Desafio 9 cada missão tem o seu pódio: ganha quem a cumpriu no **nível mais alto** e, no empate, em menos tempo. A vila coletiva e o Galinha Pong não têm pódio. (As gravações de antes do pódio não guardavam as contas da hora da vitória: entram com as da partida inteira, que podem ter um ou outro botão apertado depois dela.)
 - **Um grupo por desafio:** embaixo do pódio, as gravações vêm separadas por desafio (os Desafios 1 a 9, a vila coletiva, o Galinha Pong e o treino dele), cada grupo com a conta das gravações e, dentro dele, da mais nova para a mais antiga. Um clique no título do grupo o recolhe ou o expande, como no pódio, e o atalho **recolher todos / expandir todos**, em cima do primeiro grupo, faz isso com todos de uma vez. O navegador guarda quais grupos ficaram recolhidos.
-- **Assistir:** clique numa gravação. Ela abre **em pausa**: o `Espaço`, ou o botão **▶ tocar**, faz a partida andar. O próprio jogo a refaz: na quadra, com tudo o que a transmissão tem (as etiquetas, as câmeras, a torcida, o comentarista, a reprise de cada ponto); nos Desafios 1 a 9, com o campo de quem jogou (nome e modelo) e do que o robô pretende. A lista também diz, de cada gravação, qual iA jogou. As esperas encolhem: entre uma rodada e outra passa no máximo 1,8 segundo, e o jogo dá o tempo de ler cada fala e cada intenção.
+- **Assistir:** clique numa gravação. Ela abre **em pausa**: o `Espaço`, ou o botão **▶ tocar**, faz a partida andar. O próprio jogo a refaz: na quadra, com tudo o que a transmissão tem (as etiquetas, as câmeras, a torcida, o comentarista, a reprise de cada ponto); nos Desafios 1 a 9, com o campo de quem jogou (nome e modelo) e do que o robô pretende, e com a visão **por trás** do robô, que o acompanha pensando alto (a tecla `C` ou a pílula das visões: veja [As visões de quem assiste](#as-visões-de-quem-assiste)). A lista também diz, de cada gravação, qual iA jogou. As esperas encolhem: entre uma rodada e outra passa no máximo 1,8 segundo, e o jogo dá o tempo de ler cada fala e cada intenção.
 - **Controles:** o painel da gravação tem pausar, voltar ao começo, ir para a rodada anterior ou para a seguinte, uma régua para ir a qualquer ponto e quatro velocidades (0,5×, 1×, 2× e 4×). No teclado: `Espaço` pausa e continua, `←` e `→` andam de rodada em rodada (de botão em botão, nos Desafios 1 a 9), `↑` e `↓` mudam a velocidade e `Home` volta ao começo. Na quadra, as câmeras e o som funcionam como ao vivo.
 - **Botão e imagem, uma parada cada (Desafios 1 a 9):** o pedido de imagem (o botão `F`) também é uma parada de quem anda de botão em botão. E, tocando, o replay dá o tempo de ler a intenção de um botão antes de passar para o seguinte, mesmo que a iA tenha apertado o botão e pedido a imagem em seguida: há uma pausa no botão e outra na imagem.
 - **Voltar (Desafios 1 a 9):** o jogo não sabe desfazer um botão, então para voltar a página é montada de novo já no ponto pedido. A página que estava na tela fica à vista (o painel diz "voltando…") até a nova estar pronta, e a troca é de uma vez, sem tela preta. Leva uma fração de segundo nas salas e cerca de um segundo na cidade.
@@ -369,7 +375,7 @@ Dê duplo clique em `index.html`. As teclas são as mesmas que a iA tem, mais al
 - `X`, na vila coletiva, tira do jogo o robô do teclado;
 - `O` liga e desliga o som (os efeitos do que acontece, a música do violeiro da praça e a chuva); a pílula **som**, no canto de baixo, à direita, faz o mesmo, e tem duas réguas de volume, uma para o violão e outra para os efeitos (a escolha fica guardada no navegador). O navegador só deixa o som tocar depois de um clique ou de uma tecla na página. (A tecla `M` já é a do Galinha Pong.)
 - `R` recomeça o desafio atual;
-- `C` troca a visão de quem assiste, entre a da iA e a de quem voa por fora (veja [Duas visões para quem assiste](#duas-visões-para-quem-assiste); só nos Desafios 1 a 9);
+- `C` troca a visão de quem assiste, entre a da iA e a de quem voa por fora — e, nos replays, a que vai por trás do robô (veja [As visões de quem assiste](#as-visões-de-quem-assiste); só nos Desafios 1 a 9);
 - `I` congela a tela até a próxima imagem ser pedida (para sentir como a iA enxerga; só nos Desafios 1 a 9);
 - `H` esconde a lista de teclas (ela fica onde não tapa o que o jogo escreve na imagem — a missão, o inventário, o alvo, o mapa do carro; no menu ao lado, mora na coluna);
 - `B` troca o arranjo da página, entre a tela cheia e o menu ao lado (veja [Tela cheia ou menu ao lado](#tela-cheia-ou-menu-ao-lado); só nos Desafios 1 a 9 e na vila coletiva);

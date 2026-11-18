@@ -139,9 +139,10 @@
     position: fixed; left: 0; top: 0; max-width: 300px; box-sizing: border-box; padding: 9px 13px 10px; border-radius: 16px;
     background: #fff; color: #14181d; font: 600 14.5px/1.3 var(--texto); white-space: normal; overflow-wrap: anywhere;
     box-shadow: 0 8px 26px rgba(0, 0, 0, .4); pointer-events: none; user-select: none;
-    transform-origin: 50% calc(100% + 26px); will-change: transform;
+    transform-origin: var(--rabo, 50%) calc(100% + 26px); will-change: transform;
   }
-  body.desafio #pensa::before, body.desafio #pensa::after { content: ''; position: absolute; left: 50%; border-radius: 50%; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .3); }
+  /* (--rabo: onde o balão se prende à cabeça do robô, ao longo da largura dele: no meio ou, na visão por trás, perto de uma das pontas: ver porPensamento, em jogo.js) */
+  body.desafio #pensa::before, body.desafio #pensa::after { content: ''; position: absolute; left: var(--rabo, 50%); border-radius: 50%; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .3); }
   body.desafio #pensa::before { bottom: -14px; width: 12px; height: 12px; margin-left: -10px; }
   body.desafio #pensa::after { bottom: -25px; width: 7px; height: 7px; margin-left: -2px; }
   body.desafio #pensa b { display: inline-block; margin-right: 7px; padding: 2px 6px; border-radius: 6px; background: #14181d; color: #fff; font: 700 10.5px/1.4 var(--mono); vertical-align: 2px; }
@@ -280,7 +281,7 @@
 <body>
 <canvas id="tela"></canvas>
 
-<!-- No modo voador (jogo.js): o balão com o que a iA pretende, em cima da cabeça do robô. É da
+<!-- No modo voador e na visão por trás (jogo.js): o balão com o que a iA pretende, em cima da cabeça do robô. É da
      página, não do jogo: nunca entra na imagem que a iA recebe. -->
 <div id="pensa" hidden></div>
 
@@ -317,8 +318,9 @@ I R H G Esc</div>
 <!-- Estado da ligação com o servidor MCP (ver ponte.js). Não aparece quando a página é aberta direto do arquivo. -->
 <div id="ponte" class="painel" hidden></div>
 
-<!-- A visão de quem assiste, nos desafios 1 a 7 (jogo.js): a da iA ou a de quem voa por fora. -->
-<div id="vista" class="painel" hidden><button type="button" tabindex="-1" data-vista="ia" title="O que o robô da iA está vendo">visão da iA</button><button type="button" tabindex="-1" data-vista="voador" title="Uma câmera solta, invisível: W A S D voam, Q e E descem e sobem, Shift corre, Z vai até o robô; um clique prende o mouse, que passa a virar a câmera, e Esc solta">voador</button><kbd>C</kbd></div>
+<!-- A visão de quem assiste, nos desafios (jogo.js): a da iA, a de quem voa por fora e, só nas gravações dos desafios
+     em que o robô joga sozinho, a que vai atrás dele (fora delas, jogo.js tira esse botão). -->
+<div id="vista" class="painel" hidden><button type="button" tabindex="-1" data-vista="ia" title="O que o robô da iA está vendo">visão da iA</button><button type="button" tabindex="-1" data-vista="atras" title="A câmera vai atrás do robô, por cima do ombro dele, com o balão do que ele pretende em cima da cabeça; a roda do mouse afasta e aproxima">por trás</button><button type="button" tabindex="-1" data-vista="voador" title="Uma câmera solta, invisível: W A S D voam, Q e E descem e sobem, Shift corre, Z vai até o robô; um clique prende o mouse, que passa a virar a câmera, e Esc solta">voador</button><kbd>C</kbd></div>
 
 <!-- O arranjo da página nos desafios (jogo.js): a imagem enchendo a janela, com os painéis por cima, ou a imagem com o menu ao lado. -->
 <div id="arranjo" class="painel" hidden><button type="button" tabindex="-1" data-arranjo="cheia" title="A imagem do jogo enche a janela, e os painéis ficam por cima dela, nos cantos">tela cheia</button><button type="button" tabindex="-1" data-arranjo="lado" title="A imagem fica do tamanho da que a iA recebe, sem nada por cima, e os painéis vão para um menu ao lado">menu ao lado</button><kbd>B</kbd></div>
