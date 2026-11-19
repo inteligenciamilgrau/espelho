@@ -31,11 +31,13 @@
   #dobrar { margin: 0 0 8px; text-align: right; }
   #dobrar span { cursor: pointer; color: #7dffb0; user-select: none; }
   #dobrar span:hover { text-decoration: underline; }
-  /* o pódio dos desafios: um cartão por desafio, com os três degraus (2º, 1º e 3º) */
+  /* o pódio: um cartão por desafio, com os três degraus (2º, 1º e 3º). Os cartões aparecem em dois lugares: todos juntos, no
+     pódio geral, e cada um no alto do grupo do seu desafio */
   #podio { margin: 0 0 22px; }
   #podio summary { cursor: pointer; font-size: 17px; font-weight: bold; user-select: none; }
   #podio .dica { margin: 6px 0 12px; }
-  #podios { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 10px; }
+  .podios { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 10px; }
+  .grupo .podios { margin: 10px 0 12px; }
   .podio { padding: 10px 12px 0; border-radius: 8px; background: #151c23; border: 1px solid #222c36; overflow: hidden; }
   .podio h2 { margin: 0 0 8px; font-size: 14px; color: #cfe6f2; }
   .podio .degraus { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 6px; }
@@ -61,13 +63,14 @@
     <span id="atualizar">atualizar</span>
   </header>
   <p class="dica">Toda partida é gravada sozinha enquanto é jogada. Escolha uma para assistir: ela abre em pausa (o Espaço a faz andar), passa sem as esperas das iAs, e dá para pausar, acelerar e ir de rodada em rodada. Esta aba não mexe no jogo que está aberto na outra.</p>
-  <!-- O pódio dos desafios 1 a 9 (o script preenche: ver "o pódio"). Não há pódio da vila nem do Galinha Pong. -->
+  <!-- O pódio geral: os pódios de todos os desafios, de 1 a 9, juntos (o script preenche: ver "o pódio"). O de cada desafio
+       aparece também no alto do grupo dele, na lista. Não há pódio da vila nem do Galinha Pong. -->
   <details id="podio" hidden>
-    <summary>🏆 Pódio dos desafios</summary>
-    <p class="dica">De cada desafio, as três iAs que venceram com menos movimentos (os botões apertados até a vitória, sem contar os pedidos de imagem); no empate, a que levou menos tempo. Vale a melhor partida de cada iA, e as partidas do teclado, sem nome, não entram. No quebra-cabeça vale a pontuação e, nos zumbis, quantos foram derrubados (é o recorde). Nas missões, cada missão tem o seu pódio: vale o nível mais alto em que ela foi cumprida e, no empate, o menor tempo. Um clique num degrau abre a partida.</p>
-    <div id="podios"></div>
+    <summary>🏆 Pódio geral: todos os desafios</summary>
+    <p class="dica">O pódio de cada desafio também fica no alto do grupo dele, mais abaixo. De cada desafio, as três iAs que venceram com menos movimentos (os botões apertados até a vitória, sem contar os pedidos de imagem); no empate, a que levou menos tempo. Vale a melhor partida de cada iA, e as partidas do teclado, sem nome, não entram. No quebra-cabeça vale a pontuação e, nos zumbis, quantos foram derrubados (é o recorde). Nas missões, cada missão tem o seu pódio: vale o nível mais alto em que ela foi cumprida e, no empate, o menor tempo. Um clique num degrau abre a partida.</p>
+    <div id="podios" class="podios"></div>
   </details>
-  <!-- As gravações, um grupo por desafio (o script preenche: ver "os grupos"); e o atalho que fecha ou abre todos de uma vez. -->
+  <!-- As gravações, um grupo por desafio, cada um com o pódio dele no alto (o script preenche: ver "os grupos"); e o atalho que fecha ou abre todos de uma vez. -->
   <div id="dobrar" hidden><span></span></div>
   <div id="lista"></div>
   <div id="vazio" hidden></div>
@@ -167,6 +170,9 @@
   // Só valem as partidas com as regras de agora (da versão 15 em diante: ver jogo.js).
   // Cada iA (o nome de guerra com o modelo) entra uma vez só, com a melhor partida dela. Partida
   // sem nome é do teclado: não entra. A vila e o Galinha Pong não têm pódio.
+  // Cada pódio aparece em dois lugares: no pódio geral, com os de todos os desafios juntos (para
+  // quem quer saber quais são as melhores iAs), e no alto do grupo do seu desafio, na lista (para
+  // quem só quer saber daquele desafio: ver "os grupos").
   const elPodio = document.getElementById('podio'), elPodios = document.getElementById('podios');
   // (Nas missões — o desafio 9 — há um pódio para cada missão: ganha quem a cumpriu no nível mais alto; no empate, em menos tempo.)
   // (No quebra-cabeça há um pódio para cada nível: 3 x 3, 4 x 4 e 5 x 5. Por isso o desafio dele entra no pódio como 7.1, 7.2 ou 7.3.)
@@ -182,49 +188,58 @@
     if (desafio === '8') {
       if (!(Number(resumo.versao) >= 15)) return null;   // (antes da versão 14 das regras os zumbis eram mais lentos, as balas não acabavam e não havia mapa; antes da 15 o robô virava na hora: era outro jogo)
       const z = resumo.zumbis && typeof resumo.zumbis === 'object' ? resumo.zumbis : null, mortos = z ? numero(z.mortos) : 0, tiros = z ? numero(z.tiros) : 0;
-      return mortos < 1 ? null : { id, desafio, nome, modelo, ordem: [-mortos, tiros], conta: [`${mortos} ${mortos === 1 ? 'zumbi' : 'zumbis'}`, `${tiros} ${tiros === 1 ? 'tiro' : 'tiros'}`] };
+      return mortos < 1 ? null : { id, resumo, desafio, nome, modelo, ordem: [-mortos, tiros], conta: [`${mortos} ${mortos === 1 ? 'zumbi' : 'zumbis'}`, `${tiros} ${tiros === 1 ? 'tiro' : 'tiros'}`] };
     }
     if (resumo.ganhou !== true) return null;
     if (desafio === '7') {
       const q = resumo.quebra && typeof resumo.quebra === 'object' ? resumo.quebra : null;
       if (!q || q.desistiu === true) return null;
       const pontos = Math.min(100, numero(q.pontos)), tempo = numero(q.tempo);
-      return { id, desafio: '7.' + nivelDoQuebra(resumo), nome, modelo, ordem: [-pontos, tempo], conta: [`${pontos} pontos`, relogio(tempo)] };
+      return { id, resumo, desafio: '7.' + nivelDoQuebra(resumo), nome, modelo, ordem: [-pontos, tempo], conta: [`${pontos} pontos`, relogio(tempo)] };
     }
     const v = resumo.vitoria && typeof resumo.vitoria === 'object' ? resumo.vitoria : null;
     const movimentos = numero(v ? v.botoes : resumo.botoes), tempo = numero(v ? v.tempo : resumo.duracao);
-    return { id, desafio, nome, modelo, ordem: [movimentos, tempo], conta: [`${movimentos} ${movimentos === 1 ? 'movimento' : 'movimentos'}`, relogio(tempo)] };
+    return { id, resumo, desafio, nome, modelo, ordem: [movimentos, tempo], conta: [`${movimentos} ${movimentos === 1 ? 'movimento' : 'movimentos'}`, relogio(tempo)] };
   }
   const antes = (a, b) => a.ordem[0] - b.ordem[0] || a.ordem[1] - b.ordem[1];
-  function mostrarPodio(lista) {
-    elPodios.textContent = '';
-    let cartoes = 0;
+  // Os três primeiros de cada pódio, pelo nome dele em NO_PODIO: { '1': [...], '7.2': [...] }. Só entra o pódio em que há alguém.
+  function podiosDe(lista) {
+    const feitos = lista.map(feito).filter(Boolean), podios = {};
     for (const desafio of NO_PODIO) {
       const melhores = new Map();                // a melhor partida de cada iA neste desafio
-      for (const f of lista.map(feito)) {
-        if (!f || f.desafio !== desafio) continue;
+      for (const f of feitos) {
+        if (f.desafio !== desafio) continue;
         const quem = (f.nome + '|' + f.modelo).toLowerCase();
         if (!melhores.has(quem) || antes(f, melhores.get(quem)) < 0) melhores.set(quem, f);
       }
       const tres = [...melhores.values()].sort(antes).slice(0, 3);
-      if (!tres.length) continue;
-      cartoes++;
-      const cartao = elemento(elPodios, 'div', '', 'podio');
-      elemento(cartao, 'h2', NOME_DO_PODIO(desafio));
-      const degraus = elemento(cartao, 'div', '', 'degraus');
-      tres.forEach((f, i) => {
-        const lugar = elemento(degraus, 'div', '', 'lugar l' + (i + 1));
-        lugar.title = `${i + 1}º lugar: ${f.nome}${f.modelo ? ' (' + f.modelo + ')' : ''} — ${f.conta.join(', ')}. Clique para assistir.`;
-        elemento(lugar, 'div', f.nome, 'quem laranja');
-        elemento(lugar, 'div', f.modelo || '—', 'modelo');
-        elemento(lugar, 'div', f.conta[0], 'conta');
-        elemento(lugar, 'div', f.conta[1], 'tempo');
-        elemento(lugar, 'div', `${i + 1}º`, 'degrau');
-        // (o id e o desafio foram conferidos: o endereço não leva nada escrito por uma iA)
-        lugar.addEventListener('click', () => { location.href = f.resumo ? enderecoDe(f.id, f.resumo) : './?desafio=' + desafio + '&assistir=' + f.id; });
-      });
+      if (tres.length) podios[desafio] = tres;
     }
-    elPodio.hidden = !cartoes;
+    return podios;
+  }
+  // O cartão de um pódio, com os três degraus. Um clique num degrau abre a partida.
+  function cartaoDoPodio(pai, titulo, tres) {
+    const cartao = elemento(pai, 'div', '', 'podio');
+    elemento(cartao, 'h2', titulo);
+    const degraus = elemento(cartao, 'div', '', 'degraus');
+    tres.forEach((f, i) => {
+      const lugar = elemento(degraus, 'div', '', 'lugar l' + (i + 1));
+      lugar.title = `${i + 1}º lugar: ${f.nome}${f.modelo ? ' (' + f.modelo + ')' : ''} — ${f.conta.join(', ')}. Clique para assistir.`;
+      elemento(lugar, 'div', f.nome, 'quem laranja');
+      elemento(lugar, 'div', f.modelo || '—', 'modelo');
+      elemento(lugar, 'div', f.conta[0], 'conta');
+      elemento(lugar, 'div', f.conta[1], 'tempo');
+      elemento(lugar, 'div', `${i + 1}º`, 'degrau');
+      // (O endereço é o da gravação, feito do resumo dela. Antes, o degrau do quebra-cabeça montava o endereço com o nome
+      //  do pódio — "7.1" —, que não é um desafio: a página abria o Desafio 1, e a gravação não tocava.)
+      lugar.addEventListener('click', () => { location.href = enderecoDe(f.id, f.resumo); });
+    });
+  }
+  // O pódio geral: os cartões de todos os desafios, na ordem deles.
+  function mostrarPodio(podios) {
+    elPodios.textContent = '';
+    for (const desafio of NO_PODIO) if (podios[desafio]) cartaoDoPodio(elPodios, NOME_DO_PODIO(desafio), podios[desafio]);
+    elPodio.hidden = !elPodios.childElementCount;
   }
   try { elPodio.open = localStorage.getItem(CHAVE_DO_PODIO) !== 'fechado'; } catch (e) { elPodio.open = true; }
   elPodio.addEventListener('toggle', () => { try { localStorage.setItem(CHAVE_DO_PODIO, elPodio.open ? 'aberto' : 'fechado'); } catch (e) { } });
@@ -234,6 +249,9 @@
   // e dentro dele as gravações da mais nova para a mais antiga. Cada grupo abre e fecha, como o
   // pódio, e o navegador guarda quais ficaram fechados (a lista é refeita toda vez que a aba volta
   // a ser olhada: sem isso, o grupo fechado abriria de novo).
+  // No alto de cada grupo, antes das gravações, vai o pódio daquele desafio: o mesmo cartão do pódio
+  // geral (no quebra-cabeça, um por tamanho; nas missões, um por missão). O grupo sem ninguém no
+  // pódio — ninguém venceu ainda, ou é a vila ou o Galinha Pong — começa direto nas gravações.
   const GRUPOS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'V', 'M', 'T'], CHAVE_DOS_GRUPOS = 'replays.grupos';
   const NOME_DO_GRUPO = d => '789V'.includes(d) ? `Desafio ${d}: ${JOGOS[d]}` : d === 'T' ? 'Treino do Galinha Pong' : JOGOS[d];
   const tantas = n => n === 1 ? '1 gravação' : `${n} gravações`;
@@ -250,8 +268,8 @@
     const todos = gruposNaTela(), abrir = !todos.some(g => g.open);
     todos.forEach(g => { g.open = abrir; });   // (o 'toggle' de cada grupo guarda como ele ficou e acerta o texto do atalho)
   });
-  // Monta os grupos e devolve quantas gravações há na lista.
-  function mostrarGrupos(lista) {
+  // Monta os grupos, cada um com o seu pódio no alto, e devolve quantas gravações há na lista.
+  function mostrarGrupos(lista, podios) {
     elLista.textContent = '';
     let quantas = 0;
     for (const desafio of GRUPOS) {
@@ -260,6 +278,11 @@
       quantas += linhas.length;
       const grupo = elemento(elLista, 'details', '', 'grupo'), titulo = elemento(grupo, 'summary', NOME_DO_GRUPO(desafio));
       elemento(titulo, 'span', tantas(linhas.length), 'quantas');
+      const doGrupo = NO_PODIO.filter(d => podios[d] && (d === desafio || d.startsWith(desafio + '.')));   // (o pódio deste desafio; no 7 e no 9, os de cada tamanho e de cada missão)
+      if (doGrupo.length) {
+        const cartoes = elemento(grupo, 'div', '', 'podios');
+        for (const d of doGrupo) cartaoDoPodio(cartoes, d === desafio ? '🏆 Pódio' : '🏆 ' + NOME_DO_PODIO(d), podios[d]);
+      }
       linhas.forEach(l => grupo.appendChild(l));
       grupo.open = !fechados.has(desafio);
       grupo.addEventListener('toggle', () => {
@@ -276,8 +299,9 @@
   async function mostrar() {
     let lista = null;
     try { lista = await gravacao.listar(); } catch (e) { }
-    mostrarPodio(lista || []);
-    const quantas = mostrarGrupos(lista || []);
+    const podios = podiosDe(lista || []);
+    mostrarPodio(podios);
+    const quantas = mostrarGrupos(lista || [], podios);
     elConta.textContent = lista ? tantas(quantas) : '';
     elVazio.hidden = quantas > 0;
     elVazio.textContent = !lista ? 'Não consegui falar com o servidor do jogo. Ele está ligado?' : 'Nenhuma partida gravada ainda. Jogue uma (ou ponha as iAs para jogar) e ela aparece aqui.';
