@@ -198,12 +198,11 @@
   body.desafio.doca-lado #doca > .gravacao { width: auto !important; }
   body.desafio.doca-lado #quer { flex: 0 1 auto; min-height: 0; }
   body.desafio.doca-lado #mensagem { flex: none; max-width: none; }
-  body.desafio.doca-lado #ajuda { flex: none; margin-top: auto; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; align-items: start; padding: 10px 10px 8px; }
+  body.desafio.doca-lado #ajuda { flex: none; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; align-items: start; padding: 10px 10px 8px; }
   body.desafio.doca-lado #ajuda .da-pagina { margin-top: 0; padding: 0 0 0 12px; border-top: 0; border-left: 1px solid var(--borda); }
   body.desafio.doca-lado #ajuda .da-pagina .fileira { flex-wrap: wrap; }
   body.desafio.doca-lado #ajuda .do-voador .dica { max-width: 132px; }
-  body.desafio.doca-lado #pilulas { margin-top: auto; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
-  body.desafio.doca-lado #ajuda:not([hidden]) + #pilulas { margin-top: 0; }
+  body.desafio.doca-lado #pilulas { flex-wrap: wrap; justify-content: flex-end; align-items: center; }
   body.desafio.doca-lado #pilulas > .painel { flex: 1 1 auto; box-sizing: border-box; text-align: center; }
   body.desafio.doca-lado #pilulas > #modo { flex: none; }
   body.desafio.doca-lado #vista, body.desafio.doca-lado #arranjo { flex-basis: 100%; justify-content: center; }
@@ -215,6 +214,33 @@
   body.desafio.doca-lado #som kbd { justify-self: start; }
   body.desafio.doca-lado #som { flex-basis: 100%; }
   body.desafio.doca-lado #som label input[type=range] { flex: 1 1 40px; min-width: 40px; width: auto; }
+  /* As seções da coluna. O que é de quem assiste vai em três seções, e cada uma tem uma barra que a minimiza e a expande
+     (jogo.js: ver "as seções do menu ao lado"): o que a iA pretende (a barra é o título dele, dentro do campo), o que o jogo
+     disse com a lista de teclas, e a config, que são as pílulas. As duas de baixo ficam no pé da coluna; minimizadas, sobra
+     só a barra de cada uma, e o campo do que a iA pretende toma o resto da coluna. Fora da coluna (na tela cheia, na faixa
+     e na quadra) as barras não existem: o título do campo é só um título, e nada fica minimizado. */
+  .secao { display: none; }
+  body.desafio .secao { all: unset; display: none; box-sizing: border-box; }
+  body.desafio .secao i { display: none; }
+  body.desafio #quer .secao { display: block; }
+  body.desafio.doca-lado #doca .secao { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; pointer-events: auto; transition: color .15s, background .15s; }
+  body.desafio.doca-lado #doca .secao:hover { color: #fff; }
+  /* (a seta: para baixo, a seção está aberta; para o lado, minimizada) */
+  body.desafio.doca-lado #doca .secao i { display: block; flex: none; width: 6px; height: 6px; margin: -3px 4px 0 0; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); transition: transform .15s, margin .15s; }
+  body.desafio.doca-lado #doca .secao[aria-expanded="false"] i { margin-top: 0; transform: rotate(-45deg); }
+  body.desafio.doca-lado #doca > .secao { flex: none; padding: 8px 10px 8px 13px; border-radius: 10px; border: 1px solid var(--borda); background: rgba(255, 255, 255, .045); font: 600 10px/1 var(--titulo); letter-spacing: 1.6px; text-transform: uppercase; color: var(--apagado); }
+  body.desafio.doca-lado #doca > .secao:hover { background: rgba(255, 255, 255, .11); }
+  body.desafio.doca-lado #doca > .secao[aria-expanded="true"] { margin-bottom: -4px; }   /* (aberta, a barra fica mais perto do que é dela) */
+  body.desafio.doca-lado #doca > .secao[data-secao="jogo"] { margin-top: auto; }          /* (daqui para baixo, tudo no pé da coluna) */
+  body.desafio.doca-lado #quer .secao { width: 100%; margin: -4px 0 1px; padding: 4px 0; }   /* (a largura: um botão não se estica sozinho, e na vila coletiva o campo não é uma pilha) */
+  body.desafio.doca-lado #mensagem::before { display: none; }                             /* (o nome dela já está na barra) */
+  body.desafio.doca-lado.fecha-quer #quer .secao { margin-bottom: -4px; }
+  body.desafio.doca-lado.fecha-quer #quer .rolo-fora { display: none; }
+  body.desafio.doca-lado.fecha-quer.coletivo #quer > :not(.secao) { display: none; }
+  body.desafio.doca-lado.fecha-jogo #mensagem, body.desafio.doca-lado.fecha-jogo #ajuda { display: none; }
+  /* (o aviso vermelho do MCP e a marca do modo iA não são config: continuam à vista com ela minimizada) */
+  body.desafio.doca-lado.fecha-config #pilulas > :not(#modo):not(.alerta) { display: none; }
+  body.desafio.doca-lado.fecha-config #pilulas:not(:has(> #modo:not([hidden]), > .alerta)) { display: none; }
   /* a faixa: da esquerda para a direita, o que o jogo disse, quem joga e o que pretende, e as pílulas; assistindo a uma
      gravação, o painel dela vem primeiro e o que o jogo disse sobe para cima das pílulas (jogo.js o muda de lugar)
      (aqui a lista de teclas não cabe: fica solta, num canto da imagem em que o jogo não escreve, e o H a guarda) */
@@ -293,6 +319,11 @@
 <!-- O que a iA diz que pretende com cada botão, para quem assiste (jogo.js preenche). -->
 <div id="quer" class="painel" hidden></div>
 
+<!-- As barras das seções do menu ao lado (jogo.js: ver "as seções do menu ao lado"): um clique minimiza ou expande o que
+     vem embaixo dela. Só aparecem na coluna do menu ao lado. Esta é a do que o jogo disse e da lista de teclas; a do
+     que a iA pretende é o título do campo dela (jogo.js a põe lá dentro); a da config vem antes das pílulas. -->
+<button class="secao" type="button" tabindex="-1" data-secao="jogo"><span>o jogo disse · teclas</span><i></i></button>
+
 <!-- O que o jogo diz ao jogador no começo do desafio (jogo.js preenche). -->
 <div id="mensagem" class="painel"></div>
 
@@ -307,6 +338,9 @@ L T F
 
 1 2 3 4 5 6 7 8 9 V M C Shift+T
 I R H G Esc</div>
+
+<!-- A barra da config (o som, a visão, o arranjo, o MCP, os replays e os jogos): ver a outra barra, acima. -->
+<button class="secao" type="button" tabindex="-1" data-secao="config"><span>config</span><i></i></button>
 
 <div id="pilulas">
 <!-- O modo iA (tecla I): a imagem só muda quando a iA pede uma. -->

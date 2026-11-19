@@ -2270,11 +2270,12 @@
     sol.target.position.copy(focoDoSol);
     vila.focarSol = (x, z) => {
       const longe = Math.hypot(x - MEIO.x, z - MEIO.z) > 36, fx = longe ? Math.round(x / 8) * 8 : MEIO.x, fz = longe ? Math.round(z / 8) * 8 : MEIO.z;
-      if (fx === focoDoSol.x && fz === focoDoSol.z) return;
+      if (fx === focoDoSol.x && fz === focoDoSol.z) return false;
       focoDoSol.set(fx, 0, fz);
       sol.position.copy(focoDoSol).addScaledVector(vila.clima && vila.clima.v ? vila.clima.v.sol : SOL, 70);
       sol.target.position.copy(focoDoSol);
       sol.target.updateMatrixWorld();
+      return true;                              // (o quadrado mudou de lugar: as sombras têm de ser refeitas já, mesmo no ritmo de ambiente: ver desenhar)
     };
     sol.castShadow = true;
     sol.shadow.mapSize.set(4096, 4096);
@@ -5527,12 +5528,22 @@
   // Nesse desenho só as sombras interessam, e tudo é pintado com um material só, liso. (Com os materiais de verdade, cada um
   // ganhava dois programas na placa de vídeo — um para a tela, outro para este desenho, que não tem as cores da tela — e
   // trocava de um para o outro a cada quadro: o primeiro desenho da página demorava o dobro, e todos os outros, mais.)
-  const alvoDescartavel = new T.WebGLRenderTarget(1, 1), tintaDescartavel = new T.MeshBasicMaterial();
+  // E a câmera desse desenho não vê nada: fica debaixo do mundo, olhando para baixo. Quem decide o que faz sombra são as camadas
+  // da câmera, que ela copia de quem pediu; o resto do desenho não serve para nada, e com a câmera de verdade a cena inteira era
+  // desenhada mais uma vez à toa (na cidade, mais de mil peças por desenho).
+  // (sombrasEm: a hora em que as sombras foram refeitas pela última vez; pouparSombras: este desenho pode ficar com as que já
+  // estão feitas — só no ritmo de ambiente da cidade: ver "o ritmo do desenho".)
+  const alvoDescartavel = new T.WebGLRenderTarget(1, 1), tintaDescartavel = new T.MeshBasicMaterial(), cameraCega = new T.PerspectiveCamera(10, 1, 0.01, 0.02);
+  cameraCega.position.set(0, -4000, 0);
+  cameraCega.rotation.x = -Math.PI / 2;
+  let sombrasEm = -Infinity, pouparSombras = false;
   function calcularSombras(camera) {
+    cameraCega.layers.mask = camera.layers.mask;
     renderer.shadowMap.needsUpdate = true;
     renderer.setRenderTarget(alvoDescartavel);
     cena.overrideMaterial = tintaDescartavel;
-    try { renderer.render(cena, camera); } finally { cena.overrideMaterial = null; renderer.setRenderTarget(null); }
+    try { renderer.render(cena, cameraCega); } finally { cena.overrideMaterial = null; renderer.setRenderTarget(null); }
+    sombrasEm = performance.now();
   }
   function desenhar() {
     assentarMarcas();                           // os números dos alvos, no lugar em que cada um aparece neste desenho
@@ -5541,10 +5552,10 @@
       // Na vila não há espelho: só as sombras (calculadas num desenho descartável em que a
       // câmera "vê" o corpo do robô, como abaixo) e o mundo, com o corpo de fora.
       vidro.visible = false;
-      vila.focarSol(camera.position.x, camera.position.z);   // (as sombras do sol, em volta de quem olha)
+      const solMudou = vila.focarSol(camera.position.x, camera.position.z);   // (as sombras do sol, em volta de quem olha)
       for (const c of CAMADAS_DOS_CORPOS) camera.layers.enable(c);   // (a camada 1, e as dos outros robôs do coletivo)
       camera.layers.disable(2);
-      calcularSombras(camera);
+      if (!pouparSombras || solMudou) calcularSombras(camera);
       camera.layers.disable(COLETIVO ? atual.camada : 1);            // o próprio corpo fica de fora; os dos outros robôs, à vista
       camera.layers.enable(2);
       refletirEspelhos(camera);                 // os espelhos das casas, com as sombras deste desenho
@@ -5585,7 +5596,7 @@
     quadros = [];
   }
   function desenharMosaico(agora) {
-    if (agora - ultimoMosaico < 70) return;     // (uns 14 quadros por segundo bastam: cada robô custa um desenho da cidade inteira)
+    if (agora - ultimoMosaico < 62) return;     // (uns 14 quadros por segundo bastam: cada robô custa um desenho da cidade inteira; 62 ms: dois quadros do ritmo de ambiente, de 30 por segundo)
     ultimoMosaico = agora;
     if (soEste && !soEste.dentro) soEste = null;
     const lista = soEste ? [soEste] : emJogo(), daVez = atual, tamanho = renderer.getSize(new T.Vector2()), L = tamanho.x, A = tamanho.y;
@@ -5792,6 +5803,7 @@
   function ajustarTamanho(deQualquerJeito) {
     if (!repartir() && deQualquerJeito !== true) return;
     definirTamanho(tela.w, tela.h);
+    acordarDesenho(300, true);                         // (redimensionar limpa o canvas: o desenho novo vem já no próximo quadro da tela, seja qual for o ritmo)
     ultimoMosaico = 0;                          // (redimensionar limpa o canvas: a tela dividida é desenhada de novo já)
     desenharQuer();                             // (o campo das intenções mostra as linhas que cabem no lugar que ele tem agora)
     arrumarPaineis();
@@ -5799,29 +5811,77 @@
   }
   window.addEventListener('resize', ajustarTamanho);
 
+  // ---------- o ritmo do desenho ----------
+  // Desenhar a cena custa caro (no quarto do espelho são três passadas da cena, mais as sombras), e a página não precisa
+  // fazer isso a cada quadro da tela: numa tela de 165 Hz seriam 165 desenhos por segundo, com a placa de vídeo no talo
+  // e a ventoinha ligada, para mostrar uma cena parada enquanto a iA pensa. O ritmo é o que a cena pede:
+  //   vivo:     alguma coisa se mexe por causa do jogo ou de quem assiste — um botão acabou de ser apertado, quem voa
+  //             está mexendo a câmera, os zumbis estão andando, o carro está em viagem. Até 60 por segundo.
+  //   ambiente: só a vida de fundo — as pessoas respirando, a praça, a água, a chuva. 30 por segundo.
+  //   parado:   nada muda. A conta do jogo continua, 12 vezes por segundo, e a imagem é refeita 2 vezes por segundo, só
+  //             por garantia: se alguma mudança escapar de `acordarDesenho`, ela aparece em meio segundo.
+  // `acordarDesenho` põe o desenho no ritmo vivo por um tempo. É chamada em tudo o que muda a cena (todo comando termina em
+  // `resposta`, que a chama) e no teclado e no mouse de quem assiste; com `ja`, o próximo quadro da tela é desenhado
+  // de qualquer jeito (a janela mudou de tamanho, a visão mudou). Nada disto muda o jogo nem a imagem da iA, que é
+  // desenhada na hora em que ela pede (ver frame). Com ?desenho=livre no endereço a página desenha a cada quadro da
+  // tela, como antes.
+  // (folga: os quadros da tela não chegam em horas exatas; com 3 ms de folga, numa tela de 165 Hz o ritmo vivo dá um
+  // desenho a cada três quadros dela, sempre no mesmo passo, e numa de 144, a cada dois.)
+  const RITMO = { vivo: 60, ambiente: 30, parado: 12, garantia: 2, folga: 3, desperto: 1200, sombras: 190, livre: ENDERECO.get('desenho') === 'livre' };   // (sombras: na cidade, no ritmo de ambiente, de quantos em quantos milissegundos elas são refeitas: ver quadro)
+  let acordadoAte = 0, desenharJa = true, ultimoDesenho = 0, ritmoDeAntes = Infinity;
+  function acordarDesenho(ms, ja) {
+    acordadoAte = Math.max(acordadoAte, performance.now() + (ms || RITMO.desperto));
+    if (ja) desenharJa = true;
+  }
+  function ritmoDaCena(agora) {
+    if (RITMO.livre) return Infinity;
+    if (agora < acordadoAte) return RITMO.vivo;
+    if (solto() && (apertadas.size || arrasto)) return RITMO.vivo;                // quem voa está andando com a câmera, ou virando-a
+    const relogioAnda = !ASSISTINDO || !!(toca && toca.tocando && !toca.acabou());   // (numa gravação em pausa, o que depende do relógio do jogo está parado)
+    if (relogioAnda && ((zumbi && zumbi.comeco !== null && zumbi.fim === null) || (vila.carro && vila.carro.viagem))) return RITMO.vivo;
+    return REGRAS.vila || pessoa ? RITMO.ambiente : RITMO.parado;
+  }
+  for (const tipo of ['keydown', 'keyup', 'pointerdown', 'pointerup', 'wheel']) window.addEventListener(tipo, () => acordarDesenho(), { capture: true, passive: true });   // (quem assiste mexeu: pode ter mudado o que se vê)
+
   let anterior = performance.now();
   let toca = null;                              // quem toca a gravação, quando a página está assistindo a uma (ver o fim do arquivo)
   function quadro(agora) {
+    const ritmo = ritmoDaCena(agora);           // (ver "o ritmo do desenho": se ainda não é hora do próximo, este quadro da tela passa em branco)
+    if (!desenharJa && agora - anterior < 1000 / ritmo - RITMO.folga) { requestAnimationFrame(quadro); return; }
     const real = Math.min(0.1, (agora - anterior) / 1000);
     anterior = agora;
     // Assistindo a uma gravação, o tempo é o dela: parado na pausa, mais depressa quando se acelera.
     const dt = ASSISTINDO ? (toca ? toca.passo(real) : 0) : real;
     if (ASSISTINDO) horaGravada += dt * 1000;   // o relógio do jogo (ver hora): entre um botão gravado e o outro ele anda com a gravação
     if (toca) toca.soltar();                    // os botões gravados cuja hora chegou
-    const k = 1 - Math.exp(-dt * 14);
+    // (suave: o tempo que vale para o que desliza até o lugar — o robô, as portas, a câmera de quem assiste. No primeiro quadro depois
+    // de o ritmo subir, ele é o de um quadro do ritmo novo, e não o tempo todo desde o último desenho: senão o movimento começava com um salto.)
+    const suave = ritmoDeAntes < ritmo ? Math.min(dt, 1 / ritmo) : dt, real2 = ritmoDeAntes < ritmo ? Math.min(real, 1 / ritmo) : real;
+    ritmoDeAntes = ritmo;
+    const k = 1 - Math.exp(-suave * 14);
     if (COLETIVO) {                             // os outros robôs também andam; e quem sumiu sem sair deixa o lugar
       const daVez = atual;
       cadaRobo(r => { if (r !== daVez) { animarRobo(k); porCorpo(); } });
       if (!ASSISTINDO) for (const r of emJogo()) if (r.quem > 0 && agora - r.ativo > PARADO_DEMAIS) sairDoJogo(r);
     }
-    animar(k, 1 - Math.exp(-dt * 5));
+    animar(k, 1 - Math.exp(-suave * 5));
     if (vila.clima) vila.clima.passo(real);       // a hora do dia e a chuva da cidade
     animarPessoas(agora / 1000);                // quem mora ali respira, pisca e olha em volta (no relógio de verdade, mesmo com a gravação parada)
     soarEViver(agora / 1000, real);             // os sons que dependem de onde se está, e a vida da praça
     ajustarTamanho();                           // (a visão de quem assiste ou a tela dividida podem ter mudado o formato da imagem)
-    if (vista.voando) { esconderEtiquetas(); aplicarVisual(); if (vista.atras) seguir(real); else voar(real); desenharDeFora(); }   // quem assiste de fora vê tudo ao vivo, mesmo no modo iA
-    else if (variosOlhos()) { if (!modoIA) desenharMosaico(agora); }                           // no coletivo, com mais de um robô: a tela dividida, um quadro para cada um
-    else if (!modoIA) { esconderEtiquetas(); aplicarVisual(); desenhar(); }
+    if (desenharJa || ritmo > RITMO.parado || agora - ultimoDesenho >= 1000 / RITMO.garantia - RITMO.folga) {   // (com tudo parado, a imagem que está na tela já é esta: ver "o ritmo do desenho")
+      desenharJa = false;
+      ultimoDesenho = agora;
+      // (Na cidade, refazer as sombras é mais da metade do desenho: tudo o que faz sombra é desenhado de novo, do ponto de vista do sol.
+      // No ritmo de ambiente o que se mexe é miúdo — quem respira, os pombos —, e as sombras são refeitas 5 vezes por segundo, e não 30.
+      // Só nos desenhos daqui: a imagem que a iA pede refaz as sombras sempre.)
+      pouparSombras = ritmo === RITMO.ambiente && !!REGRAS.semEspelho && performance.now() - sombrasEm < RITMO.sombras;
+      try {
+        if (vista.voando) { esconderEtiquetas(); aplicarVisual(); if (vista.atras) seguir(real2); else voar(real2); desenharDeFora(); }   // quem assiste de fora vê tudo ao vivo, mesmo no modo iA
+        else if (variosOlhos()) { if (!modoIA) desenharMosaico(agora); }                           // no coletivo, com mais de um robô: a tela dividida, um quadro para cada um
+        else if (!modoIA) { esconderEtiquetas(); aplicarVisual(); desenhar(); }
+      } finally { pouparSombras = false; }
+    }
     if (agora - ultimoArranjo > 250) { ultimoArranjo = agora; arrumarPaineis(); }   // (quatro vezes por segundo basta: a lista de teclas, quando está solta, sai de cima do que o jogo escreve)
     if ((quebra || zumbi) && elPlacar && agora - ultimoPlacar > (campanha ? 250 : 500)) { ultimoPlacar = agora; elPlacar.textContent = quebra ? placarDoQuebra() : placarDoZumbi(); }   // (o relógio do quebra-cabeça, para quem assiste)
     requestAnimationFrame(quadro);
@@ -5951,6 +6011,7 @@
   let depressa = false;                         // (a gravação está pulando para outro ponto: os botões são refeitos de uma vez, sem desenhar nem tocar nada a cada um: ver o fim do arquivo)
   function resposta(comando, ok, mensagem) {
     ultima = { comando, ok, mensagem };
+    if (comando !== 'frame') acordarDesenho();         // (o que o comando mudou vai se mexer na tela: ver "o ritmo do desenho"; a imagem pedida pela iA não muda nada, e a tela já foi refeita em frame)
     if (depressa) { alvoAtual(); return; }      // (pulando para outro ponto de uma gravação: fica só o que muda o jogo — alvoAtual esquece o alvo escolhido que saiu do alcance; o que é de ver e de ouvir fica para o fim do pulo: ver mostrarOJogo)
     som.doQueAconteceu(comando, ok, mensagem, estado);   // (o som de cada coisa, para quem assiste)
     linhas.push(`› ${comando} — ${mensagem}`);
@@ -7654,6 +7715,44 @@
   const noFimDoRolo = () => elRolo.scrollHeight - elRolo.clientHeight - elRolo.scrollTop < 6;
   elRolo.addEventListener('scroll', () => { elFim.hidden = noFimDoRolo(); }, { passive: true });
   elFim.addEventListener('click', () => { elRolo.scrollTop = elRolo.scrollHeight; });
+  // ---------- as seções do menu ao lado ----------
+  // Na coluna do menu ao lado, o que é de quem assiste vai em três seções, e cada uma tem uma barra que a minimiza e a
+  // expande com um clique: o que a iA pretende ('quer': a barra é o título do campo, elBarraDoQuer), o que o jogo disse
+  // com a lista de teclas ('jogo') e a config, que são as pílulas ('config'; as barras destas duas estão em index.html).
+  // O que mais interessa a quem assiste é o que a iA pretende: com as outras duas minimizadas, esse campo toma a coluna
+  // inteira. A escolha fica guardada no navegador. Quem esconde e mostra é o estilo (index.html), pelas classes
+  // fecha-quer, fecha-jogo e fecha-config do body, e só na coluna: na tela cheia e na faixa as barras não existem, e
+  // nada fica minimizado.
+  const CHAVE_DAS_SECOES = 'desafio.secoes', SECOES = { quer: 'o que a iA pretende', jogo: 'o que o jogo disse e a lista de teclas', config: 'a config: o som, a visão, o arranjo da página, o MCP, os replays e os jogos' };
+  const minimizadas = new Set();
+  try { for (const s of JSON.parse(localStorage.getItem(CHAVE_DAS_SECOES)) || []) if (Object.prototype.hasOwnProperty.call(SECOES, s)) minimizadas.add(s); } catch (e) { }
+  const elBarraDoQuer = Object.assign(document.createElement('button'), { type: 'button', className: 'titulo secao', tabIndex: -1 });
+  elBarraDoQuer.dataset.secao = 'quer';
+  elBarraDoQuer.append(document.createElement('span'), document.createElement('i'));
+  function mostrarSecoes() {
+    for (const s of Object.keys(SECOES)) document.body.classList.toggle('fecha-' + s, minimizadas.has(s));
+    for (const b of [elBarraDoQuer, ...document.querySelectorAll('#doca > .secao')]) {
+      const fechada = minimizadas.has(b.dataset.secao);
+      b.setAttribute('aria-expanded', String(!fechada));
+      b.title = (fechada ? 'Expande ' : 'Minimiza ') + SECOES[b.dataset.secao];
+    }
+  }
+  function alternarSecao(s) {
+    if (!Object.prototype.hasOwnProperty.call(SECOES, s)) return;
+    const noFim = noFimDoRolo();                // (a caixa das intenções estava no fim? então continua nele, com a altura nova)
+    if (!minimizadas.delete(s)) minimizadas.add(s);
+    try { localStorage.setItem(CHAVE_DAS_SECOES, JSON.stringify([...minimizadas])); } catch (e) { }
+    mostrarSecoes();
+    desenharQuer();                             // (o campo mostra o que cabe no lugar que ele tem agora)
+    if (noFim || s === 'quer') { elRolo.scrollTop = elRolo.scrollHeight; elFim.hidden = true; }   // (a caixa que estava guardada volta no fim: na mais nova)
+  }
+  mostrarSecoes();
+  document.getElementById('doca').addEventListener('click', e => {
+    const b = e.target.closest('.secao');
+    if (!b || !document.body.classList.contains('doca-lado')) return;
+    b.blur();                                   // (senão o Espaço, que é um botão do jogo, apertaria a barra de novo)
+    alternarSecao(b.dataset.secao);
+  });
   // Põe na caixa as linhas que faltam, acende a última e acerta a altura e a rolagem.
   function acertarRolo() {
     const n = intencoes.length, noFim = noFimDoRolo(), topo = elRolo.scrollTop;
@@ -7688,10 +7787,11 @@
     if (!elQuer || depressa) return;            // (pulando para outro ponto de uma gravação, o campo é escrito uma vez só, no fim)
     const pedaco = (tag, texto) => { const el = document.createElement(tag); el.textContent = texto; return el; };   // sempre como texto: tudo aqui vem da iA
     const linha = (classe, ...partes) => { const d = document.createElement('div'); d.className = classe; d.append(...partes); elQuer.insertBefore(d, elMoldura.parentNode === elQuer ? elMoldura : null); return d; };
+    const barra = texto => { elBarraDoQuer.firstChild.textContent = texto; elQuer.insertBefore(elBarraDoQuer, elMoldura.parentNode === elQuer ? elMoldura : null); };   // (o título que, na coluna do menu ao lado, minimiza e expande o campo: ver "as seções do menu ao lado")
     for (const el of [...elQuer.childNodes]) if (el !== elMoldura) el.remove();   // (a caixa das intenções fica: ver acertarRolo)
     if (COLETIVO) {                             // no coletivo: quem está na vila, e a última coisa que cada um disse que pretende
       const lista = emJogo();
-      linha('titulo', lista.length ? `na vila · pedidos atendidos: ${entregas}` : 'ninguém na vila');
+      barra(lista.length ? `na vila · pedidos atendidos: ${entregas}` : 'ninguém na vila');
       for (const r of lista) {
         const dele = vila.pessoas.find(p => p.pedindo && p.com === r);
         linha('quem', pedaco('b', r.nome), ' ', pedaco('span', r.modelo + (r.entregas ? ` · ${r.entregas}` : '') + (dele ? ` · missão: casa ${dele.casa}` : ' · sem missão')));
@@ -7720,7 +7820,7 @@
       linha('linha', elPlacar);
     }
     if (intencoes.length) {
-      linha('titulo', 'o que pretende');
+      barra('o que pretende');
       if (elMoldura.parentNode !== elQuer) elQuer.append(elMoldura);
     } else elMoldura.remove();
     elQuer.hidden = !elQuer.childNodes.length;
@@ -8282,7 +8382,7 @@
     voador.rotation.set(vista.pitch, vista.yaw, 0);
     atualizarBalao(voador);                     // o balão da pessoa, virado para esta câmera
     refletirEspelhos(voador);                   // os espelhos das casas da cidade
-    if (vila.focarSol) vila.focarSol(vista.x, vista.z);   // (as sombras do sol, em volta de quem voa)
+    const solMudou = vila.focarSol ? vila.focarSol(vista.x, vista.z) : false;   // (as sombras do sol, em volta de quem voa)
     renderer.clear();
     voador.layers.disable(3);
     if (!REGRAS.semEspelho) {                   // 1) o mundo refletido no plano do espelho
@@ -8295,7 +8395,7 @@
     }
     vidro.visible = !REGRAS.semEspelho && !REGRAS.espelhoDisfarcado;
     voador.layers.enable(3);                    // 2) o mundo real por cima, com o balão da pessoa
-    renderer.shadowMap.needsUpdate = true;
+    if (!REGRAS.semEspelho || !pouparSombras || solMudou) { renderer.shadowMap.needsUpdate = true; sombrasEm = performance.now(); }   // (na cidade, no ritmo de ambiente, as sombras já feitas servem: ver "o ritmo do desenho")
     renderer.render(cena, voador);
     porPensamento();
   }
@@ -8358,6 +8458,7 @@
     if (modo !== 'voador') soltar();            // fora do modo voador, o mouse fica livre
     if (modo === 'voador' && !vista.posta) irAteORobo();
     if (modo === 'atras') seguir(antes === 'ia' ? Infinity : 0);   // (vinda do voo, a câmera vai até lá voando; da visão da iA, já aparece no lugar)
+    acordarDesenho(0, true);                           // (a visão nova aparece já: ver "o ritmo do desenho")
     mostrarVista();
     guardarVista();
     if (modo === 'ia' && modoIA) { aplicarVisual(); desenhar(); }   // no modo iA a tela só muda quando a iA pede a imagem: sem isto ficaria a do voo
@@ -8399,6 +8500,7 @@
   let arrasto = null;
   const preso = () => document.pointerLockElement === canvas;
   const virarVista = (dx, dy, quanto) => {
+    acordarDesenho(400);                               // (o mouse está virando a câmera: desenho no ritmo vivo enquanto ele se mexe)
     vista.yaw -= dx * quanto;
     vista.pitch = entre(vista.pitch - dy * quanto, -1.45, 1.45);
   };
@@ -8620,6 +8722,7 @@
         ehPasso: ev => ev.e === 'botao',        // cada botão é uma parada de quem anda para a frente e para trás — a imagem pedida (F) também: não muda nada no jogo, mas é quando se lê o que a iA queria ver
         aplicar(ev, rapido) {                   // (rapido: a gravação está pulando para outro ponto — o que é só de ver e de ouvir fica para o fim do pulo: ver assentar)
           depressa = rapido === true;
+          acordarDesenho();                            // (o que este acontecimento muda vai se mexer na tela: ver "o ritmo do desenho")
           try { refazer(ev); } finally { depressa = false; fita.i++; }   // (fita.i: quantos acontecimentos já foram — eles vêm sempre na ordem, um de cada vez)
         },
         // Quanto esperar antes de `ev`: o tempo de ler o que o botão anterior pretendia (mais curto depois de uma imagem), e nunca mais do
@@ -8631,7 +8734,7 @@
           const ler = (anterior.b === 'F' ? 500 : 900) + 35 * semControle(anterior.q, 140).length;
           return anterior.e === 'botao' && anterior.q && ev.r === anterior.r ? ler : Math.min(intervalo, ler);
         },
-        assentar() { animar(1, 1); aplicarVisual(); mostrarOJogo(); desenharQuer(); },
+        assentar() { animar(1, 1); aplicarVisual(); mostrarOJogo(); desenharQuer(); acordarDesenho(0, true); },
       });
       function refazer(ev) {
         if (COLETIVO) {                       // no coletivo: quem entrou, quem saiu e o botão de cada robô (r: o número dele)

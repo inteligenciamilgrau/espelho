@@ -2841,8 +2841,20 @@
   }
   window.addEventListener('resize', () => definirTamanho(window.innerWidth, window.innerHeight));
 
+  // O ritmo do desenho. Cada desenho da quadra são quatro passadas da cena (as sombras, a transmissão e a vista de cada
+  // jogador), e a página não precisa fazer isso a cada quadro da tela: numa tela de 165 Hz seriam 165 por segundo, com a
+  // placa de vídeo no talo. Com os dois jogadores na quadra (ou numa reprise, ou com quem assiste mexendo no teclado ou no
+  // mouse), até 60 por segundo; com a quadra esperando jogador, 30, que para a torcida parada basta. (folga: os quadros da
+  // tela não chegam em horas exatas; com 3 ms, numa tela de 165 Hz o ritmo de 60 dá um desenho a cada três quadros dela,
+  // sempre no mesmo passo.) Não muda o jogo nem a imagem das iAs, que é desenhada na hora em que cada uma pede. Com
+  // ?desenho=livre no endereço a página desenha a cada quadro da tela, como antes. (Nos desafios: ver o mesmo em jogo.js.)
+  const RITMO = { vivo: 60, calmo: 30, folga: 3, desperto: 1500, livre: ENDERECO.get('desenho') === 'livre' };
+  let acordadoAte = 0;
+  for (const tipo of ['keydown', 'pointerdown', 'pointermove', 'wheel']) window.addEventListener(tipo, () => { acordadoAte = performance.now() + RITMO.desperto; }, { capture: true, passive: true });
   let anterior = performance.now(), quadros = 0;
   function quadro(real) {
+    const ritmo = RITMO.livre ? Infinity : real < acordadoAte || replay.ativo || replay.pedido || presentes() ? RITMO.vivo : RITMO.calmo;
+    if (real - anterior < 1000 / ritmo - RITMO.folga) { requestAnimationFrame(quadro); return; }
     quadros++;
     const dtReal = Math.min(0.1, (real - anterior) / 1000), kReal = 1 - Math.exp(-dtReal * 12);
     anterior = real;

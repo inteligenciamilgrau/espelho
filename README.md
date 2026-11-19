@@ -118,7 +118,8 @@ Nos Desafios 1 a 9 e na vila coletiva a página tem dois arranjos. Troca-se pela
 - A imagem tem o formato da que a iA recebe e mostra o mesmo desenho: você vê o que ela vê, nem mais para os lados, nem menos. Nada da página fica por cima dela.
 - Tudo o que é de quem assiste vai para um menu à esquerda da imagem: os controles da gravação (nos replays), quem está jogando e o que pretende, o que o jogo disse, a lista de teclas e as pílulas.
 - O campo das intenções mostra as que couberem no lugar que ele tem, a mais nova embaixo, e rola do mesmo jeito para as de antes.
-- Numa janela mais quadrada, em que a coluna deixaria a imagem pequena demais, o menu vira uma faixa embaixo da imagem. Aí a lista de teclas não cabe nele e fica num canto da imagem (o `H` a guarda).
+- O menu tem três seções, e cada uma tem uma barra que a minimiza e a expande com um clique (a seta da barra aponta para baixo quando a seção está aberta, e para o lado quando está minimizada): **o que pretende**, **o jogo disse · teclas** e **config** (as pílulas do som, da visão, do arranjo, do MCP, dos replays e dos jogos). Com as duas de baixo minimizadas, o campo das intenções toma a coluna inteira. A escolha fica guardada no navegador. O aviso vermelho do MCP aparece mesmo com a config minimizada.
+- Numa janela mais quadrada, em que a coluna deixaria a imagem pequena demais, o menu vira uma faixa embaixo da imagem. Aí a lista de teclas não cabe nele e fica num canto da imagem (o `H` a guarda), e as barras das seções não aparecem: tudo fica à vista.
 - No modo voador, na visão por trás do robô e na tela dividida da vila coletiva o desenho toma todo o espaço ao lado do menu.
 
 Para abrir a página já num dos dois, acrescente `?painel=cheia` ou `?painel=lado` ao endereço.
@@ -365,6 +366,17 @@ O teclado e a iA apertam exatamente os mesmos botões, pela mesma função (`jog
 A gravação segue o mesmo caminho: a página anota cada acontecimento (a rodada com o botão de cada jogador, o texto na barriga, a fala do comentarista, o botão com a intenção) e manda a gravação ao servidor, que só a guarda num arquivo (`gravacao.js`). O que acontece numa partida depende só dos botões e da ordem deles; por isso, para tocar a gravação, o jogo aperta os mesmos botões de novo, num relógio próprio que pausa e acelera. Na quadra, cada rodada gravada leva junto um resumo de como o jogo ficou, e o replay confere se a partida refeita bate com ele.
 
 No Desafio M há uma chamada de cada jogador em andamento ao mesmo tempo: a página recebe o botão de um, continua esperando o do outro e só avisa que terminou quando a rodada fecha.
+
+### O ritmo do desenho
+
+Desenhar a cena custa caro, e a página não a redesenha a cada quadro da tela (numa tela de 165 Hz seriam 165 desenhos por segundo, com a placa de vídeo trabalhando sem parar para mostrar uma cena parada enquanto a iA pensa). Ela desenha no ritmo que a cena pede:
+
+- **Alguma coisa se mexe** (um botão acabou de ser apertado, quem voa está mexendo a câmera, os zumbis estão andando, o carro está em viagem): até 60 desenhos por segundo.
+- **Só a vida de fundo** (as pessoas respirando, a praça, a água, a chuva): 30 por segundo. Na cidade, nesse ritmo, as sombras são refeitas 5 vezes por segundo.
+- **Nada muda** (o quarto do espelho, o quebra-cabeça ou o campo dos zumbis esperando a iA): 2 por segundo, só por garantia.
+- **Na quadra:** até 60 com os dois jogadores em campo, e 30 enquanto ela espera jogador.
+
+Um botão, uma tecla ou um clique acordam o desenho na hora. Nada disso muda o jogo nem a imagem que a iA recebe, que é desenhada no momento em que ela pede. Para desenhar a cada quadro da tela, como era antes, acrescente `?desenho=livre` ao endereço da página (ou `&desenho=livre`, se o endereço já tiver um `?`).
 
 ## Jogar no teclado, sem MCP
 
